@@ -1,0 +1,41 @@
+# Verilog simulation outputs
+*.vcd
+*.wlf
+*.asdb
+*.awc
+*.log
+*.jou
+*.pb
+transcript
+vsim.wlf
+
+# Simulator work libraries and generated folders
+work/
+lib/
+questa_lib/
+modelsim.ini
+xsim.dir/
+.sim/
+output/
+build/
+
+# FPGA tool generated files
+*.qpf
+*.qsf
+*.sof
+*.pof
+*.rpt
+*.smsg
+*.summary
+*.done
+*.jdi
+*.cdf
+incremental_db/
+db/
+
+# Editor / operating system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*~
