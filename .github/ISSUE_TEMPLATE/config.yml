@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: Read the Project Status
+    url: https://github.com/Khaledbaniodeh/TM4C123-simulator/blob/main/PROJECT_STATUS.md
+    about: Check what is completed, paused, and not yet implemented before opening an issue.
+
+  - name: Read the Support Guide
+    url: https://github.com/Khaledbaniodeh/TM4C123-simulator/blob/main/SUPPORT.md
+    about: Review the support guidelines and the information required for technical help.
+
+  - name: Security Vulnerability
+    url: https://github.com/Khaledbaniodeh/TM4C123-simulator/blob/main/SECURITY.md
+    about: Do not publish sensitive security details in a normal public issue.
