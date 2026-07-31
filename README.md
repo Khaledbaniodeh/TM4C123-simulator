@@ -1,7 +1,18 @@
 # TM4C123 Educational Web Simulator
 
-> **Project status: Planning / Temporarily Paused**  
-> This repository does **not** currently contain a finished or usable simulator.
+<p align="center">
+  <img src="docs/images/tm4c123-hero.png" alt="TM4C123 Educational Web Simulator" width="100%">
+</p>
+
+<p align="center">
+  <strong>A planned Wokwi-style educational web simulator for the TM4C123G LaunchPad.</strong>
+</p>
+
+<p align="center">
+  <strong>Status:</strong> Planning / Temporarily Paused
+</p>
+
+---
 
 ## Overview
 
@@ -24,18 +35,18 @@ The project is intentionally focused on university laboratory examples rather th
 
 This repository is currently in the **architecture, planning, and feasibility stage**.
 
-It is not a finished application, and the simulator cannot currently be run.
+It is **not** a finished application, and the simulator cannot currently be run.
 
 The existing files mainly document:
 
-- MVP scope.
-- Supported laboratory examples.
-- Required registers and peripherals.
-- Proposed system architecture.
-- Feasibility and execution plans.
-- Small implementation tasks and acceptance criteria.
+- MVP scope
+- Supported laboratory examples
+- Required registers and peripherals
+- Proposed system architecture
+- Feasibility and execution plans
+- Small implementation tasks and acceptance criteria
 
-The repository is public to make the design transparent and to invite technical collaboration, not to present the project as complete.
+The repository is public to make the design transparent and to invite technical collaboration — **not** to present the project as complete.
 
 ---
 
@@ -43,13 +54,13 @@ The repository is public to make the design transparent and to invite technical 
 
 The next phase requires a suitable development and execution environment for:
 
-- Docker-based isolation.
-- ARM Cortex-M4 cross-compilation.
-- `arm-none-eabi-gcc`.
-- Renode or another suitable execution engine.
-- Custom TM4C123 peripheral models.
-- Automated testing and CI.
-- Adequate storage, memory, and processing capacity.
+- Docker-based isolation
+- ARM Cortex-M4 cross-compilation
+- `arm-none-eabi-gcc`
+- Renode or another suitable execution engine
+- Custom TM4C123 peripheral models
+- Automated testing and CI
+- Adequate storage, memory, and processing capacity
 
 Development is temporarily paused while a more suitable environment and additional technical support are arranged.
 
@@ -61,17 +72,17 @@ Technical contributors are welcome.
 
 The project would benefit most from help in the following areas:
 
-- ARM Cortex-M4 and bare-metal firmware.
-- TM4C123 register-level peripherals.
-- Renode platform and C# peripheral development.
-- Embedded toolchains and ELF loading.
-- Docker sandboxing and secure execution of user code.
-- React and TypeScript frontend development.
-- WebSocket or event-stream architecture.
-- Digital circuit and pin-state modeling.
-- Automated testing and CI/CD.
-- Compute, storage, or CI-runner resources suitable for the feasibility spike.
-- Technical review of the current architecture and execution plan.
+- ARM Cortex-M4 and bare-metal firmware
+- TM4C123 register-level peripherals
+- Renode platform and C# peripheral development
+- Embedded toolchains and ELF loading
+- Docker sandboxing and secure execution of user code
+- React and TypeScript frontend development
+- WebSocket or event-stream architecture
+- Digital circuit and pin-state modeling
+- Automated testing and CI/CD
+- Compute, storage, or CI-runner resources suitable for the feasibility spike
+- Technical review of the current architecture and execution plan
 
 Contributions do not need to cover the whole simulator. The implementation plan is intentionally divided into small, independently testable tasks.
 
@@ -79,15 +90,15 @@ Contributions do not need to cover the whole simulator. The implementation plan 
 
 ## Planned MVP Components
 
-- TM4C123G LaunchPad board.
-- Built-in RGB LED.
-- SW1 and SW2.
-- External LED.
-- Pushbutton.
-- Resistor.
-- Potentiometer.
-- LCD1602.
-- Logic analyzer.
+- TM4C123G LaunchPad board
+- Built-in RGB LED
+- SW1 and SW2
+- External LED
+- Pushbutton
+- Resistor
+- Potentiometer
+- LCD1602
+- Logic analyzer
 
 ---
 
@@ -95,16 +106,16 @@ Contributions do not need to cover the whole simulator. The implementation plan 
 
 The MVP is intended to support selected educational examples involving:
 
-- GPIO input and output.
-- PF0 unlock and commit control.
-- GPIO interrupts.
-- SysTick.
-- NVIC interrupt dispatch.
-- General-purpose timers.
-- LCD1602 in 4-bit mode.
-- ADC0 Sample Sequencer 3.
-- Potentiometer-based analog input.
-- Digital signal capture.
+- GPIO input and output
+- PF0 unlock and commit control
+- GPIO interrupts
+- SysTick
+- NVIC interrupt dispatch
+- General-purpose timers
+- LCD1602 in 4-bit mode
+- ADC0 Sample Sequencer 3
+- Potentiometer-based analog input
+- Digital signal capture
 
 ---
 
@@ -128,12 +139,12 @@ A visual result must come from real firmware execution and simulated register be
 
 The repository currently contains project documentation such as:
 
-- MVP specification.
-- Compatibility matrix.
-- Architecture design.
-- Feasibility-spike plan.
-- Small task definitions.
-- Acceptance criteria and stage gates.
+- MVP specification
+- Compatibility matrix
+- Architecture design
+- Feasibility-spike plan
+- Small task definitions
+- Acceptance criteria and stage gates
 
 Implementation code will be added only after the initial execution feasibility path is proven.
 
@@ -169,23 +180,32 @@ Before contributing:
 
 For collaboration, open a GitHub Issue describing:
 
-- Your area of expertise.
-- The task you want to help with.
-- Your proposed approach.
-- Any technical requirements or blockers.
+- Your area of expertise
+- The task you want to help with
+- Your proposed approach
+- Any technical requirements or blockers
+
+You may also find these files useful:
+
+- `PROJECT_STATUS.md`
+- `ROADMAP.md`
+- `HELP_WANTED.md`
+- `CONTRIBUTING.md`
+- `SECURITY.md`
+- `SUPPORT.md`
 
 ---
 
 ## Project Principles
 
-- Correctness before visual polish.
-- Small and reviewable tasks.
-- Real firmware execution.
-- Register-level behavior.
-- No silent unsupported features.
-- Deterministic simulation.
-- Clear acceptance tests.
-- Honest project status.
+- Correctness before visual polish
+- Small and reviewable tasks
+- Real firmware execution
+- Register-level behavior
+- No silent unsupported features
+- Deterministic simulation
+- Clear acceptance tests
+- Honest project status
 
 ---
 
