@@ -1,0 +1,26 @@
+# Normalize text files
+* text=auto
+
+# TM4C123 simulator web prototype
+prototype/index.html linguist-language=HTML
+prototype/index.html linguist-detectable=true
+prototype/index.html linguist-documentation=false
+
+prototype/styles.css linguist-language=CSS
+prototype/styles.css linguist-detectable=true
+prototype/styles.css linguist-generated=false
+prototype/styles.css linguist-vendored=false
+prototype/styles.css linguist-documentation=false
+
+prototype/script.js linguist-language=JavaScript
+prototype/script.js linguist-detectable=true
+prototype/script.js linguist-generated=false
+prototype/script.js linguist-vendored=false
+prototype/script.js linguist-documentation=false
+
+# TM4C123 reference firmware examples
+examples/** linguist-documentation=false
+examples/**/*.c linguist-language=C
+examples/**/*.c linguist-detectable=true
+examples/**/*.c linguist-generated=false
+examples/**/*.c linguist-vendored=false
