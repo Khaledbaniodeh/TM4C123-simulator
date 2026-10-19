@@ -124,12 +124,36 @@ def extract(brd_bytes):
 INTERESTING = re.compile(r"^(J\d+|SW\d+|S\d+|D\d+|LED\d*|U\d+|R9|R10|Y\d+|H\d+|P\d+|USB\d*|CON\d*)$", re.I)
 
 
+def describe_archive(data):
+    """Short diagnostic of what was downloaded (for annotations)."""
+    head = data[:16]
+    lines = [f"bytes={len(data)} magic={head!r}"]
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            for info in archive.infolist()[:60]:
+                lines.append(f"{info.filename} ({info.file_size} B)")
+    except zipfile.BadZipFile as error:
+        lines.append(f"not a zip: {error}; start={data[:300]!r}")
+    return lines
+
+
 def main():
     zip_path, mode = sys.argv[1], sys.argv[2]
     with open(zip_path, "rb") as handle:
-        found = find_brd(handle.read())
+        data = handle.read()
+    try:
+        run(data, mode)
+    except Exception:  # Report the failure where it can be read without logs.
+        import traceback
+        annotate("error", "extract_brd failed", traceback.format_exc().splitlines()[-12:])
+        annotate("notice", "Archive diagnostics", describe_archive(data))
+        sys.exit(1)
+
+
+def run(data, mode):
+    found = find_brd(data)
     if not found:
-        print("::error title=hwref::No .brd file found in the archive")
+        annotate("error", "No .brd file in archive", describe_archive(data))
         sys.exit(1)
     brd_name, brd_bytes, listing = found
     data = extract(brd_bytes)

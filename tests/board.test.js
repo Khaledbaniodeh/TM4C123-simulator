@@ -98,6 +98,20 @@ describe("board part behavior", () => {
     assert.deepEqual(result.boardInputs.PD0, { level: false, strength: "strong" }, "R9 carries the level to PD0");
   });
 
+  it("lights a real-catalog LED through a resistor from a board GPIO (example F wiring)", () => {
+    const diagram = createDiagram();
+    diagram.parts.push(
+      { type: "led", id: "led1", top: 0, left: 0, rotate: 0, attrs: { color: "red" } },
+      { type: "resistor", id: "r1", top: 0, left: 0, rotate: 0, attrs: { value: "220" } },
+    );
+    diagram.connections.push(["board1:J1.10", "r1:2", "green", []], ["r1:1", "led1:A", "green", []], ["led1:C", "board1:J3.2", "black", []]);
+    const high = { PA7: { level: 1, drive: "output", state: "high" } };
+    const low = { PA7: { level: 0, drive: "output", state: "low" } };
+    assert.deepEqual(evaluateCircuit(diagram, CATALOG, high).leds.led1, { on: true, reason: "forward biased" });
+    assert.equal(evaluateCircuit(diagram, CATALOG, low).leds.led1.on, false);
+    assert.equal(evaluateCircuit(diagram, CATALOG, {}).leds.led1.on, false, "no simulation state: LED off");
+  });
+
   it("offers only external parts in the library, each with an honest status", () => {
     assert.ok(!LIBRARY.includes(BOARD_PART.type));
     for (const type of LIBRARY) {

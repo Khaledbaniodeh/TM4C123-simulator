@@ -71,6 +71,7 @@ const resistor = {
     { name: "1", x: 0, y: G },
     { name: "2", x: 6 * G, y: G },
   ],
+  links: () => [{ a: "1", b: "2", strength: "weak" }],
   render(part) {
     const value = escapeXml(part.attrs?.value ?? "220");
     return `
@@ -98,6 +99,8 @@ const pushbutton = {
     { name: "1", x: 0, y: 3 * G },
     { name: "2", x: 4 * G, y: 3 * G },
   ],
+  // Closed (a strong connection) only while held.
+  links: (part, inputs) => (inputs?.pressed?.has(part.id) ? [{ a: "1", b: "2" }] : []),
   interactive: true,
   render(part, state = {}) {
     const pressed = state.pressed === true;

@@ -41,9 +41,11 @@ jobs:
         run: python3 tools/hwref/extract_brd.py "$RUNNER_TEMP/ti/spmr240.zip" summary
 
       - name: Connector, switch, and LED pads
+        if: always()
         run: python3 tools/hwref/extract_brd.py "$RUNNER_TEMP/ti/spmr240.zip" headers
 
       - name: Verify pin map against SPMU296
+        if: always()
         run: |
           pdftotext -layout "$RUNNER_TEMP/ti/spmu296.pdf" "$RUNNER_TEMP/ti/spmu296.txt"
           python3 tools/hwref/check_pinmap.py "$RUNNER_TEMP/ti/spmu296.txt" apps/web/board/ek-tm4c123gxl.pins.json
