@@ -74,19 +74,21 @@ const CAD_TEST_HOLES = [
 ];
 
 /**
- * Three 0.039 in through-holes near the top-right corner (NC drill tool T4).
- * Treated as the RESET pushbutton footprint; the refdes is not yet confirmed
- * from the CAD export (see RESET_SOURCE).
+ * Three 0.039 in holes (NC drill tool T4) centred on J5 at (1872, 2360) mil:
+ * the Tag-Connect TC2050 debug footprint on the bottom side.
  */
-const CAD_RESET_HOLES = [[1.832, 2.21], [1.912, 2.21], [1.872, 2.51]];
-export const RESET_SOURCE = "tentative: 3-hole footprint from NC drill tool T4; refdes not yet confirmed";
+const CAD_J5_HOLES = [[1.832, 2.21], [1.912, 2.21], [1.872, 2.51]];
+
+/**
+ * The SPMR240 part list contains only SW1, SW2 (user switches) and SW3
+ * (power select): no reset pushbutton part. The board view therefore draws
+ * no reset button; MCU reset is available from the toolbar and as the J2.5
+ * RESET header signal.
+ */
+export const RESET_SOURCE = "no reset switch part in SPMR240 Rev A (SW1, SW2, SW3 only)";
 
 const at = (refdes) => cad(CAD_PLACEMENT[refdes][0], CAD_PLACEMENT[refdes][1]);
 const inch = ([x, y]) => cad(x * 1000, y * 1000);
-const resetCenter = (() => {
-  const points = CAD_RESET_HOLES.map(inch);
-  return { x: points.reduce((s, p) => s + p.x, 0) / points.length, y: points.reduce((s, p) => s + p.y, 0) / points.length };
-})();
 
 /** Header pitch: 0.1 inch. */
 const PITCH = 2.54;
@@ -103,7 +105,7 @@ export const GEOMETRY = Object.freeze({
   usbDebug: at("J11"),
   usbDevice: at("J9"),
   powerSwitch: at("SW3"),
-  reset: resetCenter,
+  tagConnect: cad(1872, 2360),
   sw1: at("SW1"),
   sw2: at("SW2"),
   rgbLed: at("D1"),
@@ -364,7 +366,7 @@ export const COMPONENTS = Object.freeze({
   D4: { title: "D4 · Power LED", status: "visual", lines: ["Shown lit while a simulation session is live"] },
   SW1: { title: "SW1 · User switch", status: "simulated", lines: ["PF4, active low; firmware must enable the internal pull-up", "Hold to press while the simulation runs"] },
   SW2: { title: "SW2 · User switch", status: "simulated", lines: ["PF0, active low; PF0 is commit-protected (GPIOLOCK/GPIOCR)", "Hold to press while the simulation runs"] },
-  RESET: { title: "RESET pushbutton", status: "provisional", lines: ["Releasing it resets the simulated MCU (Renode machine Reset)", `Position provisional — ${RESET_SOURCE}`] },
+  J5: { title: "J5 · Tag-Connect TC2050 debug footprint (bottom side)", status: "visual", lines: ["Three alignment holes from the NC drill file (tool T4)", "Not simulated"] },
   Y1: { title: "Y1 · Crystal (target MCU)", status: "visual", lines: ["Clock tree not modeled; the simulator assumes the 16 MHz PIOSC reset clock"] },
   Y2: { title: "Y2 · Crystal (target MCU)", status: "visual", lines: ["Clock tree and hibernation module not modeled"] },
   Y5: { title: "Y5 · Crystal (ICDI)", status: "visual", lines: ["Part of the debug interface; not simulated"] },
@@ -392,7 +394,7 @@ const around = (p, w, h) => ({ x: p.x - w / 2, y: p.y - h / 2, w, h });
 function render() {
   const g = GEOMETRY;
   const holes = CAD_TEST_HOLES.map(inch).map((p) => `<circle cx="${S(p.x)}" cy="${S(p.y)}" r="${S(0.75)}" class="lp-hole" /><circle cx="${S(p.x)}" cy="${S(p.y)}" r="${S(0.45)}" class="lp-drill" />`).join("");
-  const resetHoles = CAD_RESET_HOLES.map(inch).map((p) => `<circle cx="${S(p.x)}" cy="${S(p.y)}" r="${S(0.7)}" class="lp-hole" />`).join("");
+  const tagConnectHoles = CAD_J5_HOLES.map(inch).map((p) => `<circle cx="${S(p.x)}" cy="${S(p.y)}" r="${S(0.5)}" class="lp-drill" />`).join("");
   const r9 = at("R9");
   const r10 = at("R10");
   return `
@@ -408,7 +410,7 @@ function render() {
         <path d="M ${S(g.mcu.x + 5)} ${S(g.mcu.y + 6)} V ${S(g.sw2.y - 4)} H ${S(g.sw2.x - 3)}" />
       </g>
       ${holes}
-      ${resetHoles}
+      ${component("J5", around(g.tagConnect, 4.4, 9.0), `${tagConnectHoles}<text x="${S(g.tagConnect.x)}" y="${S(g.tagConnect.y + 0.7)}" class="lp-silk small">J5</text>`)}
       <rect x="${S(1.2)}" y="${S(16.6)}" width="${S(48.4)}" height="${S(0.25)}" class="lp-divider" />
       <text x="${S(g.width / 2)}" y="${S(18.3)}" class="lp-silk small">IN-CIRCUIT DEBUG INTERFACE ABOVE · TARGET MCU BELOW</text>
       ${component("J11", { x: g.usbDebug.x - 4, y: -1, w: 8, h: 5.2 }, usbTop(g.usbDebug, "DEBUG"))}
@@ -444,7 +446,6 @@ function render() {
           <circle id="blueLed" cx="${S(g.rgbLed.x + 0.5)}" cy="${S(g.rgbLed.y + 0.35)}" r="${S(0.33)}" class="lp-rgb-die blue" />
         </g>`)}
       <text x="${S(g.rgbLed.x - 1.8)}" y="${S(g.rgbLed.y + 0.8)}" class="lp-silk small end">RGB</text>
-      ${component("RESET", around(g.reset, 5.4, 5.4), tactileSwitch("resetButton_board", "RESET", g.reset, "RESET", 4.0))}
       ${component("SW1", around(g.sw1, 7.4, 7.4), tactileSwitch("sw1Button", "SW1", g.sw1, "SW1"))}
       ${component("SW2", around(g.sw2, 7.4, 7.4), tactileSwitch("sw2Button", "SW2", g.sw2, "SW2"))}
       <text x="${S(g.width / 2)}" y="${S(g.height - 6.4)}" class="lp-silk lp-title">TM4C123G LaunchPad</text>

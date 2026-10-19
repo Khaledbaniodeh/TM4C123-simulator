@@ -57,6 +57,17 @@ jobs:
         if: always()
         run: python3 tools/hwref/inspect_pads.py "$RUNNER_TEMP/ti/spmr240.zip" drill
 
+      - name: Reset switch evidence (user guide and BOM)
+        if: always()
+        run: |
+          cd "$RUNNER_TEMP/ti" && unzip -q -o spmr240.zip
+          {
+            echo "SPMU296 lines mentioning reset/switch:"
+            grep -n -i -E "reset|switch" spmu296.txt | head -25
+            echo "BOM strings mentioning switch/reset/EVQ:"
+            strings "$(find . -name '*Bill Of Materials*.xls' | head -1)" | grep -i -E "switch|reset|EVQ|SW[0-9]" | head -20
+          } | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}' | sed 's/^/::notice title=Reset switch evidence::/'; echo
+
       - name: Schematic nets for LEDs, switches, R9/R10
         if: always()
         run: |
