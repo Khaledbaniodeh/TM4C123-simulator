@@ -334,8 +334,9 @@ function crystal(refdes) {
   return `<rect x="${S(position.x - w / 2)}" y="${S(position.y - h / 2)}" width="${S(w)}" height="${S(h)}" rx="0.6" class="lp-crystal" />`;
 }
 
-function tactileSwitch(id, input, position, label, size = 6) {
+function tactileSwitch(id, input, position, label, size = 6, labelAbove = false) {
   const { x, y } = position;
+  const labelY = labelAbove ? y - size / 2 - 0.9 : y + size / 2 + 2.0;
   return `
     <g id="${id}" class="lp-switch" data-input="${input}" role="button" tabindex="0" aria-pressed="false"
        aria-label="${label} — hold to press while the simulation runs">
@@ -345,7 +346,7 @@ function tactileSwitch(id, input, position, label, size = 6) {
       <circle cx="${S(x - size * 0.36)}" cy="${S(y + size * 0.36)}" r="${S(0.35)}" class="lp-switch-corner" />
       <circle cx="${S(x + size * 0.36)}" cy="${S(y + size * 0.36)}" r="${S(0.35)}" class="lp-switch-corner" />
       <circle cx="${S(x)}" cy="${S(y)}" r="${S(size * 0.3)}" class="lp-switch-cap" />
-      <text x="${S(x)}" y="${S(y + size / 2 + 2.0)}" class="lp-silk">${label}</text>
+      <text x="${S(x)}" y="${S(labelY)}" class="lp-silk">${label}</text>
     </g>`;
 }
 
@@ -458,7 +459,7 @@ function render() {
           <circle id="blueLed" cx="${S(g.rgbLed.x + 0.5)}" cy="${S(g.rgbLed.y + 0.35)}" r="${S(0.33)}" class="lp-rgb-die blue" />
         </g>`)}
       <text x="${S(g.rgbLed.x - 1.8)}" y="${S(g.rgbLed.y + 0.8)}" class="lp-silk small end">RGB</text>
-      ${component("RESET", around(g.reset, 7.4, 7.4), tactileSwitch("resetButton_board", "RESET", g.reset, "RESET"))}
+      ${component("RESET", around(g.reset, 7.4, 7.4), tactileSwitch("resetButton_board", "RESET", g.reset, "RESET", 6, true))}
       ${component("SW1", around(g.sw1, 7.4, 7.4), tactileSwitch("sw1Button", "SW1", g.sw1, "SW1"))}
       ${component("SW2", around(g.sw2, 7.4, 7.4), tactileSwitch("sw2Button", "SW2", g.sw2, "SW2"))}
       <text x="${S(g.width / 2)}" y="${S(g.height - 6.4)}" class="lp-silk lp-title">TM4C123G LaunchPad</text>
