@@ -102,10 +102,48 @@
   fill: #9aa1ab;
 }
 
-.lp-passive {
-  fill: #c9b48a;
-  stroke: #7d6a45;
-  stroke-width: 0.3;
+.lp-res {
+  fill: #1f1f22;
+  stroke: #c9ccd2;
+  stroke-width: 0.35;
+}
+
+.lp-res.lp-zero {
+  fill: #3a3a3e;
+}
+
+.lp-cap {
+  fill: #b8916a;
+  stroke: #d8dbe0;
+  stroke-width: 0.35;
+}
+
+.lp-crystal {
+  fill: #c9ccd2;
+  stroke: #8b9099;
+  stroke-width: 0.5;
+}
+
+.lp-ic-small {
+  fill: #26292e;
+  stroke: #9aa0a8;
+  stroke-width: 0.4;
+}
+
+.lp-drill {
+  fill: #0d1117;
+}
+
+.lp-divider {
+  fill: rgba(243, 241, 234, 0.55);
+}
+
+.lp-switch-corner {
+  fill: #6b7280;
+}
+
+.lp-pinlabel.dim {
+  fill-opacity: 0.72;
 }
 
 .lp-usb-shell {

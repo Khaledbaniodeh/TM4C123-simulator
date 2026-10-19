@@ -68,10 +68,29 @@ describe("board geometry", () => {
     assert.ok(x("J2") > x("J4") && x("J4") > GEOMETRY.width / 2);
   });
 
-  it("is portrait with the USB edge at the top", () => {
+  it("matches TI's CAD data: 2.0 x 2.6 in outline and header columns on 0.1 in", () => {
+    assert.ok(Math.abs(GEOMETRY.width - 50.8) < 1e-9 && Math.abs(GEOMETRY.height - 66.04) < 1e-9);
+    // J1/J3 at 100/200 mil, J4/J2 at 1800/1900 mil; pin 1 at 1400 mil (CAD y up) = 30.48 mm from the top.
+    const expected = { J1: 2.54, J3: 5.08, J4: 45.72, J2: 48.26 };
+    for (const [header, x] of Object.entries(expected)) {
+      assert.ok(Math.abs(GEOMETRY.headers[header].x - x) < 1e-9, `${header} x`);
+      assert.ok(Math.abs(GEOMETRY.headers[header].y - 30.48) < 1e-9, `${header} pin 1 y`);
+    }
+  });
+
+  it("is portrait with DEBUG USB on the top edge, DEVICE USB on the left edge, and switches at the bottom", () => {
     assert.ok(GEOMETRY.height > GEOMETRY.width);
-    assert.ok(GEOMETRY.usbDebug.y < GEOMETRY.height / 4 && GEOMETRY.usbDevice.y < GEOMETRY.height / 4);
-    assert.ok(GEOMETRY.sw1.y > GEOMETRY.height / 2 && GEOMETRY.sw2.y > GEOMETRY.height / 2);
+    assert.ok(GEOMETRY.usbDebug.y < 3, "DEBUG micro-B on the top edge");
+    assert.ok(GEOMETRY.usbDevice.x < 3, "DEVICE micro-AB on the left edge");
+    assert.ok(GEOMETRY.sw1.y > GEOMETRY.height * 0.85 && GEOMETRY.sw2.y > GEOMETRY.height * 0.85);
+    assert.ok(GEOMETRY.sw1.x < GEOMETRY.width / 2 && GEOMETRY.sw2.x > GEOMETRY.width / 2);
+  });
+
+  it("puts every header pin anchor on the 0.1-inch workspace grid", () => {
+    for (const pin of BOARD_PART.pins) {
+      assert.ok(Math.abs(pin.x / GRID - Math.round(pin.x / GRID)) < 1e-6, `${pin.name} x`);
+      assert.ok(Math.abs(pin.y / GRID - Math.round(pin.y / GRID)) < 1e-6, `${pin.name} y`);
+    }
   });
 });
 

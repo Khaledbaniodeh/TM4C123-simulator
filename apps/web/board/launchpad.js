@@ -2,11 +2,18 @@
  * EK-TM4C123GXL LaunchPad part: original SVG artwork, pin anchors, and pin
  * metadata for the circuit workspace.
  *
- * Geometry (millimetres, origin at the board's top-left corner, USB edge at
- * the top) comes from TI's Rev A design files (SPMR240), extracted in CI by
- * tools/hwref/extract_brd.py — see GEOMETRY_SOURCE below. Header signal
- * assignments come from ek-tm4c123gxl.pins.json (verified against SPMU296
- * by tools/hwref/check_pinmap.py).
+ * Placement data comes from TI's Rev A design package (SPMR240, a PADS 9.3
+ * design), extracted on the CI runner by tools/hwref/inspect_pads.py:
+ *   - board outline: PADS *LINES* BOARD and the BoardOutline Gerber agree,
+ *     2000 x 2600 mil
+ *   - part placements: PADS *PART* section (BASIC units / 38100 = mil)
+ *   - header pins: NC drill tool T2 (0.035 in), 40 hits on a 100 mil grid
+ * CAD values are kept verbatim below in mil with the y axis pointing up
+ * (as TI publishes them) and converted to SVG millimetres (y down) by cad().
+ * The artwork itself is an original drawing; no TI files are redistributed.
+ *
+ * Header signal assignments come from ek-tm4c123gxl.pins.json, verified
+ * against SPMU296 by tools/hwref/check_pinmap.py.
  *
  * Electrical state is never decided here: `update()` paints LEDs and
  * switches from the simulator-derived state passed in by the app.
@@ -16,38 +23,94 @@ import { mm } from "../workspace/geometry.js";
 
 export const BOARD_TYPE = "tm4c123gxl-launchpad";
 
+const MIL = 0.0254;
+const BOARD_MIL = { width: 2000, height: 2600 };
+
+/** CAD (mil, y up) -> board millimetres (origin top-left, y down). */
+function cad(xMil, yMil) {
+  return { x: xMil * MIL, y: (BOARD_MIL.height - yMil) * MIL };
+}
+
+/** Part placements from SPMR240 (refdes: [x mil, y mil, rotation deg (CAD, CCW)]). */
+export const CAD_PLACEMENT = Object.freeze({
+  J1: [100, 1400, 0], J3: [200, 1400, 0], J4: [1800, 1400, 0], J2: [1900, 1400, 0],
+  U1: [1000, 1000, 135], // TM4C123GH6PM target (LQFP-64)
+  U2: [1200, 2230, 0], // TM4C123G in-circuit debug interface (ICDI)
+  SW1: [400, 200, 0], SW2: [1600, 200, 0], // SW-EVQQ2 user switches
+  SW3: [200, 2400, 90], // DPDT power select
+  J11: [616, 2540, 270], // USB micro-B (DEBUG)
+  J9: [60, 1800, 0], // USB micro-AB (DEVICE)
+  D1: [1904, 1616, 270], // RGB LED (0404)
+  D4: [772, 2200, 270], // power LED (0805)
+  Q1: [1695.8, 1551.3, 0], Q2: [1695.4, 1696.8, 0], Q3: [1696, 1624, 0], // LED drivers
+  Y1: [726.3, 1480.9, 0], Y2: [650.1, 1340.4, 0], Y5: [1711.1, 2223.4, 270], // crystals
+  U4: [548, 2060, 0], U8: [576, 2208, 90], D2: [708, 2024, 180],
+  R9: [813.7, 633.3, 0], R10: [942, 632.6, 0],
+});
+
+/** Passives with known placement (refdes: [x, y, rot, package]). Partial list. */
+const CAD_PASSIVES = [
+  ["R24", 372.9, 2526.3, 270, "0402"], ["R19", 843.6, 2169.7, 270, "0402"], ["C34", 819, 2041.8, 0, "0402"],
+  ["R21", 1952, 2328, 270, "0402"], ["R22", 1952, 2432, 90, "0402"], ["R30", 654, 1812, 180, "0603"],
+  ["R14", 236, 2020, 0, "0603"], ["R1", 1552, 1150, 0, "0603"], ["R2", 1508, 1572, 0, "0603"],
+  ["R11", 1552, 1450, 180, "0603"], ["R12", 1552, 1350, 180, "0603"], ["R13", 691.3, 277.1, 180, "0603"],
+  ["R16", 396, 2368, 270, "0603"], ["R17", 528, 1920, 90, "0402"], ["R4", 1783.4, 1696.8, 0, "0402"],
+  ["R5", 1784, 1624, 0, "0402"], ["C12", 700.5, 752.8, 180, "0402"], ["C1", 853.8, 2340, 270, "0402"],
+  ["C2", 1244, 1908, 270, "0402"], ["C8", 1132, 644, 0, "0402"], ["R26", 649.3, 1242.5, 0, "0603"],
+  ["R20", 1536.8, 2242.2, 180, "0603"], ["C14", 431.4, 2189.3, 270, "0402"], ["R25", 260, 1580, 0, "0603"],
+  ["R29", 260, 1516, 180, "0603"], ["C18", 708, 2244, 90, "0402"], ["R27", 708, 2164, 270, "0402"],
+  ["C3", 1260.5, 1182.6, 0, "0402"], ["C4", 701.4, 839.8, 180, "0402"], ["C5", 1132, 692, 0, "0402"],
+  ["C6", 1307.4, 825.5, 90, "0402"], ["C7", 663.9, 1185.8, 180, "0402"], ["C10", 701, 796.5, 180, "0402"],
+  ["C11", 1260, 1230, 0, "0402"], ["R31", 1095.2, 1403.7, 270, "0402"], ["C28", 809.4, 1518.7, 270, "0402"],
+  ["C29", 809.4, 1447.1, 270, "0402"], ["C31", 551.8, 1250.6, 180, "0402"], ["C32", 747.1, 1250.9, 0, "0402"],
+  ["R28", 809, 1368.3, 270, "0402"], ["C13", 809, 1289.4, 270, "0402"], ["C15", 904, 2340, 270, "0402"],
+];
+
+/** Plated single-pin holes (NC drill tool T3, 0.039 in), inch, y up, board-relative. */
+const CAD_TEST_HOLES = [
+  [0.1, 0.1], [0.1, 0.2], [0.1, 0.3], [0.4, 1.7], [0.4, 1.8], [0.2, 2.1], [0.1, 2.1], [0.3, 2.1],
+  [0.9, 2.5], [0.6, 1.9], [0.7, 1.9], [1.0, 1.8], [0.9, 1.8], [1.0, 1.4], [1.2, 1.3], [1.1, 1.8],
+  [1.2, 1.8], [1.5, 1.8], [1.4, 1.8], [1.3, 1.8], [1.5, 1.9], [1.8, 0.4], [1.9, 0.3], [1.9, 0.2], [1.9, 0.1],
+];
+
+/**
+ * Three 0.039 in through-holes near the top-right corner (NC drill tool T4).
+ * Treated as the RESET pushbutton footprint; the refdes is not yet confirmed
+ * from the CAD export (see RESET_SOURCE).
+ */
+const CAD_RESET_HOLES = [[1.832, 2.21], [1.912, 2.21], [1.872, 2.51]];
+export const RESET_SOURCE = "tentative: 3-hole footprint from NC drill tool T4; refdes not yet confirmed";
+
+const at = (refdes) => cad(CAD_PLACEMENT[refdes][0], CAD_PLACEMENT[refdes][1]);
+const inch = ([x, y]) => cad(x * 1000, y * 1000);
+const resetCenter = (() => {
+  const points = CAD_RESET_HOLES.map(inch);
+  return { x: points.reduce((s, p) => s + p.x, 0) / points.length, y: points.reduce((s, p) => s + p.y, 0) / points.length };
+})();
+
 /** Header pitch: 0.1 inch. */
 const PITCH = 2.54;
 
-/**
- * Physical layout in mm. PLACEHOLDER values until replaced with the
- * numbers extracted from SPMR240 (see GEOMETRY_SOURCE).
- */
+/** Layout in board millimetres (origin top-left, y down), derived from CAD_PLACEMENT. */
 export const GEOMETRY = Object.freeze({
-  width: 50.8,
-  height: 66.04,
-  cornerRadius: 1.5,
-  // Pin 1 of each header (pins run downward, 0.1" pitch).
-  headers: {
-    J1: { x: 6.35, y: 19.05 },
-    J3: { x: 8.89, y: 19.05 },
-    J4: { x: 41.91, y: 19.05 },
-    J2: { x: 44.45, y: 19.05 },
-  },
-  mcu: { x: 25.4, y: 34.9, size: 10, rotation: 45 },
-  icdi: { x: 25.4, y: 11.5, size: 7 },
-  usbDebug: { x: 34.0, y: 0 },
-  usbDevice: { x: 12.0, y: 0 },
-  powerSwitch: { x: 6.0, y: 3.2 },
-  reset: { x: 45.5, y: 4.5 },
-  sw1: { x: 6.2, y: 60.5 },
-  sw2: { x: 44.6, y: 60.5 },
-  rgbLed: { x: 37.5, y: 52.5 },
-  powerLed: { x: 41.5, y: 9.5 },
-  holes: [],
+  width: BOARD_MIL.width * MIL,
+  height: BOARD_MIL.height * MIL,
+  cornerRadius: 1.0,
+  // Pin 1 of each header; pins run downward on a 0.1 in pitch.
+  headers: { J1: at("J1"), J3: at("J3"), J4: at("J4"), J2: at("J2") },
+  mcu: { ...at("U1"), size: 10, rotation: -CAD_PLACEMENT.U1[2] },
+  icdi: { ...at("U2"), size: 10 },
+  usbDebug: at("J11"),
+  usbDevice: at("J9"),
+  powerSwitch: at("SW3"),
+  reset: resetCenter,
+  sw1: at("SW1"),
+  sw2: at("SW2"),
+  rgbLed: at("D1"),
+  powerLed: at("D4"),
 });
 
-export const GEOMETRY_SOURCE = "placeholder — pending SPMR240 extraction";
+export const GEOMETRY_SOURCE = "TI SPMR240 Rev A design package (PADS 9.3), extracted in CI";
 
 const SIZE = { width: mm(GEOMETRY.width), height: mm(GEOMETRY.height) };
 
@@ -137,7 +200,7 @@ function links() {
 }
 
 // ---------------------------------------------------------------------------
-// Artwork (original drawing; proportions from TI design data)
+// Artwork (original drawing; placement from TI CAD data)
 // ---------------------------------------------------------------------------
 
 const S = (value) => mm(value).toFixed(2);
@@ -146,25 +209,42 @@ function headerArt(header) {
   const origin = GEOMETRY.headers[header];
   const x = mm(origin.x);
   const y = mm(origin.y);
-  const length = mm(PITCH * 10);
   const half = mm(PITCH / 2);
   const right = origin.x > GEOMETRY.width / 2;
+  const outer = header === "J1" || header === "J2";
   const pins = pinMap.headers[header].map((entry) => {
     const py = mm(origin.y + (entry.pin - 1) * PITCH);
     const label = entry.gpio ?? entry.signal;
-    const labelX = right ? x - mm(1.9) : x + mm(1.9);
+    // Labels sit toward the board centre; outer-header (J1/J2) labels are
+    // drawn by outerLabels() one column further in.
+    const labelX = right ? x - mm(1.6) : x + mm(1.6);
     return `
       <rect x="${(x - mm(0.95)).toFixed(2)}" y="${(py - mm(0.95)).toFixed(2)}" width="${S(1.9)}" height="${S(1.9)}" rx="1" class="lp-pad" />
-      <rect x="${(x - mm(0.32)).toFixed(2)}" y="${(py - mm(0.32)).toFixed(2)}" width="${S(0.64)}" height="${S(0.64)}" class="lp-pin" />
-      <text x="${labelX.toFixed(2)}" y="${(py + mm(0.45)).toFixed(2)}" class="lp-silk lp-pinlabel ${right ? "end" : "start"}">${label}</text>`;
+      <circle cx="${x.toFixed(2)}" cy="${py.toFixed(2)}" r="${S(0.45)}" class="lp-pin" />
+      ${outer ? "" : `<text x="${labelX.toFixed(2)}" y="${(py + mm(0.45)).toFixed(2)}" class="lp-silk lp-pinlabel ${right ? "end" : "start"}">${label}</text>`}`;
   }).join("");
-  const numberX = x;
   return `
     <g class="lp-header" data-header="${header}">
-      <rect x="${(x - half).toFixed(2)}" y="${(y - half).toFixed(2)}" width="${(half * 2).toFixed(2)}" height="${length.toFixed(2)}" rx="1.5" class="lp-header-body" />
+      <rect x="${(x - half).toFixed(2)}" y="${(y - half).toFixed(2)}" width="${(half * 2).toFixed(2)}" height="${mm(PITCH * 10).toFixed(2)}" rx="1.5" class="lp-header-body" />
       ${pins}
-      <text x="${numberX.toFixed(2)}" y="${(y - mm(2.2)).toFixed(2)}" class="lp-silk lp-header-name">${header}</text>
+      <text x="${x.toFixed(2)}" y="${(y - mm(1.9)).toFixed(2)}" class="lp-silk lp-header-name">${header}</text>
     </g>`;
+}
+
+/** Outer-header labels (J1/J2) next to the inner header's labels, e.g. "PB5 · PD0". */
+function outerLabels() {
+  const rows = [];
+  for (const [outer, inner] of [["J1", "J3"], ["J2", "J4"]]) {
+    const right = outer === "J2";
+    const origin = GEOMETRY.headers[inner];
+    for (let pin = 1; pin <= 10; pin++) {
+      const entry = pinMap.headers[outer][pin - 1];
+      const py = mm(origin.y + (pin - 1) * PITCH);
+      const x = right ? mm(origin.x) - mm(6.6) : mm(origin.x) + mm(6.6);
+      rows.push(`<text x="${x.toFixed(2)}" y="${(py + mm(0.45)).toFixed(2)}" class="lp-silk lp-pinlabel dim ${right ? "end" : "start"}">${entry.gpio ?? entry.signal}</text>`);
+    }
+  }
+  return rows.join("");
 }
 
 function qfp(cx, cy, size, rotation, label, sublabel) {
@@ -172,16 +252,16 @@ function qfp(cx, cy, size, rotation, label, sublabel) {
   const leadLength = mm(1.0);
   const leads = [];
   const count = 16;
-  const span = body * 0.82;
+  const span = body * 0.8;
   for (let side = 0; side < 4; side++) {
     for (let i = 0; i < count; i++) {
       const offset = -span / 2 + (span * (i + 0.5)) / count;
       const half = body / 2;
       const [x, y, w, h] = [
-        [offset - 0.6, -half - leadLength, 1.2, leadLength],
-        [half, offset - 0.6, leadLength, 1.2],
-        [offset - 0.6, half, 1.2, leadLength],
-        [-half - leadLength, offset - 0.6, leadLength, 1.2],
+        [offset - 0.55, -half - leadLength, 1.1, leadLength],
+        [half, offset - 0.55, leadLength, 1.1],
+        [offset - 0.55, half, 1.1, leadLength],
+        [-half - leadLength, offset - 0.55, leadLength, 1.1],
       ][side];
       leads.push(`<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}" class="lp-lead" />`);
     }
@@ -190,21 +270,55 @@ function qfp(cx, cy, size, rotation, label, sublabel) {
     <g transform="translate(${mm(cx).toFixed(2)} ${mm(cy).toFixed(2)}) rotate(${rotation})">
       ${leads.join("")}
       <rect x="${(-body / 2).toFixed(2)}" y="${(-body / 2).toFixed(2)}" width="${body.toFixed(2)}" height="${body.toFixed(2)}" rx="1.2" class="lp-chip" />
-      <circle cx="${(-body / 2 + 4).toFixed(2)}" cy="${(-body / 2 + 4).toFixed(2)}" r="1.4" class="lp-chip-dot" />
+      <circle cx="${(-body / 2 + 4.5).toFixed(2)}" cy="${(-body / 2 + 4.5).toFixed(2)}" r="1.5" class="lp-chip-dot" />
       <g transform="rotate(${-rotation})">
         <text y="-1" class="lp-chip-text">${label}</text>
-        <text y="6" class="lp-chip-subtext">${sublabel}</text>
+        <text y="6.5" class="lp-chip-subtext">${sublabel}</text>
       </g>
     </g>`;
 }
 
-function usbArt(x, label) {
+function smdPart(position, rotation, length, width, cls) {
+  const vertical = rotation % 180 !== 0;
+  const w = vertical ? width : length;
+  const h = vertical ? length : width;
+  return `<rect x="${S(position.x - w / 2)}" y="${S(position.y - h / 2)}" width="${S(w)}" height="${S(h)}" class="${cls}" />`;
+}
+
+const PASSIVE_SIZE = { "0402": [1.0, 0.5], "0603": [1.6, 0.8] };
+
+function passivesArt() {
+  return CAD_PASSIVES.map(([refdes, x, y, rotation, size]) => {
+    const [length, width] = PASSIVE_SIZE[size];
+    const cls = refdes.startsWith("C") ? "lp-cap" : "lp-res";
+    return smdPart(cad(x, y), rotation, length, width, cls);
+  }).join("");
+}
+
+function usbTop(position, label) {
   return `
     <g class="lp-usb">
-      <rect x="${S(x - 4)}" y="${S(-1.2)}" width="${S(8)}" height="${S(5.6)}" rx="1.5" class="lp-usb-shell" />
-      <rect x="${S(x - 2.9)}" y="${S(-0.6)}" width="${S(5.8)}" height="${S(1.6)}" rx="0.6" class="lp-usb-mouth" />
-      <text x="${S(x)}" y="${S(7.2)}" class="lp-silk">${label}</text>
+      <rect x="${S(position.x - 4)}" y="${S(-1.0)}" width="${S(8)}" height="${S(5.2)}" rx="1.3" class="lp-usb-shell" />
+      <rect x="${S(position.x - 2.9)}" y="${S(-0.6)}" width="${S(5.8)}" height="${S(1.5)}" rx="0.6" class="lp-usb-mouth" />
+      <text x="${S(position.x)}" y="${S(6.6)}" class="lp-silk small">${label}</text>
     </g>`;
+}
+
+function usbLeft(position, label) {
+  return `
+    <g class="lp-usb">
+      <rect x="${S(-1.0)}" y="${S(position.y - 4)}" width="${S(5.2)}" height="${S(8)}" rx="1.3" class="lp-usb-shell" />
+      <rect x="${S(-0.6)}" y="${S(position.y - 2.9)}" width="${S(1.5)}" height="${S(5.8)}" rx="0.6" class="lp-usb-mouth" />
+      <text x="${S(5.6)}" y="${S(position.y + 0.8)}" class="lp-silk small start">${label}</text>
+    </g>`;
+}
+
+function crystal(refdes) {
+  const position = at(refdes);
+  const vertical = CAD_PLACEMENT[refdes][2] % 180 !== 0;
+  const w = vertical ? 3.2 : 5.0;
+  const h = vertical ? 5.0 : 3.2;
+  return `<rect x="${S(position.x - w / 2)}" y="${S(position.y - h / 2)}" width="${S(w)}" height="${S(h)}" rx="0.6" class="lp-crystal" />`;
 }
 
 function tactileSwitch(id, input, position, label, size = 6) {
@@ -212,59 +326,78 @@ function tactileSwitch(id, input, position, label, size = 6) {
   return `
     <g id="${id}" class="lp-switch" data-input="${input}" role="button" tabindex="0" aria-pressed="false"
        aria-label="${label} — hold to press while the simulation runs">
-      <rect x="${S(x - size / 2)}" y="${S(y - size / 2)}" width="${S(size)}" height="${S(size)}" rx="2" class="lp-switch-body" />
-      <circle cx="${S(x)}" cy="${S(y)}" r="${S(size * 0.29)}" class="lp-switch-cap" />
-      <text x="${S(x)}" y="${S(y + size / 2 + 2.3)}" class="lp-silk">${label}</text>
+      <rect x="${S(x - size / 2)}" y="${S(y - size / 2)}" width="${S(size)}" height="${S(size)}" rx="1.6" class="lp-switch-body" />
+      <circle cx="${S(x - size * 0.36)}" cy="${S(y - size * 0.36)}" r="${S(0.35)}" class="lp-switch-corner" />
+      <circle cx="${S(x + size * 0.36)}" cy="${S(y - size * 0.36)}" r="${S(0.35)}" class="lp-switch-corner" />
+      <circle cx="${S(x - size * 0.36)}" cy="${S(y + size * 0.36)}" r="${S(0.35)}" class="lp-switch-corner" />
+      <circle cx="${S(x + size * 0.36)}" cy="${S(y + size * 0.36)}" r="${S(0.35)}" class="lp-switch-corner" />
+      <circle cx="${S(x)}" cy="${S(y)}" r="${S(size * 0.3)}" class="lp-switch-cap" />
+      <text x="${S(x)}" y="${S(y + size / 2 + 2.0)}" class="lp-silk">${label}</text>
     </g>`;
 }
 
 function render() {
   const g = GEOMETRY;
-  const smd = [];
-  // Decorative passives near the MCUs (positions are illustrative, not placement data).
-  const passives = [[18, 26], [20, 26], [31, 26], [33, 26], [18, 44], [20, 44], [31, 44], [33, 44], [16.5, 33], [16.5, 36], [34.5, 33], [34.5, 36], [20, 7.5], [30.5, 7.5], [20, 15.5], [30.5, 15.5]];
-  for (const [x, y] of passives) {
-    smd.push(`<rect x="${S(x - 0.8)}" y="${S(y - 0.4)}" width="${S(1.6)}" height="${S(0.8)}" class="lp-passive" />`);
-  }
+  const holes = CAD_TEST_HOLES.map(inch).map((p) => `<circle cx="${S(p.x)}" cy="${S(p.y)}" r="${S(0.75)}" class="lp-hole" /><circle cx="${S(p.x)}" cy="${S(p.y)}" r="${S(0.45)}" class="lp-drill" />`).join("");
+  const resetHoles = CAD_RESET_HOLES.map(inch).map((p) => `<circle cx="${S(p.x)}" cy="${S(p.y)}" r="${S(0.7)}" class="lp-hole" />`).join("");
+  const r9 = at("R9");
+  const r10 = at("R10");
   return `
     <g class="launchpad">
       <rect x="0" y="0" width="${S(g.width)}" height="${S(g.height)}" rx="${S(g.cornerRadius)}" class="lp-pcb" />
-      <rect x="${S(0.8)}" y="${S(0.8)}" width="${S(g.width - 1.6)}" height="${S(g.height - 1.6)}" rx="${S(g.cornerRadius)}" class="lp-pcb-edge" />
+      <rect x="${S(0.6)}" y="${S(0.6)}" width="${S(g.width - 1.2)}" height="${S(g.height - 1.2)}" rx="${S(g.cornerRadius)}" class="lp-pcb-edge" />
       <g class="lp-traces">
-        <path d="M ${S(g.mcu.x)} ${S(g.mcu.y - 9)} V ${S(g.icdi.y + 6)}" />
-        <path d="M ${S(g.mcu.x - 9)} ${S(g.mcu.y)} H ${S(g.headers.J3.x + 2)}" />
-        <path d="M ${S(g.mcu.x + 9)} ${S(g.mcu.y)} H ${S(g.headers.J4.x - 2)}" />
-        <path d="M ${S(g.mcu.x)} ${S(g.mcu.y + 9)} V ${S(g.rgbLed.y - 4)} H ${S(g.rgbLed.x)}" />
+        <path d="M ${S(g.mcu.x)} ${S(g.mcu.y - 8)} V ${S(g.icdi.y + 8)}" />
+        <path d="M ${S(g.mcu.x - 8)} ${S(g.mcu.y)} H ${S(g.headers.J3.x + 6)}" />
+        <path d="M ${S(g.mcu.x + 8)} ${S(g.mcu.y)} H ${S(g.headers.J4.x - 6)}" />
+        <path d="M ${S(g.mcu.x + 6)} ${S(g.mcu.y - 6)} L ${S(g.rgbLed.x - 6)} ${S(g.rgbLed.y)} H ${S(g.rgbLed.x - 1)}" />
+        <path d="M ${S(g.mcu.x - 5)} ${S(g.mcu.y + 6)} V ${S(g.sw1.y - 4)} H ${S(g.sw1.x + 3)}" />
+        <path d="M ${S(g.mcu.x + 5)} ${S(g.mcu.y + 6)} V ${S(g.sw2.y - 4)} H ${S(g.sw2.x - 3)}" />
       </g>
-      ${g.holes.map((h) => `<circle cx="${S(h.x)}" cy="${S(h.y)}" r="${S(h.r ?? 1.6)}" class="lp-hole" />`).join("")}
-      ${usbArt(g.usbDevice.x, "DEVICE")}
-      ${usbArt(g.usbDebug.x, "DEBUG")}
+      ${holes}
+      ${resetHoles}
+      <rect x="${S(1.2)}" y="${S(16.6)}" width="${S(48.4)}" height="${S(0.25)}" class="lp-divider" />
+      <text x="${S(g.width / 2)}" y="${S(18.3)}" class="lp-silk small">IN-CIRCUIT DEBUG INTERFACE ABOVE · TARGET MCU BELOW</text>
+      ${usbTop(g.usbDebug, "DEBUG")}
+      ${usbLeft(g.usbDevice, "DEVICE")}
       <g class="lp-power-switch">
-        <rect x="${S(g.powerSwitch.x - 3)}" y="${S(g.powerSwitch.y - 1.3)}" width="${S(6)}" height="${S(2.6)}" rx="0.6" class="lp-switch-body" />
-        <rect x="${S(g.powerSwitch.x - 2.6)}" y="${S(g.powerSwitch.y - 0.8)}" width="${S(2.2)}" height="${S(1.6)}" rx="0.4" class="lp-slider" />
-        <text x="${S(g.powerSwitch.x)}" y="${S(g.powerSwitch.y + 3.6)}" class="lp-silk small">PWR SELECT</text>
+        ${smdPart(g.powerSwitch, CAD_PLACEMENT.SW3[2], 7.0, 3.0, "lp-switch-body")}
+        <rect x="${S(g.powerSwitch.x - 0.9)}" y="${S(g.powerSwitch.y - 2.6)}" width="${S(1.8)}" height="${S(2.0)}" rx="0.3" class="lp-slider" />
+        <text x="${S(g.powerSwitch.x + 2.4)}" y="${S(g.powerSwitch.y - 1.6)}" class="lp-silk small start">DEBUG</text>
+        <text x="${S(g.powerSwitch.x + 2.4)}" y="${S(g.powerSwitch.y + 2.6)}" class="lp-silk small start">DEVICE</text>
+        <text x="${S(g.powerSwitch.x)}" y="${S(g.powerSwitch.y + 5.6)}" class="lp-silk small">PWR SELECT</text>
       </g>
-      ${qfp(g.icdi.x, g.icdi.y, g.icdi.size, 0, "ICDI", "debug")}
-      ${qfp(g.mcu.x, g.mcu.y, g.mcu.size, g.mcu.rotation, "TM4C123", "GH6PM")}
-      ${smd.join("")}
+      ${qfp(g.icdi.x, g.icdi.y, g.icdi.size, 0, "TM4C123G", "ICDI")}
+      ${qfp(g.mcu.x, g.mcu.y, g.mcu.size, g.mcu.rotation, "TM4C123G", "H6PM")}
+      ${["Y1", "Y2", "Y5"].map(crystal).join("")}
+      ${passivesArt()}
+      ${smdPart(at("U4"), 0, 2.9, 1.6, "lp-ic-small")}
+      ${smdPart(at("U8"), 90, 3.0, 3.0, "lp-ic-small")}
+      ${smdPart(at("D2"), 180, 2.9, 1.3, "lp-ic-small")}
+      ${["Q1", "Q2", "Q3"].map((q) => smdPart(at(q), 0, 1.2, 0.8, "lp-ic-small")).join("")}
+      ${smdPart(r9, 0, 1.6, 0.8, "lp-res lp-zero")}
+      ${smdPart(r10, 0, 1.6, 0.8, "lp-res lp-zero")}
+      <text x="${S(r9.x)}" y="${S(r9.y + 2.2)}" class="lp-silk small">R9</text>
+      <text x="${S(r10.x)}" y="${S(r10.y + 2.2)}" class="lp-silk small">R10</text>
       ${["J1", "J3", "J4", "J2"].map(headerArt).join("")}
+      ${outerLabels()}
       <g class="lp-power-led">
-        <rect x="${S(g.powerLed.x - 0.8)}" y="${S(g.powerLed.y - 0.5)}" width="${S(1.6)}" height="${S(1)}" class="lp-led-off" id="powerLed" />
-        <text x="${S(g.powerLed.x)}" y="${S(g.powerLed.y + 2.6)}" class="lp-silk small">PWR</text>
+        ${smdPart(g.powerLed, 270, 2.0, 1.25, "lp-led-off")}
+        <text x="${S(g.powerLed.x + 2.4)}" y="${S(g.powerLed.y + 0.8)}" class="lp-silk small start">PWR</text>
       </g>
       <g class="lp-rgb">
-        <rect x="${S(g.rgbLed.x - 2.6)}" y="${S(g.rgbLed.y - 2.6)}" width="${S(5.2)}" height="${S(5.2)}" rx="0.8" class="lp-rgb-body" />
-        <circle id="redLed" cx="${S(g.rgbLed.x - 1.3)}" cy="${S(g.rgbLed.y)}" r="${S(0.75)}" class="lp-rgb-die red" />
-        <circle id="greenLed" cx="${S(g.rgbLed.x)}" cy="${S(g.rgbLed.y - 1.1)}" r="${S(0.75)}" class="lp-rgb-die green" />
-        <circle id="blueLed" cx="${S(g.rgbLed.x + 1.3)}" cy="${S(g.rgbLed.y)}" r="${S(0.75)}" class="lp-rgb-die blue" />
-        <circle cx="${S(g.rgbLed.x)}" cy="${S(g.rgbLed.y)}" r="${S(4.2)}" class="lp-rgb-glow" />
-        <text x="${S(g.rgbLed.x)}" y="${S(g.rgbLed.y + 4.7)}" class="lp-silk small">RGB LED</text>
+        <circle cx="${S(g.rgbLed.x)}" cy="${S(g.rgbLed.y)}" r="${S(4.5)}" class="lp-rgb-glow" />
+        <rect x="${S(g.rgbLed.x - 1.0)}" y="${S(g.rgbLed.y - 1.0)}" width="${S(2.0)}" height="${S(2.0)}" rx="0.3" class="lp-rgb-body" />
+        <circle id="redLed" cx="${S(g.rgbLed.x - 0.5)}" cy="${S(g.rgbLed.y + 0.35)}" r="${S(0.33)}" class="lp-rgb-die red" />
+        <circle id="greenLed" cx="${S(g.rgbLed.x)}" cy="${S(g.rgbLed.y - 0.45)}" r="${S(0.33)}" class="lp-rgb-die green" />
+        <circle id="blueLed" cx="${S(g.rgbLed.x + 0.5)}" cy="${S(g.rgbLed.y + 0.35)}" r="${S(0.33)}" class="lp-rgb-die blue" />
+        <text x="${S(g.rgbLed.x - 1.8)}" y="${S(g.rgbLed.y + 0.8)}" class="lp-silk small end">RGB</text>
       </g>
-      ${tactileSwitch("resetButton_board", "RESET", g.reset, "RESET", 4.4)}
+      ${tactileSwitch("resetButton_board", "RESET", g.reset, "RESET", 4.0)}
       ${tactileSwitch("sw1Button", "SW1", g.sw1, "SW1")}
       ${tactileSwitch("sw2Button", "SW2", g.sw2, "SW2")}
-      <text x="${S(g.width / 2)}" y="${S(g.height - 6.8)}" class="lp-silk lp-title">TM4C123G LaunchPad</text>
-      <text x="${S(g.width / 2)}" y="${S(g.height - 3.6)}" class="lp-silk small">EK-TM4C123GXL · simulated board view</text>
+      <text x="${S(g.width / 2)}" y="${S(g.height - 6.4)}" class="lp-silk lp-title">TM4C123G LaunchPad</text>
+      <text x="${S(g.width / 2)}" y="${S(g.height - 3.4)}" class="lp-silk small">EK-TM4C123GXL · simulated board view</text>
     </g>`;
 }
 
@@ -278,7 +411,7 @@ function update(body, part, state = {}) {
   }
   body.querySelector(".lp-rgb-glow")?.setAttribute("style",
     `opacity:${Object.values(leds).some(Boolean) ? 1 : 0};fill:rgb(${leds.redLed ? 255 : 0},${leds.greenLed ? 255 : 0},${leds.blueLed ? 255 : 0})`);
-  body.querySelector("#powerLed")?.classList.toggle("active", state.live === true);
+  body.querySelector(".lp-power-led .lp-led-off")?.classList.toggle("active", state.live === true);
   for (const node of body.querySelectorAll("[data-input]")) {
     const pressed = state.pressed?.has(node.dataset.input) === true;
     node.classList.toggle("pressed", pressed);
@@ -304,5 +437,6 @@ export const BOARD_PART = Object.freeze({
   update,
   geometry: GEOMETRY,
   geometrySource: GEOMETRY_SOURCE,
+  resetSource: RESET_SOURCE,
   pinMap,
 });

@@ -154,9 +154,11 @@ def parts(archive):
                 rows.append(f"{tokens[0]} {tokens[1]} x={x_mil:.1f}mil y={y_mil:.1f}mil ori={tokens[4]} {' '.join(tokens[5:8])}")
             except ValueError:
                 rows.append(" ".join(tokens[:8]))
-    annotate("notice", "PADS parts (BASIC units -> mils)", rows)
-    remarks = [line for line in lines if line.startswith("*REMARK*")][:30]
-    annotate("notice", "PADS field layout remarks", remarks)
+    # Everything except plain resistors, capacitors, and single header pins:
+    # short enough to fit one annotation, so no part is lost to truncation.
+    active = [row for row in rows if not re.search(r"\s(RESC|CAPC|HDR-)", row)]
+    annotate("notice", "PADS non-passive parts", active)
+    annotate("notice", "PADS part types", sorted({row.split()[1] for row in rows if len(row.split()) > 1}))
 
 
 def main():
