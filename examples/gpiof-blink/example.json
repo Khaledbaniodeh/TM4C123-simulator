@@ -1,0 +1,8 @@
+{
+  "id": "gpiof-blink",
+  "title": "C — Blink red LED (software delay)",
+  "summary": "Toggles PF1 through the masked DATA alias with a busy-wait delay. The period follows from executed instructions at 16 MIPS.",
+  "experiment": 5,
+  "expected": "PF1 toggles periodically — red LED blinks",
+  "inputs": []
+}

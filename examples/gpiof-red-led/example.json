@@ -1,0 +1,8 @@
+{
+  "id": "gpiof-red-led",
+  "title": "A — Red LED on (PF1)",
+  "summary": "Enables the GPIOF clock, configures PF1 as a digital output, and drives it HIGH.",
+  "experiment": 5,
+  "expected": "PF1 HIGH (output) — red LED ON",
+  "inputs": []
+}
