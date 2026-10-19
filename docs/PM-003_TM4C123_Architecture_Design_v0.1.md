@@ -12,7 +12,7 @@
 
 ## 1. Purpose
 
-This document defines the technical architecture of the TM4C123 Educational Web Simulator.
+This document defines the technical architecture of the TM4C123 Simulator.
 
 It establishes:
 

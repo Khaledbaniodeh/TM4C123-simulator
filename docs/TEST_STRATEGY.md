@@ -1,6 +1,6 @@
 # Test Strategy
 
-This document defines the planned testing approach for the TM4C123 Educational Web Simulator.
+This document defines the planned testing approach for the TM4C123 Simulator.
 
 The purpose of testing is not only to confirm that the web interface works. The project must prove that compiled firmware produces correct and deterministic simulated hardware behavior.
 

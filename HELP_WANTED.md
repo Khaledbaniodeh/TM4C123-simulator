@@ -1,6 +1,6 @@
 # Help Wanted
 
-The TM4C123 Educational Web Simulator is currently seeking technical contributors and suitable development resources.
+The TM4C123 Simulator is currently seeking technical contributors and suitable development resources.
 
 This is not a request for money. It is a request for technical collaboration, review, infrastructure guidance, and implementation support.
 

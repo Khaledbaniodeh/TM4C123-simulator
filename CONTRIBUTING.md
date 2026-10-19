@@ -1,14 +1,36 @@
-# Contributing to the TM4C123 Educational Web Simulator
+# Contributing to the TM4C123 Simulator
 
 Thank you for your interest in contributing.
 
-This project is currently in the planning and feasibility stage. The simulator is not yet complete, and contributions should follow the documented architecture and small-task workflow.
+The project is an early technical prototype: the RISK-001 vertical slice
+(C → ELF → Renode → TM4C123 GPIO models → browser) works and is tested.
+Contributions should follow the documented architecture and small-task
+workflow.
+
+## Development Setup
+
+```bash
+npm run setup:tools   # pinned arm-none-eabi-gcc + Renode into .tools/ (SHA-256 verified)
+npm ci
+npm test              # compiler, Renode integration, API, board-state tests
+npm run test:e2e      # Playwright browser tests (npx playwright install chromium first,
+                      # or set PW_CHANNEL=msedge / chrome to use an installed browser)
+npm start             # http://127.0.0.1:5123/
+```
+
+A new peripheral model must come with firmware fixtures and tests that
+assert on model events or architectural state. It must also report
+unsupported registers instead of silently accepting them. See
+[`docs/PERIPHERAL_MODELS.md`](docs/PERIPHERAL_MODELS.md) and
+[`docs/RUNTIME_EVENTS.md`](docs/RUNTIME_EVENTS.md).
 
 ## Before You Start
 
 Please read:
 
 - `README.md`
+- `docs/TECHNICAL_OVERVIEW.md`
+- `docs/DECISION_LOG.md`
 - `docs/TM4C123_Simulator_MVP_Specification_v0.1.md`
 - `docs/PM-002_TM4C123_Compatibility_Matrix_v0.1.md`
 - `docs/PM-003_TM4C123_Architecture_Design_v0.1.md`

@@ -1,6 +1,6 @@
 # Infrastructure Requirements
 
-This document describes the technical environment required to continue development of the TM4C123 Educational Web Simulator.
+This document describes the technical environment required to continue development of the TM4C123 Simulator.
 
 It is not a fundraising request.
 

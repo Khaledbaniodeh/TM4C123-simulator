@@ -1,7 +1,7 @@
 # R1A-1 — Actual Workspace Environment Check
 
 **Parent task:** R1A — Toolchain and Engine Pinning  
-**Project:** TM4C123 Educational Web Simulator  
+**Project:** TM4C123 Simulator  
 **Status:** Ready for execution  
 **Task size:** Small / Read-only discovery  
 

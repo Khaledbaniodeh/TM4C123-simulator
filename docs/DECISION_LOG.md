@@ -87,7 +87,7 @@ User-provided source code and firmware must run inside isolated and resource-lim
 
 ### D-004 — Server-Side Execution for the Initial MVP
 
-**Status:** Conditional
+**Status:** Accepted for local development (2026-10-19, see D-016). Public multi-user execution remains blocked on D-003 isolation.
 
 **Condition:**
 
@@ -103,7 +103,7 @@ Browser-side execution may be researched later but is not required for the first
 
 ### D-005 — Renode as the Initial Execution-Engine Candidate
 
-**Status:** Conditional
+**Status:** Accepted for the GPIO scope (2026-10-19, see D-016). Re-evaluate per peripheral as later milestones land.
 
 **Condition:**
 
@@ -139,7 +139,7 @@ The project scope is TM4C123 hardware simulation, not full Cortex-M4 CPU impleme
 
 ### D-007 — Custom TM4C123 Peripheral Models
 
-**Status:** Conditional
+**Status:** Accepted (2026-10-19, see D-016)
 
 **Condition:**
 
@@ -161,7 +161,7 @@ Initial models include:
 
 ### D-008 — C# for Renode Peripheral Models
 
-**Status:** Conditional
+**Status:** Accepted (2026-10-19, see D-016)
 
 **Condition:**
 
@@ -200,7 +200,7 @@ This decision becomes accepted after project-foundation compatibility is verifie
 
 ### D-010 — Node.js and TypeScript Orchestrator
 
-**Status:** Proposed
+**Status:** Accepted with amendment (2026-10-19, see D-018): Node.js orchestrator in plain ES modules; TypeScript deferred.
 
 **Decision:**
 
@@ -325,6 +325,162 @@ No large workspace or component implementation should begin before this path is 
 
 ---
 
+## Decision Updates — 2026-10-19
+
+These entries were recorded together with the RISK-001 implementation
+(branch `feat/risk-001-pf1-vertical-slice`). Evidence:
+[`RISK-001 Acceptance Report`](RISK-001_Acceptance_Report.md).
+
+### D-016 — RISK-001 Outcome: Renode Accepted for the GPIO Scope
+
+**Date:** 2026-10-19
+**Status:** Accepted (GO WITH CONDITIONS)
+
+**Decision:**
+
+Renode 1.17.0 is the execution engine. D-004, D-005, D-007, and D-008 move
+from Conditional to Accepted for the scope proven by RISK-001: SYSCTL GPIO
+clock gating, GPIO ports A–F, GPIO interrupts through the Renode NVIC.
+
+**Reason:**
+
+The complete path (C → GCC ELF → Renode Cortex-M4 → C# TM4C123 models →
+structured events → browser) works and is covered by automated tests,
+including all three mandatory negative cases and reset. Renode compiles the
+C# models at load time, so no Renode fork or build is needed.
+
+**Conditions:**
+
+- Each later peripheral (GPTM, ADC, UART, clock tree) must re-confirm that
+  Renode's model or a custom C# model can meet its acceptance tests.
+- Container isolation (D-003) must be validated before any non-local use.
+
+### D-017 — Project Identity: "TM4C123 Simulator"
+
+**Date:** 2026-10-19
+**Status:** Accepted
+
+**Decision:**
+
+The public name is **TM4C123 Simulator**, subtitle **Cortex-M4 Firmware &
+Peripheral Simulation**. Education is a use case, not the identity. The
+repository URL is unchanged. The project remains independent and makes no
+claim of Texas Instruments affiliation, production readiness, or verified
+hardware equivalence.
+
+### D-018 — Orchestrator in Plain ES Modules (Amends D-010)
+
+**Date:** 2026-10-19
+**Status:** Accepted
+
+**Decision:**
+
+The orchestrator and web client are plain Node.js/browser ES modules with no
+build step and no runtime dependencies. TypeScript (D-009, D-010) is deferred
+until the protocol stabilizes; the browser uses no framework yet.
+
+**Reason:**
+
+The RISK-001 surface is small; avoiding a build step keeps the demonstrator
+reproducible with only Node.js and the pinned toolchains.
+
+### D-019 — Runtime Event Channel
+
+**Date:** 2026-10-19
+**Status:** Accepted
+
+**Decision:**
+
+C# models write JSON-lines events (sequence number, virtual time in ns) to a
+per-session file named by `TM4C_EVENT_LOG`; the orchestrator tails it and
+forwards events to the browser over Server-Sent Events. CPU faults are read
+from the ARMv7-M SCB registers through the Renode Monitor. Renode's
+human-readable log is never parsed for state. Schema:
+[`RUNTIME_EVENTS.md`](RUNTIME_EVENTS.md).
+
+### D-020 — Hardware-Faithful Faults for Invalid Accesses
+
+**Date:** 2026-10-19
+**Status:** Accepted
+
+**Decision:**
+
+- Accessing a GPIO port whose clock is disabled raises a precise bus fault
+  (as documented for TM4C123 silicon) and emits a `bus-fault` event.
+- Accesses to reserved (unmapped) addresses raise a precise bus fault
+  (`sysbus UnhandledAccessBehaviour ThrowException`).
+- Registers that exist on the device but are not modeled produce
+  `unsupported-register-access` / `unimplemented-peripheral-access` events;
+  reads return 0 and writes are ignored.
+
+**Reason:**
+
+RISK-001 requires that unsupported accesses never silently succeed. A
+silent "LED stays off" for missing clock enable would hide the real failure
+mode students encounter on hardware.
+
+**Open question:** confirm the reserved-address fault behavior on a physical
+LaunchPad.
+
+### D-021 — Project-Local Pinned Toolchains; Containers Deferred
+
+**Date:** 2026-10-19
+**Status:** Accepted
+
+**Decision:**
+
+`tools.lock.json` pins xPack arm-none-eabi-gcc 15.2.1-1.1 and Renode 1.17.0
+with publisher SHA-256 digests; `npm run setup:tools` installs them into the
+gitignored `.tools/`. CI uses the same lock file on Linux.
+
+The local server is a **trusted, single-user, loopback-only** mode: compile
+and execution run as child processes with time/size limits but without a
+sandbox. The containerized worker required by D-003 is not implemented yet
+and is a prerequisite for any shared deployment.
+
+### D-022 — UART0 Added to the Planned Scope
+
+**Date:** 2026-10-19
+**Status:** Accepted (planned, not implemented)
+
+**Decision:**
+
+The MVP specification excluded "all UART/I2C/SSI modules". Experiment 10
+requires UART0 (PA0/PA1, 115200 baud, polling echo), so UART0 with a virtual
+serial terminal is added to the planned scope. Other UART, I2C, and SSI
+modules remain out of scope.
+
+### D-023 — Lab Firmware Compatibility Prerequisites
+
+**Date:** 2026-10-19
+**Status:** Proposed
+
+**Decision:**
+
+Experiments 6–10 use the CMSIS-style `TM4C123.h` device header and assume a
+50 MHz system clock configured by vendor startup code. Supporting them
+requires (a) a license-compatible device header (CMSIS core headers are
+Apache-2.0; the TM4C123 device header must be original or compatibly
+licensed — vendor headers are not copied), (b) a `SystemInit` /
+`SystemCoreClock` implementation, and (c) SYSCTL RCC/RCC2/PLL modeling so
+timer, UART, and SysTick rates match. Experiment 5 uses Keil ARMASM syntax,
+which the GNU toolchain does not accept; a documented conversion path is
+provided and native ARMASM support is not claimed.
+
+### D-024 — LCD1602 RW Connection Profile
+
+**Date:** 2026-10-19
+**Status:** Proposed
+
+**Decision:**
+
+Experiment 8 wires RW to ground while its driver also configures PB1 as an
+output driven low. The simulator will model RW as tied to ground with PB1
+attached to the same net: PB1 LOW is consistent; PB1 HIGH produces a
+CONFLICT state and a warning instead of being silently accepted.
+
+---
+
 ## Adding a New Decision
 
 A new decision entry should include:
@@ -350,15 +506,24 @@ Architecture-changing implementation must not begin before the relevant decision
 | D-001 | Real compiled firmware | Accepted |
 | D-002 | ELF artifact | Accepted |
 | D-003 | Isolated workers | Accepted |
-| D-004 | Server-side initial execution | Conditional |
-| D-005 | Renode engine candidate | Conditional |
+| D-004 | Server-side initial execution | Accepted (local) |
+| D-005 | Renode engine | Accepted (GPIO scope) |
 | D-006 | No custom CPU interpreter | Accepted |
-| D-007 | Custom TM4C peripherals | Conditional |
-| D-008 | C# Renode models | Conditional |
+| D-007 | Custom TM4C peripherals | Accepted |
+| D-008 | C# Renode models | Accepted |
 | D-009 | React + TypeScript frontend | Proposed |
-| D-010 | Node.js + TypeScript orchestrator | Proposed |
+| D-010 | Node.js orchestrator (TypeScript deferred) | Amended by D-018 |
 | D-011 | Wokwi-inspired `diagram.json` | Accepted |
 | D-012 | Logical electrical model | Accepted |
 | D-013 | Virtual time | Accepted |
 | D-014 | Small task workflow | Accepted |
 | D-015 | PF1 first vertical slice | Accepted |
+| D-016 | RISK-001 outcome: Renode GO WITH CONDITIONS | Accepted |
+| D-017 | Project identity "TM4C123 Simulator" | Accepted |
+| D-018 | Plain ES-module orchestrator | Accepted |
+| D-019 | JSON-lines + SSE event channel | Accepted |
+| D-020 | Hardware-faithful bus faults | Accepted |
+| D-021 | Project-local pinned toolchains; containers deferred | Accepted |
+| D-022 | UART0 added to planned scope | Accepted (planned) |
+| D-023 | Lab firmware prerequisites (header, clock, ARMASM) | Proposed |
+| D-024 | LCD1602 RW connection profile | Proposed |
