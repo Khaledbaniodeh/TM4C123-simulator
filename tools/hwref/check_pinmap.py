@@ -54,14 +54,25 @@ def main():
             # SPMU296 numbers connector pins as "<header>.<pin>", e.g. 1.02 for J1 pin 2.
             label = f"{number}.{entry['pin']:02d}"
             pattern = re.compile(rf"(^|\s){re.escape(label)}(\s|$)")
-            rows = [line for line in lines if pattern.search(line)]
+            indices = [i for i, line in enumerate(lines) if pattern.search(line)]
             token = expected_token(entry).upper()
-            match = next((row for row in rows if token in row.upper()), None)
+            token_re = re.compile(rf"(^|[\s/(]){re.escape(token)}([\s/),]|$)")
+            match = None
+            for i in indices:
+                # Some table cells wrap (e.g. the R9/R10 "for MSP430 compatibility"
+                # rows), so the GPIO name may sit on an adjacent line.
+                window = lines[max(0, i - 2): i + 3]
+                if token_re.search(lines[i].upper()):
+                    match = lines[i]
+                    break
+                if any(token_re.search(w.upper()) for w in window):
+                    match = " / ".join(w for w in window if w)
+                    break
             if match:
-                evidence.append(f"{header}.{entry['pin']} {expected_token(entry)} <= {match[:160]}")
+                evidence.append(f"{header}.{entry['pin']} {expected_token(entry)} <= {match[:200]}")
             else:
-                failures.append(f"{header}.{entry['pin']} expected {expected_token(entry)}; rows with {label}: "
-                                + (" | ".join(r[:120] for r in rows[:3]) or "none"))
+                context = [" / ".join(lines[max(0, i - 2): i + 3])[:240] for i in indices[:2]]
+                failures.append(f"{header}.{entry['pin']} expected {expected_token(entry)}; context: " + (" || ".join(context) or "none"))
 
     context = [line[:200] for line in lines if re.search(r"\bJ[1-4]\b", line)][:60]
     annotate("notice", "SPMU296 lines mentioning J1-J4", context)
