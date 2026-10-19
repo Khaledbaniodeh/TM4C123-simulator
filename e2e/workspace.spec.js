@@ -6,7 +6,7 @@ import { expect, test } from "@playwright/test";
 
 async function runExample(page, id) {
   await page.goto("/");
-  await expect(page.locator("#exampleSelect option")).toHaveCount(6);
+  await expect(page.locator("#exampleSelect option")).toHaveCount(9);
   await page.selectOption("#exampleSelect", id);
   await page.click("#runButton");
   await expect(page.locator("#simulationStatus")).toHaveText("Running");
@@ -65,7 +65,7 @@ test("D: holding SW1 lights the LED through polling firmware", async ({ page }) 
 
 test("edited source invalidates the build, and compile errors are reported", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator("#exampleSelect option")).toHaveCount(6);
+  await expect(page.locator("#exampleSelect option")).toHaveCount(9);
   await page.click("#compileButton");
   await expect(page.locator("#editorStatus")).toHaveText("Built");
 
