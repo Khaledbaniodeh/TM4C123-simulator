@@ -1,26 +1,40 @@
 #!/usr/bin/env bash
 # Prints Renode API facts needed by the peripheral models (runs in CI only).
-# Output lines from the embedded Python are turned into GitHub annotations.
-set -euo pipefail
+# All monitor output is reported as GitHub annotations (chunked).
+set -uo pipefail
 
 renode="$(node -e 'import("./scripts/lib/tools.mjs").then(m => console.log(m.renodeBinary()))')"
+out="$(mktemp)"
 
-commands=(
-  'python "import clr; from Antmicro.Renode.Peripherals.Timers import LimitTimer; print \"LT_CTOR \" + \" || \".join([str(c) for c in clr.GetClrType(LimitTimer).GetConstructors()])"'
-  'python "import clr; from Antmicro.Renode.Peripherals.Timers import LimitTimer; t=clr.GetClrType(LimitTimer); print \"LT_MEMBERS \" + \", \".join(sorted(set([m.Name for m in t.GetMembers() if m.DeclaringType == t])))"'
-  'python "import clr; from Antmicro.Renode.Peripherals.IRQControllers import NVIC; t=clr.GetClrType(NVIC); print \"NVIC_PROPS \" + \", \".join(sorted(set([p.Name + \":\" + p.PropertyType.Name for p in t.GetProperties()])))"'
-  'python "import clr; from Antmicro.Renode.Peripherals.IRQControllers import NVIC; t=clr.GetClrType(NVIC); print \"NVIC_CTOR \" + \" || \".join([str(c) for c in t.GetConstructors()])"'
-  'python "import clr; from Antmicro.Renode.Peripherals.CPU import BaseCPU; t=clr.GetClrType(BaseCPU); print \"CPU_PROPS \" + \", \".join(sorted(set([p.Name + \":\" + p.PropertyType.Name for p in t.GetProperties() if \"Perf\" in p.Name or \"Mips\" in p.Name or \"Freq\" in p.Name])))"'
-  'python "import clr; from Antmicro.Renode.Core import IMachine; t=clr.GetClrType(IMachine); print \"MACHINE_CLOCK \" + \", \".join(sorted(set([p.Name + \":\" + p.PropertyType.FullName for p in t.GetProperties() if \"Clock\" in p.Name])))"'
-  'mach create "probe"'
-  'machine LoadPlatformDescriptionFromString "nvic: IRQControllers.NVIC @ sysbus 0xE000E000 { -> cpu@0 }; cpu: CPU.CortexM @ sysbus { cpuType: \"cortex-m4f\"; nvic: nvic }"'
-  'python "n=self.Machine[\"sysbus.nvic\"]; print \"NVIC_INSTANCE \" + \", \".join([m for m in dir(n) if \"req\" in m.lower() or \"tick\" in m.lower()])"'
-  'quit'
-)
+cat > "$RUNNER_TEMP/probe.py" <<'PY'
+import clr
+from Antmicro.Renode.Peripherals.Timers import LimitTimer
+from Antmicro.Renode.Peripherals.IRQControllers import NVIC
+from Antmicro.Renode.Peripherals.CPU import BaseCPU
+from Antmicro.Renode.Core import IMachine
 
-printf '%s\n' "${commands[@]}" | timeout 120 "$renode" --console --disable-gui --plain --hide-log 2>&1 \
-  | grep -E '^(LT_|NVIC_|CPU_|MACHINE_)|error|Error' \
-  | while IFS= read -r line; do
-      escaped="${line//'%'/'%25'}"
-      echo "::notice title=${line%% *}::${escaped:0:3800}"
-    done
+def names(t, flt=lambda m: True):
+    return sorted(set([m.Name for m in clr.GetClrType(t).GetMembers() if flt(m)]))
+
+print("LT_CTOR " + " || ".join([str(c) for c in clr.GetClrType(LimitTimer).GetConstructors()]))
+print("LT_MEMBERS " + ", ".join(names(LimitTimer, lambda m: m.DeclaringType == clr.GetClrType(LimitTimer))))
+print("NVIC_CTOR " + " || ".join([str(c) for c in clr.GetClrType(NVIC).GetConstructors()]))
+print("NVIC_PROPS " + ", ".join(sorted(set([p.Name + ":" + p.PropertyType.Name for p in clr.GetClrType(NVIC).GetProperties()]))))
+print("CPU_PROPS " + ", ".join(sorted(set([p.Name + ":" + p.PropertyType.Name for p in clr.GetClrType(BaseCPU).GetProperties() if "Perf" in p.Name or "Mips" in p.Name or "Freq" in p.Name]))))
+print("MACHINE_CLOCK " + ", ".join(sorted(set([p.Name + ":" + p.PropertyType.FullName for p in clr.GetClrType(IMachine).GetProperties() if "Clock" in p.Name]))))
+print("MACHINE_METHODS " + ", ".join(sorted(set([m.Name for m in clr.GetClrType(IMachine).GetMethods() if "Peripheral" in m.Name]))))
+PY
+
+printf '%s\n' "include @$RUNNER_TEMP/probe.py" 'quit' \
+  | timeout 120 "$renode" --console --disable-gui --plain --hide-log > "$out" 2>&1
+echo "renode exit: $?"
+
+# Chunk the whole output into at most 10 annotations of ~3500 characters.
+python3 - "$out" <<'PY'
+import sys
+text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+text = text.replace("%", "%25").replace("\r", "")
+chunks = [text[i:i + 3500] for i in range(0, len(text), 3500)][:10]
+for n, chunk in enumerate(chunks, 1):
+    print(f"::notice title=Renode probe ({n}/{len(chunks)})::" + chunk.replace("\n", "%0A"))
+PY
