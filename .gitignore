@@ -1,37 +1,22 @@
-# Verilog simulation outputs
-*.vcd
-*.wlf
-*.asdb
-*.awc
+# Project-local pinned toolchains (installed by `npm run setup:tools`)
+.tools/
+
+# Node.js
+node_modules/
+
+# Firmware and simulation outputs
+/build/
+*.elf
+*.map
+*.bin
+*.hex
+*.o
+*.d
 *.log
-*.jou
-*.pb
-transcript
-vsim.wlf
 
-# Simulator work libraries and generated folders
-work/
-lib/
-questa_lib/
-modelsim.ini
-xsim.dir/
-.sim/
-output/
-build/
-
-# FPGA tool generated files
-*.qpf
-*.qsf
-*.sof
-*.pof
-*.rpt
-*.smsg
-*.summary
-*.done
-*.jdi
-*.cdf
-incremental_db/
-db/
+# Test outputs
+/test-results/
+/playwright-report/
 
 # Editor / operating system files
 .vscode/

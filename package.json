@@ -1,0 +1,19 @@
+{
+  "name": "tm4c123-simulator",
+  "version": "0.1.0",
+  "description": "TM4C123 Simulator — Cortex-M4 Firmware & Peripheral Simulation",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "setup:tools": "node scripts/setup-tools.mjs",
+    "check:tools": "node scripts/setup-tools.mjs --check",
+    "start": "node apps/orchestrator/src/server.js",
+    "test": "node --test --test-concurrency=1 tests/",
+    "test:unit": "node --test tests/compiler.test.js tests/protocol.test.js",
+    "test:e2e": "playwright test"
+  }
+}
