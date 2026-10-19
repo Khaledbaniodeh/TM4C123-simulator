@@ -16,28 +16,75 @@ has been compared against a physical LaunchPad yet**.
 | Flash | 256 KB at `0x00000000` | Table 2-4 |
 | SRAM | 32 KB at `0x20000000` | Table 2-4 |
 | NVIC | Renode built-in at `0xE000E000`, 3 priority bits (`priorityMask 0xE0`) | §3.1.2 |
-| SysTick | Renode NVIC, clocked at 16 MHz | Not yet verified against TM4C clock options |
-| Instruction rate | 16 MIPS (≈ 16 MHz PIOSC, 1 instruction/cycle) | Approximation — not cycle-accurate |
+| SysTick | Renode NVIC, clocked at the live system clock (16 MHz at reset) | Periods verified at 16/50/80 MHz (`tests/timers.test.js`) |
+| Instruction rate | System clock in MHz as MIPS (16 at reset, 50 with the lab PLL setup) — 1 instruction/clock | Approximation — not cycle-accurate (D-030) |
 | Bit-banding | Not modeled | — |
 
 ## System Control (`TM4C123SystemControl.cs`, `0x400FE000`)
 
 | Register | Offset | Behavior |
 |---|---|---|
+| `RIS` | `0x050` | `PLLLRIS` (bit 6) set when the PLL is powered / reconfigured; read-only |
+| `IMC` | `0x054` | Stored; the system-control interrupt is not modeled (`unsupported-register-access` if non-zero) |
+| `MISC` | `0x058` | Reads `RIS & IMC`; write 1 to clear `RIS` bits |
+| `RCC` | `0x060` | Reset `0x078E3AD1`; `MOSCDIS`, `OSCSRC`, `XTAL`, `BYPASS`, `PWRDN`, `USESYSDIV`, `SYSDIV` |
+| `RCC2` | `0x070` | Reset `0x07C06810`; `USERCC2` overrides `RCC`; `OSCSRC2`, `BYPASS2`, `PWRDN2`, `SYSDIV2LSB`, `SYSDIV2`, `DIV400` |
+| `RCGC1` (legacy) | `0x104` | Bits 19:16 gate TIMER0–3; other bits stored only |
 | `RCGC2` (legacy) | `0x108` | Bits 5:0 gate GPIO A–F; UDMA/USB0 bits stored only |
+| `PLLSTAT` | `0x168` | `LOCK` = PLL powered |
+| `RCGCTIMER` | `0x604` | Bits 5:0 gate TIMER0–5 |
 | `RCGCGPIO` | `0x608` | Bits 5:0 gate GPIO A–F |
+| `PRTIMER` | `0xA04` | Read-only; mirrors the effective timer clock gates |
 | `PRGPIO` | `0xA08` | Read-only; mirrors the effective GPIO clock gates |
 | everything else | — | `unsupported-register-access`, read 0, write ignored |
 
+### Clock tree (decision D-030)
+
+System clock, per the datasheet's `RCC`/`RCC2` rules:
+
+| Configuration | System clock |
+|---|---|
+| `BYPASS(2)=1`, `USESYSDIV=0` | Oscillator: MOSC (from `XTAL`), PIOSC 16 MHz, PIOSC/4, LFIOSC (30 kHz nominal), 32.768 kHz |
+| `BYPASS(2)=1`, `USESYSDIV=1` | Oscillator ÷ (`SYSDIV(2)` + 1) |
+| PLL, `RCC2.DIV400=1` | 400 MHz ÷ ((`SYSDIV2`:`SYSDIV2LSB`) + 1) |
+| PLL, otherwise | 200 MHz ÷ (`SYSDIV(2)` + 1) |
+
+The derived clock is emitted as `system-clock-changed` (`hz`, `source`,
+`pll`, `divisor`, `cause`) and applied to the CPU instruction rate, SysTick,
+and the GPTM timers. `clock-configuration-warning` is emitted for clocks
+above 80 MHz, a PLL selected while powered down, a PLL reference other than
+MOSC/PIOSC, and MOSC selected while `MOSCDIS=1`.
+
 Assumptions:
 
-- Effective GPIO clock = `RCGCGPIO` OR legacy `RCGC2`. The datasheet
-  discourages mixing both register sets; mixed use is not verified.
-- `PRGPIO` is ready immediately after a clock enable. Silicon takes a few
-  clocks; firmware that polls `PRGPIO` behaves the same.
-- **Not modeled yet:** `RCC`/`RCC2`/`RIS` (PLL), other run/sleep/deep-sleep
-  clock gates, `DID0/DID1`. Lab code from Experiments 7–10 needs these
-  (decision D-023).
+- The PLL locks immediately (no lock delay), so `while (!(RIS & PLLLRIS))`
+  loops exit after one iteration.
+- Effective GPIO clock = `RCGCGPIO` OR legacy `RCGC2`; effective timer clock
+  = `RCGCTIMER` OR legacy `RCGC1[19:16]`. Mixing both register sets is not
+  verified.
+- `PRGPIO`/`PRTIMER` are ready immediately after a clock enable.
+- **Not modeled yet:** sleep/deep-sleep clock configuration, `MOSCCTL`,
+  `PIOSCCAL`, other run-mode clock gates (UART, ADC, …), `DID0/DID1`.
+
+## GPTM timers (`TM4C123GeneralPurposeTimer.cs`, TIMER0–5)
+
+Base `0x40030000 + n·0x1000`. NVIC lines: TIMER0A/B 19/20, 1A/B 21/22,
+2A/B 23/24, 3A/B 35/36, 4A/B 70/71, 5A/B 92/93. Built on Renode
+`LimitTimer`, so counting happens in emulation virtual time at the live
+system clock.
+
+| Feature | Status |
+|---|---|
+| `GPTMCFG` 0 (32-bit, timer A) and 4 (16-bit A and B) | ✅ Verified (H, I) |
+| `TnMR` one-shot (1) and periodic (2), count down / up (`TnCDIR`) | ✅ Periodic down verified; one-shot / up implemented, not yet tested |
+| `TnILR`, period = (`TnILR`+1)·(`TnPR`+1) clocks in 16-bit mode, (`TnILR`+1) in 32-bit mode | ✅ Verified |
+| `GPTMIMR` / `RIS` / `MIS` / `ICR` timeout interrupts → NVIC | ✅ Verified |
+| `TnR` / `TnV` read-back, `TnV` write | Implemented, not yet tested |
+| Clock gating: access while unclocked → precise bus fault | ✅ Verified |
+| Capture, PWM, RTC, match interrupts, wait-on-trigger, ADC trigger, `GPTMSYNC` | ⛔ `unsupported-feature` event |
+
+Simplifications: a `TnILR` write while running reloads the counter at once;
+`TnPV` reads 0 in prescaled mode; in 32-bit mode timer B is unused.
 
 ## GPIO (`TM4C123GPIO.cs`, APB apertures)
 
@@ -105,7 +152,7 @@ real silicon behavior in that case is unverified.
 
 ## Unimplemented peripherals (`TM4C123UnimplementedPeripheral.cs`)
 
-UART0–7, TIMER0–5, WTIMER0–5, ADC0–1, SSI0–3, I2C0–3, PWM0–1, QEI0–1, WDT0–1,
+UART0–7, WTIMER0–5, ADC0–1, SSI0–3, I2C0–3, PWM0–1, QEI0–1, WDT0–1,
 CAN0–1, COMP, USB0, GPIO AHB apertures, EEPROM, HIB, flash controller,
 system exception module, and uDMA are mapped as named placeholder regions.
 The first read and first write to each register emit

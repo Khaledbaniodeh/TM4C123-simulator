@@ -26,7 +26,7 @@ for every row**.
 |---|---|---|---|
 | 5 | GPIO output | ✅ for the hardware behavior (C firmware) · ⛔ for the original ARMASM source | Keil ARMASM is not accepted by GNU `as`; see the conversion path below |
 | 6 | GPIO inputs and interrupts | ✅ for the hardware behavior (C firmware) · ⛔ for unmodified lab code | Lab code uses `TM4C123.h` (`GPIOF->DIR`, `NVIC->ISER[0]`) — needs a compatible device header (D-023) |
-| 7 | SysTick and GPTM timers | 📋 Planned | GPTM not modeled. SysTick is provided by Renode but unverified. Lab code assumes a 50 MHz PLL clock |
+| 7 | SysTick and GPTM timers | 🟡 Core verified | PLL to 50 MHz, SysTick, and TIMER0A–2A periodic verified with examples G–I. Lab code still needs the `TM4C123.h` device header (D-023) |
 | 8 | LCD1602 (HD44780, 4-bit, Port B) | 📋 Planned | GPIO Port B works; LCD model not implemented. Depends on SysTick and the 50 MHz clock |
 | 9 | ADC0 SS3, PE3/AIN0 | 📋 Planned | ADC0 is a placeholder region (accesses are reported) |
 | 10 | UART0 echo, PA0/PA1 | 📋 Planned (scope added by D-022) | UART0 is a placeholder region; needs alternate functions + 50 MHz clock |
@@ -76,12 +76,16 @@ Native ARMASM input is **not implemented and not claimed**.
 
 | Requirement | Status |
 |---|---|
-| SysTick `LOAD/VAL/CTRL`, `SysTick_Handler` | 🟡 Engine-provided (Renode NVIC at 16 MHz); not verified, clock-source bit not modeled |
-| 50 MHz system clock (`SystemCoreClock`, RCC/RCC2/PLL) | 📋 Planned (D-023) |
-| `RCGCTIMER`, GPTM `CTL/CFG/TAMR/TAPR/TAILR/IMR/MIS/ICR` | 📋 Planned — TIMER0–2 are placeholder regions today |
-| 16-bit periodic mode with prescaler (TAPR) | 📋 Planned |
-| 32-bit periodic mode, TIMER0A/1A/2A at IRQ 19/21/23 | 📋 Planned (vector names already in `startup.s`) |
-| Deterministic virtual timing | ✅ Infrastructure (RunFor-driven virtual time; determinism test) |
+| 50 MHz system clock via RCC2/PLL (MOSC 16 MHz, `DIV400`, `SYSDIV2`=7, wait for `PLLLRIS`) | ✅ G, H, I (`system-clock-changed` = 50 MHz, `PLLSTAT.LOCK`) |
+| SysTick `LOAD/VAL/CTRL` = 7, `SysTick_Handler` | ✅ G: 5,000,000 clocks = 100 ms; follows the clock (312.5 ms at 16 MHz, 62.5 ms at 80 MHz) |
+| SysTick `COUNTFLAG` polling delay, `CLKSOURCE`=0 (PIOSC/4) | 🟡 Engine-provided (Renode NVIC); not yet tested |
+| `RCGCTIMER` / `PRTIMER`, unclocked timer access | ✅ Bus fault at the first GPTM access when the clock is off |
+| GPTM `CTL/CFG/TAMR/TAPR/TAILR/IMR/MIS/ICR` | ✅ Modeled (`docs/PERIPHERAL_MODELS.md`) |
+| 16-bit periodic mode with prescaler (TAPR = 255, TAILR = 0xFFFF) | ✅ H: TIMER1A every 0.33554432 s at 50 MHz |
+| 32-bit periodic mode, TIMER0A/1A/2A at IRQ 19/21/23 | ✅ I: 250 / 500 / 1000 ms concurrently |
+| One-shot mode, up-count, capture/PWM modes | 🟡 One-shot/up implemented, untested; capture/PWM reported as `unsupported-feature` |
+| CMSIS `TM4C123.h` (`TIMER1->CTL`, `SystemCoreClock`) | ⛔ Needs a license-compatible device header (D-023) |
+| Deterministic virtual timing | ✅ Determinism test on the three-timer trace |
 
 ## Experiment 8 — LCD1602
 
@@ -91,7 +95,7 @@ Native ARMASM input is **not implemented and not claimed**.
 | Wiring: RS=PB0, RW=PB1 (also tied to GND), E=PB2, D4–D7=PB4–PB7 | 📋 Connection profile defined (D-024) |
 | HD44780 4-bit init (0x3 ×3, 0x2), function set 0x28, 0x0C, 0x06, clear 0x01 | 📋 Planned |
 | DDRAM addressing 0x80 / 0xC0, cursor, shift 0x18/0x1C | 📋 Planned |
-| Delays via SysTick COUNTFLAG at 50 MHz | ⛔ Needs SysTick verification + clock model |
+| Delays via SysTick COUNTFLAG at 50 MHz | 🟡 Clock model verified; COUNTFLAG polling not yet tested |
 | Text rendered only from firmware-driven LCD transactions | 📋 Design requirement |
 
 ## Experiment 9 — ADC
@@ -111,19 +115,15 @@ Native ARMASM input is **not implemented and not claimed**.
 |---|---|
 | `RCGCUART`, PA0/PA1 `AFSEL` + `PCTL` = 1 | ⛔ Alternate-function routing not modeled |
 | `UARTCTL/IBRD/FBRD/LCRH/CC/FR/DR` | 📋 Planned (UART0 placeholder region) |
-| 115200 baud with IBRD=27, FBRD=8 (implies 50 MHz) | ⛔ Needs the clock model |
+| 115200 baud with IBRD=27, FBRD=8 (implies 50 MHz) | 📋 Clock model available (D-030); UART not modeled |
 | Polling TX/RX on `TXFF` / `RXFE` | 📋 Planned |
 | Virtual serial terminal with input injection | 📋 Planned (Renode UART analyzers/socket terminals are candidates) |
 
 ## Next engineering task
 
-Clock-tree and timer foundation (Experiments 7–10 depend on it):
-
-1. Model SYSCTL `RCC`, `RCC2`, `RIS.PLLLRIS`, `RCGCTIMER`, `PRTIMER` with
-   reset values, and derive the system clock (PIOSC 16 MHz / MOSC 16 MHz /
-   PLL 400 MHz ÷ SYSDIV).
-2. Feed the derived frequency to the CPU instruction rate and SysTick, then
-   verify SysTick `LOAD/VAL/CTRL` and `COUNTFLAG` against the datasheet.
-3. Implement GPTM 16/32-bit periodic mode with prescaler for TIMER0–2.
-4. Provide an original, license-compatible `TM4C123.h`-compatible device
-   header + `SystemInit` so Experiment 6–7 style code compiles unchanged.
+1. Provide an original, license-compatible `TM4C123.h`-compatible device
+   header + `SystemInit`/`SystemCoreClock` so Experiment 6–7 style code
+   compiles unchanged (D-023).
+2. Verify SysTick `COUNTFLAG` polling and `CLKSOURCE`=0, and GPTM one-shot
+   mode, with dedicated tests.
+3. LCD1602 (HD44780) model on Port B for Experiment 8.

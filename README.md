@@ -139,6 +139,9 @@ down Renode cleanly.
 | [`sw1-red-led`](examples/sw1-red-led/main.c) | **D** — SW1 active-low input with internal pull-up, polled |
 | [`switch-interrupts`](examples/switch-interrupts/main.c) | **E** — PF0 unlock, falling-edge GPIO interrupts, NVIC IRQ 30, ISR |
 | [`external-led-button`](examples/external-led-button/main.c) | **F** — external LED (PA7 + 220 Ω) and pushbutton (PA6 → GND) wired in the workspace ([`diagram.json`](examples/external-led-button/diagram.json)) |
+| [`systick-blink`](examples/systick-blink/main.c) | **G** — RCC2/PLL to 50 MHz, SysTick interrupt every 100 ms toggles PF3 |
+| [`timer1a-prescaled`](examples/timer1a-prescaled/main.c) | **H** — TIMER1A 16-bit periodic, prescaler 256: 0.3355 s timeouts toggle PF2 |
+| [`three-timers`](examples/three-timers/main.c) | **I** — TIMER0A/1A/2A 32-bit periodic at 250/500/1000 ms on PF1/PF2/PF3 |
 
 Negative fixtures (missing clock / DIR / DEN, compile and link errors,
 unsupported accesses) are in [`tests/fixtures/firmware/`](tests/fixtures/firmware/).
@@ -192,7 +195,7 @@ apps/orchestrator/   Node.js server: compiler runner, Renode session, HTTP/SSE A
 apps/web/            Browser workspace (no build step)
 simulator/firmware/  Bare-metal startup.s and linker.ld for TM4C123GH6PM
 simulator/renode/    Renode platform (.repl) and C# peripheral models
-examples/            Firmware examples A–E
+examples/            Firmware examples A–I
 tests/               Node test suites + negative firmware fixtures
 e2e/                 Playwright browser tests
 docs/                Architecture, decisions, models, events, reports

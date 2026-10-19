@@ -568,6 +568,38 @@ MCU and are unaffected by its reset.
 
 ---
 
+### D-030 — Clock Model: System Clock Drives CPU Rate, SysTick, and GPTM
+
+**Date:** 2026-10-20
+**Status:** Accepted
+
+**Decision:**
+
+The SYSCTL model derives the system clock from `RCC`/`RCC2` using the
+datasheet rules (oscillator source, XTAL table, PLL 400 MHz VCO with the
+/2 unless `DIV400`, `SYSDIV`/`SYSDIV2`/`SYSDIV2LSB`). That one frequency is
+applied to:
+
+- the CPU instruction rate (Renode `PerformanceInMips` = MHz, i.e. one
+  instruction per clock; not cycle-accurate),
+- the SysTick core clock (Renode NVIC `Frequency`),
+- every GPTM instance (`LimitTimer.Frequency`).
+
+The PLL locks immediately once powered: `RIS.PLLLRIS` is set on power-up and
+on every `RCC`/`RCC2` write while powered, and `PLLSTAT.LOCK` mirrors the
+power state. Configurations above 80 MHz, PLL use while powered down, and
+MOSC selection with `MOSCDIS=1` emit `clock-configuration-warning` events
+instead of being silently accepted. If Renode refuses the clock update, an
+`unsupported-feature` event (`clock-propagation`) is emitted.
+
+**Rationale:** Experiment 7–10 lab code assumes a 50 MHz PLL clock. Timer
+and SysTick periods are then exact in virtual time, and are verified
+against `(ILR+1)·(PR+1)` and `LOAD+1` clocks in `tests/timers.test.js`.
+Software delay loops scale with the clock, as on silicon, but only
+approximately because instruction timing is not modeled.
+
+---
+
 ## Adding a New Decision
 
 A new decision entry should include:
@@ -619,3 +651,4 @@ Architecture-changing implementation must not begin before the relevant decision
 | D-027 | Logic-level netlist for external parts | Accepted |
 | D-028 | Development without local builds (GitHub Actions mode) | Accepted |
 | D-029 | MCU reset keeps external drivers connected | Accepted |
+| D-030 | System clock drives CPU rate, SysTick, and GPTM | Accepted |
