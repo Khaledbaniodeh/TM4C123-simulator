@@ -98,7 +98,9 @@ async function loadExamples() {
     try {
       const meta = JSON.parse(await readFile(path.join(EXAMPLES_DIR, entry.name, "example.json"), "utf8"));
       const source = await readFile(path.join(EXAMPLES_DIR, entry.name, "main.c"), "utf8");
-      examples.push({ ...meta, source });
+      // Optional circuit for the workspace; parsed and validated in the browser.
+      const diagram = await readFile(path.join(EXAMPLES_DIR, entry.name, "diagram.json"), "utf8").catch(() => null);
+      examples.push({ ...meta, source, diagram });
     } catch {
       // Directories without a manifest are not offered in the UI.
     }
@@ -261,6 +263,22 @@ class ActiveSimulation {
     this.broadcast({ type: "board-input", input: name, pressed, virtualTimeNs: this.session.virtualTimeNs.toString() });
   }
 
+  /**
+   * Drives a GPIO pin from the external circuit (wired parts in the
+   * workspace): "low" / "high" drive the pin, "release" leaves it undriven.
+   */
+  async drivePin(pinId, level) {
+    const match = /^P([A-F])([0-7])$/.exec(String(pinId));
+    if (!match || !["low", "high", "release"].includes(level)) {
+      throw Object.assign(new Error(`Invalid external drive: ${pinId}=${level}`), { status: 400 });
+    }
+    if (!this.session || this.state === "stopped" || this.state === "error") {
+      throw Object.assign(new Error("No running simulation"), { status: 409 });
+    }
+    await this.session.setExternalInput(match[1], Number(match[2]), level === "release" ? null : level === "high");
+    this.broadcast({ type: "external-drive", pin: pinId, level, virtualTimeNs: this.session.virtualTimeNs.toString() });
+  }
+
   async stop() {
     const previous = this.state;
     this.state = "stopped";
@@ -376,8 +394,12 @@ async function handleApi(request, response, url) {
     }
 
     if (request.method === "POST" && parts[3] === "input") {
-      const { input, pressed } = await readJson(request);
-      await simulation.input(String(input), Boolean(pressed));
+      const body = await readJson(request);
+      if (body.pin !== undefined) {
+        await simulation.drivePin(String(body.pin), String(body.level));
+      } else {
+        await simulation.input(String(body.input), Boolean(body.pressed));
+      }
       return sendJson(response, 200, { ok: true });
     }
   }

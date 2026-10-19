@@ -82,9 +82,9 @@ namespace Antmicro.Renode.Peripherals.GPIOPort
 
         public void Reset()
         {
+            // External drivers (board switches, wired parts) are outside the
+            // MCU and stay connected through an MCU reset; only registers reset.
             ResetRegisters();
-            externalDriven = 0;
-            externalLevel = 0;
             Update();
             EmitSnapshot("reset");
         }

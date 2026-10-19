@@ -157,4 +157,24 @@ describe("orchestrator API", { timeout: 300_000 }, () => {
     assert.equal(unknown.status, 400);
     await post(`/api/sessions/${body.sessionId}/control`, { action: "stop" });
   });
+
+  it("drives external circuit inputs on any GPIO pin (example F: PA6 button -> PA7 LED)", async () => {
+    const pa7 = (level) => (m) =>
+      m.type === "simulator-event" && m.event.type === "digital-pin-changed" && m.event.pin.pinId === "PA7" && m.event.level === level;
+    const build = await post("/api/build", { source: await exampleSource("external-led-button") });
+    assert.equal(build.body.ok, true, build.body.log);
+    const { body } = await post("/api/sessions", { buildId: build.body.buildId, autoRun: true });
+    await waitForMessage(body.sessionId, pa7(0));
+
+    const press = await post(`/api/sessions/${body.sessionId}/input`, { pin: "PA6", level: "low" });
+    assert.equal(press.status, 200);
+    await waitForMessage(body.sessionId, following((m) => m.type === "external-drive" && m.level === "low", pa7(1)));
+
+    await post(`/api/sessions/${body.sessionId}/input`, { pin: "PA6", level: "release" });
+    await waitForMessage(body.sessionId, following((m) => m.type === "external-drive" && m.level === "release", pa7(0)));
+
+    const invalid = await post(`/api/sessions/${body.sessionId}/input`, { pin: "PG9", level: "low" });
+    assert.equal(invalid.status, 400);
+    await post(`/api/sessions/${body.sessionId}/control`, { action: "stop" });
+  });
 });
