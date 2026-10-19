@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build, simulate, and test (Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Cache pinned toolchains
+        uses: actions/cache@v4
+        with:
+          path: .tools
+          key: tools-${{ runner.os }}-${{ hashFiles('tools.lock.json') }}
+
+      - name: Install pinned toolchains (verified by SHA-256)
+        run: npm run setup:tools
+
+      - name: Toolchain versions
+        run: |
+          .tools/arm-none-eabi-gcc-*/xpack-arm-none-eabi-gcc-*/bin/arm-none-eabi-gcc --version | head -1
+          node -e 'import("./scripts/lib/tools.mjs").then(m => console.log(m.renodeBinary()))'
+          "$(node -e 'import("./scripts/lib/tools.mjs").then(m => console.log(m.renodeBinary()))')" --version
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Compiler, Renode integration, API, and board-state tests
+        run: npm test
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser end-to-end tests
+        run: npm run test:e2e
+
+      - name: Upload browser test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: test-results/
+          retention-days: 14
