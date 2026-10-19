@@ -29,7 +29,7 @@ committed to the repository.
 | Power select | SW3 DPDT (200, 2400) mil | PADS `*PART*` |
 | Power LED | D4 (772, 2200) mil | PADS `*PART*` |
 | Tag-Connect | J5 TC2050 (bottom side); 3 × 0.039 in holes | PADS `*PART*` and drill tool T4 |
-| Reset pushbutton | **Exists** (SPMU296 feature list, board figure, §2.2.4 "RESET switch held down"); **position not yet confirmed**, so it is not drawn | Placement extraction is being widened: the first pass only read refdes like `SW1` and would miss names like `RESET` |
+| Reset switch | `RESET` (SW-EVQQ2) at (1770, 1880) mil, right side above J4/J2 | PADS `*PART*` line `RESET SW-EVQQ2 …`; SPMU296 board figure ("Reset Switch") and §2.2.4 |
 
 CAD values stay verbatim in `apps/web/board/launchpad.js` (mil, y axis up)
 and are converted to SVG millimetres by one function, `cad()`. Header pins
@@ -41,6 +41,7 @@ land exactly on the workspace's 0.1 in snap grid.
 |---|---|---|
 | 40 header pins | Hover tooltip (header pin, GPIO, alternate and analog functions, on-board role, R9/R10, live value); click to wire | GPIO pins **simulated** (Renode GPIO model); power/GND/RESET pins are wire endpoints |
 | SW1 / SW2 | Press and hold while running (pointer or keyboard) | **Simulated**: drives PF4/PF0 through the GPIO model |
+| RESET | Press and release while running | **Simulated**: Renode `machine Reset` on release |
 | D1 RGB LED | Lights from `digital-pin-changed` events only | **Simulated** |
 | D4 power LED | Lit while a session is live | Visual |
 | U1, U2, J1–J4, J5, J9, J11, SW3, Y1/Y2/Y5, R9, R10 | Click to select; the inspector shows technical details and status | Labeled *simulated* or *visual only* per component |
@@ -49,9 +50,12 @@ Pin hit targets are drawn above wires, so connected pins stay reachable. They
 keep a radius of about 7 screen pixels at every zoom level, clamped between
 the pad size and half the pin pitch.
 
-An earlier revision of this work drew a *provisional* reset button on three
-holes near the top-right corner. Those holes are J5's Tag-Connect footprint,
-so the button was removed rather than left on a guessed location.
+An earlier revision drew a *provisional* reset button on three holes near the
+top-right corner. Those holes belong to J5's Tag-Connect footprint, and that
+guess was removed. The first extraction pass missed the real part because its
+reference designator, `RESET`, contains no digits. A wider pass found it, and
+the switch is now drawn at its CAD position. Releasing it resets the simulated
+MCU; holding the MCU *in* reset is not modeled.
 
 ## Not modeled
 

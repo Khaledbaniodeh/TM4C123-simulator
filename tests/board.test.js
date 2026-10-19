@@ -86,6 +86,12 @@ describe("board geometry", () => {
     assert.ok(GEOMETRY.sw1.x < GEOMETRY.width / 2 && GEOMETRY.sw2.x > GEOMETRY.width / 2);
   });
 
+  it("places the RESET switch from its SPMR240 part line (1770, 1880 mil)", () => {
+    assert.ok(Math.abs(GEOMETRY.reset.x - 1770 * 0.0254) < 1e-9);
+    assert.ok(Math.abs(GEOMETRY.reset.y - (2600 - 1880) * 0.0254) < 1e-9);
+    assert.equal(BOARD_PART.components.RESET.status, "simulated");
+  });
+
   it("puts every header pin anchor on the 0.1-inch workspace grid", () => {
     for (const pin of BOARD_PART.pins) {
       assert.ok(Math.abs(pin.x / GRID - Math.round(pin.x / GRID)) < 1e-6, `${pin.name} x`);

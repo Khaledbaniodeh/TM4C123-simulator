@@ -355,8 +355,9 @@ test("board components are selectable with honest status", async ({ page }) => {
   await select("J5");
   await expect(page.locator("#selectionPanel")).toContainText("Tag-Connect TC2050");
   await expect(page.locator("#selectionPanel .status-chip")).toHaveText("visual only");
-  // The RESET switch's CAD position is not confirmed yet, so it is not drawn.
-  await expect(page.locator('[data-input="RESET"]')).toHaveCount(0);
+  await select("RESET");
+  await expect(page.locator("#selectionPanel")).toContainText("SPMR240 part RESET");
+  await expect(page.locator("#selectionPanel .status-chip")).toHaveText("simulated");
   // Clicking components must not move the board.
   await expect(page.locator('.part[data-part="board1"]')).toHaveAttribute("transform", "translate(0 0)");
 });
@@ -374,5 +375,12 @@ test("selected RGB LED shows firmware-driven pin state", async ({ page }) => {
   await expect(page.locator("#greenLed")).not.toHaveClass(/active/);
   await expect(page.locator("#blueLed")).not.toHaveClass(/active/);
   await page.screenshot({ path: "test-results/board-rgb-live.png" });
+
+  // Pressing and releasing the board's RESET switch resets the real MCU; the firmware runs again.
+  await page.locator("#resetButton_board").hover();
+  await page.mouse.down();
+  await page.mouse.up();
+  await expect(page.locator("#consoleOutput")).toContainText("MCU reset");
+  await expect(page.locator("#redLed")).toHaveClass(/active/);
   await page.click("#stopButton");
 });

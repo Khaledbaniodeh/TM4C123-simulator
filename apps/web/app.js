@@ -307,7 +307,12 @@ const workspace = new Workspace(elements.canvas, elements.tooltip, {
     } else {
       state.pressed.delete(key);
     }
-    if (kind === "board") {
+    if (kind === "board" && target === "RESET") {
+      // Releasing the board's RESET switch resets the MCU.
+      if (!pressed) {
+        control("reset");
+      }
+    } else if (kind === "board") {
       sendInput(target, pressed);
     } else {
       log(`${part.id} ${pressed ? "pressed" : "released"}`, "info", state.board.virtualTimeNs);

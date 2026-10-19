@@ -37,6 +37,7 @@ export const CAD_PLACEMENT = Object.freeze({
   U1: [1000, 1000, 135], // TM4C123GH6PM target (LQFP-64)
   U2: [1200, 2230, 0], // TM4C123G in-circuit debug interface (ICDI)
   SW1: [400, 200, 0], SW2: [1600, 200, 0], // SW-EVQQ2 user switches
+  RESET: [1770, 1880, 0], // SW-EVQQ2 reset switch (refdes "RESET")
   SW3: [200, 2400, 90], // DPDT power select
   J11: [616, 2540, 270], // USB micro-B (DEBUG)
   J9: [60, 1800, 0], // USB micro-AB (DEVICE)
@@ -80,12 +81,11 @@ const CAD_TEST_HOLES = [
 const CAD_J5_HOLES = [[1.832, 2.21], [1.912, 2.21], [1.872, 2.51]];
 
 /**
- * SPMU296 documents a RESET switch (feature list, board figure, §2.2.4), but
- * its placement has not yet been confirmed from the SPMR240 export, so the
- * board view does not draw it. MCU reset is available from the toolbar and
- * as the J2.5 RESET header signal.
+ * RESET switch: SPMR240 *PART* line "RESET SW-EVQQ2 1770 1880 mil" (the
+ * refdes has no digits, which the first extraction pass skipped), matching
+ * the "Reset Switch" callout in SPMU296's board figure and section 2.2.4.
  */
-export const RESET_SOURCE = "RESET switch exists (SPMU296 §2.2.4); CAD position not yet confirmed — not drawn";
+export const RESET_SOURCE = "SPMR240 part RESET (SW-EVQQ2) at 1770, 1880 mil; SPMU296 §2.2.4";
 
 const at = (refdes) => cad(CAD_PLACEMENT[refdes][0], CAD_PLACEMENT[refdes][1]);
 const inch = ([x, y]) => cad(x * 1000, y * 1000);
@@ -106,6 +106,7 @@ export const GEOMETRY = Object.freeze({
   usbDevice: at("J9"),
   powerSwitch: at("SW3"),
   tagConnect: cad(1872, 2360),
+  reset: at("RESET"),
   sw1: at("SW1"),
   sw2: at("SW2"),
   rgbLed: at("D1"),
@@ -367,6 +368,7 @@ export const COMPONENTS = Object.freeze({
   SW1: { title: "SW1 · User switch", status: "simulated", lines: ["PF4, active low; firmware must enable the internal pull-up", "Hold to press while the simulation runs"] },
   SW2: { title: "SW2 · User switch", status: "simulated", lines: ["PF0, active low; PF0 is commit-protected (GPIOLOCK/GPIOCR)", "Hold to press while the simulation runs"] },
   J5: { title: "J5 · Tag-Connect TC2050 debug footprint (bottom side)", status: "visual", lines: ["Three alignment holes from the NC drill file (tool T4)", "Not simulated"] },
+  RESET: { title: "RESET · Reset switch", status: "simulated", lines: ["Releasing it resets the simulated MCU (Renode machine Reset); holding the MCU in reset is not modeled", `Position: ${RESET_SOURCE}`] },
   Y1: { title: "Y1 · Crystal (target MCU)", status: "visual", lines: ["Clock tree not modeled; the simulator assumes the 16 MHz PIOSC reset clock"] },
   Y2: { title: "Y2 · Crystal (target MCU)", status: "visual", lines: ["Clock tree and hibernation module not modeled"] },
   Y5: { title: "Y5 · Crystal (ICDI)", status: "visual", lines: ["Part of the debug interface; not simulated"] },
@@ -411,8 +413,8 @@ function render() {
       </g>
       ${holes}
       ${component("J5", around(g.tagConnect, 4.4, 9.0), `${tagConnectHoles}<text x="${S(g.tagConnect.x)}" y="${S(g.tagConnect.y + 0.7)}" class="lp-silk small">J5</text>`)}
-      <rect x="${S(1.2)}" y="${S(16.6)}" width="${S(48.4)}" height="${S(0.25)}" class="lp-divider" />
-      <text x="${S(g.width / 2)}" y="${S(18.3)}" class="lp-silk small">IN-CIRCUIT DEBUG INTERFACE ABOVE · TARGET MCU BELOW</text>
+      <rect x="${S(1.2)}" y="${S(16.6)}" width="${S(39.0)}" height="${S(0.25)}" class="lp-divider" />
+      <text x="${S(21)}" y="${S(18.4)}" class="lp-silk small">ICDI ABOVE · TARGET MCU BELOW</text>
       ${component("J11", { x: g.usbDebug.x - 4, y: -1, w: 8, h: 5.2 }, usbTop(g.usbDebug, "DEBUG"))}
       ${component("J9", { x: -1, y: g.usbDevice.y - 4, w: 5.2, h: 8 }, usbLeft(g.usbDevice, "DEVICE"))}
       ${component("SW3", around(g.powerSwitch, 3.6, 7.6), `
@@ -446,6 +448,7 @@ function render() {
           <circle id="blueLed" cx="${S(g.rgbLed.x + 0.5)}" cy="${S(g.rgbLed.y + 0.35)}" r="${S(0.33)}" class="lp-rgb-die blue" />
         </g>`)}
       <text x="${S(g.rgbLed.x - 1.8)}" y="${S(g.rgbLed.y + 0.8)}" class="lp-silk small end">RGB</text>
+      ${component("RESET", around(g.reset, 7.4, 7.4), tactileSwitch("resetButton_board", "RESET", g.reset, "RESET"))}
       ${component("SW1", around(g.sw1, 7.4, 7.4), tactileSwitch("sw1Button", "SW1", g.sw1, "SW1"))}
       ${component("SW2", around(g.sw2, 7.4, 7.4), tactileSwitch("sw2Button", "SW2", g.sw2, "SW2"))}
       <text x="${S(g.width / 2)}" y="${S(g.height - 6.4)}" class="lp-silk lp-title">TM4C123G LaunchPad</text>
