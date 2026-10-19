@@ -1,0 +1,270 @@
+// TM4C123GH6PM platform description for Renode.
+//
+// Requires the custom peripheral sources to be included first (in order):
+//   simulator/renode/peripherals/TM4C123EventSink.cs
+//   simulator/renode/peripherals/TM4C123SystemControl.cs
+//   simulator/renode/peripherals/TM4C123GPIO.cs
+//   simulator/renode/peripherals/TM4C123UnimplementedPeripheral.cs
+//
+// Addresses: TM4C123GH6PM datasheet (SPMS376E), Table 2-4 "Memory Map".
+// Interrupt numbers: Table 2-9 "Interrupts".
+// Anything not listed here is unmapped; Renode reports such accesses.
+
+flash: Memory.MappedMemory @ sysbus 0x00000000
+    size: 0x40000
+
+sram: Memory.MappedMemory @ sysbus 0x20000000
+    size: 0x8000
+
+// 3 implemented priority bits (PRIx[7:5]); SysTick clocked from the 16 MHz
+// precision internal oscillator (PIOSC) default system clock.
+nvic: IRQControllers.NVIC @ sysbus 0xE000E000
+    priorityMask: 0xE0
+    systickFrequency: 16000000
+    IRQ -> cpu@0
+
+cpu: CPU.CortexM @ sysbus
+    cpuType: "cortex-m4f"
+    nvic: nvic
+
+sysctl: Miscellaneous.TM4C123SystemControl @ sysbus 0x400FE000
+
+gpioPortA: GPIOPort.TM4C123GPIO @ sysbus 0x40004000
+    systemControl: sysctl
+    portIndex: 0
+    IRQ -> nvic@0
+
+gpioPortB: GPIOPort.TM4C123GPIO @ sysbus 0x40005000
+    systemControl: sysctl
+    portIndex: 1
+    IRQ -> nvic@1
+
+gpioPortC: GPIOPort.TM4C123GPIO @ sysbus 0x40006000
+    systemControl: sysctl
+    portIndex: 2
+    IRQ -> nvic@2
+
+gpioPortD: GPIOPort.TM4C123GPIO @ sysbus 0x40007000
+    systemControl: sysctl
+    portIndex: 3
+    IRQ -> nvic@3
+
+gpioPortE: GPIOPort.TM4C123GPIO @ sysbus 0x40024000
+    systemControl: sysctl
+    portIndex: 4
+    IRQ -> nvic@4
+
+gpioPortF: GPIOPort.TM4C123GPIO @ sysbus 0x40025000
+    systemControl: sysctl
+    portIndex: 5
+    IRQ -> nvic@30
+
+// ---------------------------------------------------------------------------
+// Peripherals present on TM4C123GH6PM but not modeled yet. Accesses produce
+// `unimplemented-peripheral-access` events (see TM4C123UnimplementedPeripheral.cs).
+// Remove an entry here when a real model replaces it.
+// ---------------------------------------------------------------------------
+
+unimplWDT0: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40000000
+    peripheralName: "WDT0"
+    baseAddress: 0x40000000
+
+unimplWDT1: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40001000
+    peripheralName: "WDT1"
+    baseAddress: 0x40001000
+
+unimplSSI0: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40008000
+    peripheralName: "SSI0"
+    baseAddress: 0x40008000
+
+unimplSSI1: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40009000
+    peripheralName: "SSI1"
+    baseAddress: 0x40009000
+
+unimplSSI2: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x4000A000
+    peripheralName: "SSI2"
+    baseAddress: 0x4000A000
+
+unimplSSI3: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x4000B000
+    peripheralName: "SSI3"
+    baseAddress: 0x4000B000
+
+unimplUART0: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x4000C000
+    peripheralName: "UART0"
+    baseAddress: 0x4000C000
+
+unimplUART1: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x4000D000
+    peripheralName: "UART1"
+    baseAddress: 0x4000D000
+
+unimplUART2: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x4000E000
+    peripheralName: "UART2"
+    baseAddress: 0x4000E000
+
+unimplUART3: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x4000F000
+    peripheralName: "UART3"
+    baseAddress: 0x4000F000
+
+unimplUART4: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40010000
+    peripheralName: "UART4"
+    baseAddress: 0x40010000
+
+unimplUART5: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40011000
+    peripheralName: "UART5"
+    baseAddress: 0x40011000
+
+unimplUART6: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40012000
+    peripheralName: "UART6"
+    baseAddress: 0x40012000
+
+unimplUART7: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40013000
+    peripheralName: "UART7"
+    baseAddress: 0x40013000
+
+unimplI2C0: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40020000
+    peripheralName: "I2C0"
+    baseAddress: 0x40020000
+
+unimplI2C1: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40021000
+    peripheralName: "I2C1"
+    baseAddress: 0x40021000
+
+unimplI2C2: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40022000
+    peripheralName: "I2C2"
+    baseAddress: 0x40022000
+
+unimplI2C3: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40023000
+    peripheralName: "I2C3"
+    baseAddress: 0x40023000
+
+unimplPWM0: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40028000
+    peripheralName: "PWM0"
+    baseAddress: 0x40028000
+
+unimplPWM1: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40029000
+    peripheralName: "PWM1"
+    baseAddress: 0x40029000
+
+unimplQEI0: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x4002C000
+    peripheralName: "QEI0"
+    baseAddress: 0x4002C000
+
+unimplQEI1: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x4002D000
+    peripheralName: "QEI1"
+    baseAddress: 0x4002D000
+
+unimplTIMER0: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40030000
+    peripheralName: "TIMER0"
+    baseAddress: 0x40030000
+
+unimplTIMER1: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40031000
+    peripheralName: "TIMER1"
+    baseAddress: 0x40031000
+
+unimplTIMER2: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40032000
+    peripheralName: "TIMER2"
+    baseAddress: 0x40032000
+
+unimplTIMER3: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40033000
+    peripheralName: "TIMER3"
+    baseAddress: 0x40033000
+
+unimplTIMER4: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40034000
+    peripheralName: "TIMER4"
+    baseAddress: 0x40034000
+
+unimplTIMER5: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40035000
+    peripheralName: "TIMER5"
+    baseAddress: 0x40035000
+
+unimplWTIMER0: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40036000
+    peripheralName: "WTIMER0"
+    baseAddress: 0x40036000
+
+unimplWTIMER1: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40037000
+    peripheralName: "WTIMER1"
+    baseAddress: 0x40037000
+
+unimplADC0: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40038000
+    peripheralName: "ADC0"
+    baseAddress: 0x40038000
+
+unimplADC1: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40039000
+    peripheralName: "ADC1"
+    baseAddress: 0x40039000
+
+unimplCOMP: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x4003C000
+    peripheralName: "COMP"
+    baseAddress: 0x4003C000
+
+unimplCAN0: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40040000
+    peripheralName: "CAN0"
+    baseAddress: 0x40040000
+
+unimplCAN1: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40041000
+    peripheralName: "CAN1"
+    baseAddress: 0x40041000
+
+unimplWTIMER2: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x4004C000
+    peripheralName: "WTIMER2"
+    baseAddress: 0x4004C000
+
+unimplWTIMER3: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x4004D000
+    peripheralName: "WTIMER3"
+    baseAddress: 0x4004D000
+
+unimplWTIMER4: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x4004E000
+    peripheralName: "WTIMER4"
+    baseAddress: 0x4004E000
+
+unimplWTIMER5: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x4004F000
+    peripheralName: "WTIMER5"
+    baseAddress: 0x4004F000
+
+unimplUSB0: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40050000
+    peripheralName: "USB0"
+    baseAddress: 0x40050000
+
+unimplGPIOAAHB: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40058000
+    peripheralName: "GPIOA_AHB"
+    baseAddress: 0x40058000
+
+unimplGPIOBAHB: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40059000
+    peripheralName: "GPIOB_AHB"
+    baseAddress: 0x40059000
+
+unimplGPIOCAHB: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x4005A000
+    peripheralName: "GPIOC_AHB"
+    baseAddress: 0x4005A000
+
+unimplGPIODAHB: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x4005B000
+    peripheralName: "GPIOD_AHB"
+    baseAddress: 0x4005B000
+
+unimplGPIOEAHB: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x4005C000
+    peripheralName: "GPIOE_AHB"
+    baseAddress: 0x4005C000
+
+unimplGPIOFAHB: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x4005D000
+    peripheralName: "GPIOF_AHB"
+    baseAddress: 0x4005D000
+
+unimplEEPROM: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x400AF000
+    peripheralName: "EEPROM"
+    baseAddress: 0x400AF000
+
+unimplSYSEXC: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x400F9000
+    peripheralName: "SYSEXC"
+    baseAddress: 0x400F9000
+
+unimplHIB: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x400FC000
+    peripheralName: "HIB"
+    baseAddress: 0x400FC000
+
+unimplFLASHCTL: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x400FD000
+    peripheralName: "FLASHCTL"
+    baseAddress: 0x400FD000
+
+unimplUDMA: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x400FF000
+    peripheralName: "UDMA"
+    baseAddress: 0x400FF000
