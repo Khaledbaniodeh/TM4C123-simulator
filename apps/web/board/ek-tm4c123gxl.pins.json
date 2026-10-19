@@ -1,0 +1,67 @@
+{
+  "$comment": "EK-TM4C123GXL BoosterPack header map. Header/GPIO assignments are verified in CI against TI SPMU296 (tools/hwref/check_pinmap.py). Alternate functions follow the TM4C123GH6PM datasheet (SPMS376E) Table 23-5 and are not yet machine-verified.",
+  "board": "EK-TM4C123GXL",
+  "mcu": "TM4C123GH6PM",
+  "sources": {
+    "headers": "TI SPMU296, EK-TM4C123GXL User's Guide, BoosterPack connector tables",
+    "alternateFunctions": "TI SPMS376E, TM4C123GH6PM datasheet, Table 23-5",
+    "geometry": "TI SPMR240, EK-TM4C123GXL Rev A design files (board layout), extracted in CI"
+  },
+  "headers": {
+    "J1": [
+      { "pin": 1, "signal": "3.3V", "kind": "power" },
+      { "pin": 2, "gpio": "PB5", "alt": ["AIN11", "SSI2Fss", "M0PWM3", "T1CCP1", "CAN0Tx"] },
+      { "pin": 3, "gpio": "PB0", "alt": ["U1Rx", "T2CCP0", "USB0ID"] },
+      { "pin": 4, "gpio": "PB1", "alt": ["U1Tx", "T2CCP1", "USB0VBUS"] },
+      { "pin": 5, "gpio": "PE4", "alt": ["AIN9", "U5Rx", "I2C2SCL", "M0PWM4", "M1PWM2", "CAN0Rx"] },
+      { "pin": 6, "gpio": "PE5", "alt": ["AIN8", "U5Tx", "I2C2SDA", "M0PWM5", "M1PWM3", "CAN0Tx"] },
+      { "pin": 7, "gpio": "PB4", "alt": ["AIN10", "SSI2Clk", "M0PWM2", "T1CCP0", "CAN0Rx"] },
+      { "pin": 8, "gpio": "PA5", "alt": ["SSI0Tx"] },
+      { "pin": 9, "gpio": "PA6", "alt": ["I2C1SCL", "M1PWM2"] },
+      { "pin": 10, "gpio": "PA7", "alt": ["I2C1SDA", "M1PWM3"] }
+    ],
+    "J2": [
+      { "pin": 1, "signal": "GND", "kind": "ground" },
+      { "pin": 2, "gpio": "PB2", "alt": ["I2C0SCL", "T3CCP0"] },
+      { "pin": 3, "gpio": "PE0", "alt": ["AIN3", "U7Rx"] },
+      { "pin": 4, "gpio": "PF0", "alt": ["U1RTS", "SSI1Rx", "CAN0Rx", "M1PWM4", "PhA0", "T0CCP0", "NMI", "C0o"], "board": "SW2" },
+      { "pin": 5, "signal": "RESET", "kind": "reset" },
+      { "pin": 6, "gpio": "PB7", "alt": ["SSI2Tx", "M0PWM1", "T0CCP1"], "shorted": "PD1", "via": "R10" },
+      { "pin": 7, "gpio": "PB6", "alt": ["SSI2Rx", "M0PWM0", "T0CCP0"], "shorted": "PD0", "via": "R9" },
+      { "pin": 8, "gpio": "PA4", "alt": ["SSI0Rx"] },
+      { "pin": 9, "gpio": "PA3", "alt": ["SSI0Fss"] },
+      { "pin": 10, "gpio": "PA2", "alt": ["SSI0Clk"] }
+    ],
+    "J3": [
+      { "pin": 1, "signal": "5V", "kind": "power" },
+      { "pin": 2, "signal": "GND", "kind": "ground" },
+      { "pin": 3, "gpio": "PD0", "alt": ["AIN7", "SSI3Clk", "SSI1Clk", "I2C3SCL", "M0PWM6", "M1PWM0", "WT2CCP0"], "shorted": "PB6", "via": "R9" },
+      { "pin": 4, "gpio": "PD1", "alt": ["AIN6", "SSI3Fss", "SSI1Fss", "I2C3SDA", "M0PWM7", "M1PWM1", "WT2CCP1"], "shorted": "PB7", "via": "R10" },
+      { "pin": 5, "gpio": "PD2", "alt": ["AIN5", "SSI3Rx", "SSI1Rx", "M0FAULT0", "WT3CCP0", "USB0EPEN"] },
+      { "pin": 6, "gpio": "PD3", "alt": ["AIN4", "SSI3Tx", "SSI1Tx", "IDX0", "WT3CCP1", "USB0PFLT"] },
+      { "pin": 7, "gpio": "PE1", "alt": ["AIN2", "U7Tx"] },
+      { "pin": 8, "gpio": "PE2", "alt": ["AIN1"] },
+      { "pin": 9, "gpio": "PE3", "alt": ["AIN0"] },
+      { "pin": 10, "gpio": "PF1", "alt": ["U1CTS", "SSI1Tx", "M1PWM5", "T0CCP1", "C1o", "TRD1"], "board": "Red LED" }
+    ],
+    "J4": [
+      { "pin": 1, "gpio": "PF2", "alt": ["SSI1Clk", "M0FAULT0", "M1PWM6", "T1CCP0", "TRD0"], "board": "Blue LED" },
+      { "pin": 2, "gpio": "PF3", "alt": ["SSI1Fss", "CAN0Tx", "M1PWM7", "T1CCP1", "TRCLK"], "board": "Green LED" },
+      { "pin": 3, "gpio": "PB3", "alt": ["I2C0SDA", "T3CCP1"] },
+      { "pin": 4, "gpio": "PC4", "alt": ["C1-", "U4Rx", "U1Rx", "M0PWM6", "IDX1", "WT0CCP0", "U1RTS"] },
+      { "pin": 5, "gpio": "PC5", "alt": ["C1+", "U4Tx", "U1Tx", "M0PWM7", "PhA1", "WT0CCP1", "U1CTS"] },
+      { "pin": 6, "gpio": "PC6", "alt": ["C0+", "U3Rx", "PhB1", "WT1CCP0", "USB0EPEN"] },
+      { "pin": 7, "gpio": "PC7", "alt": ["C0-", "U3Tx", "WT1CCP1", "USB0PFLT"] },
+      { "pin": 8, "gpio": "PD6", "alt": ["U2Rx", "M0FAULT0", "PhA0", "WT5CCP0"] },
+      { "pin": 9, "gpio": "PD7", "alt": ["U2Tx", "PhB0", "WT5CCP1", "NMI"] },
+      { "pin": 10, "gpio": "PF4", "alt": ["M1FAULT0", "IDX0", "T2CCP0", "USB0EPEN"], "board": "SW1" }
+    ]
+  },
+  "onboard": {
+    "redLed": "PF1",
+    "blueLed": "PF2",
+    "greenLed": "PF3",
+    "sw1": "PF4",
+    "sw2": "PF0"
+  }
+}
