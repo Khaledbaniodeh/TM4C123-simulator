@@ -204,7 +204,8 @@ button {
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(390px, 46%) minmax(460px, 54%);
+  /* The circuit workspace is the central element; the editor gets about a third. */
+  grid-template-columns: minmax(330px, 34%) minmax(520px, 1fr);
   min-height: 0;
 }
 

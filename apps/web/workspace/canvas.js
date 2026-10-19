@@ -53,6 +53,7 @@ export class Workspace extends EventTarget {
   #showGrid = true;
   #snapToGrid = true;
   #pressedParts = new Set();
+  #initialFitDone = false;
 
   /**
    * @param svg        root <svg> element
@@ -91,7 +92,17 @@ export class Workspace extends EventTarget {
     svg.addEventListener("wheel", (event) => this.#onWheel(event), { passive: false });
     svg.addEventListener("keydown", (event) => this.#onKeyDown(event));
     svg.addEventListener("pointerleave", () => this.#hideTooltip());
-    new ResizeObserver(() => this.#applyViewBox()).observe(svg);
+    // Fit once the canvas has a real size (it may be 0×0 while the layout
+    // settles); afterwards keep the user's view and only re-apply it.
+    new ResizeObserver(() => {
+      const rect = svg.getBoundingClientRect();
+      if (!this.#initialFitDone && rect.width > 0 && rect.height > 0) {
+        this.#initialFitDone = true;
+        this.fit();
+      } else {
+        this.#applyViewBox();
+      }
+    }).observe(svg);
 
     this.render();
   }
