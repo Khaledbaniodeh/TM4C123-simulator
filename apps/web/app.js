@@ -47,6 +47,15 @@ const STATUS_LABELS = {
 
 const DRAFT_KEY = "tm4c123-simulator:diagram-draft";
 
+/** GPIOs whose live state is shown when a board component is selected. */
+const COMPONENT_PINS = {
+  D1: ["PF1", "PF2", "PF3"],
+  SW1: ["PF4"],
+  SW2: ["PF0"],
+  R9: ["PD0", "PB6"],
+  R10: ["PD1", "PB7"],
+};
+
 const $ = (selector) => document.querySelector(selector);
 
 const elements = {
@@ -486,6 +495,35 @@ function renderSelectionPanel() {
     panel.textContent = "Select a part or wire. Click a pin to start a wire.";
     return;
   }
+  if (selection.kind === "component") {
+    const info = BOARD_PART.components[selection.id];
+    if (!info) {
+      return;
+    }
+    const title = document.createElement("p");
+    title.innerHTML = `<strong></strong> <span class="status-chip"></span>`;
+    title.querySelector("strong").textContent = info.title;
+    const chip = title.querySelector(".status-chip");
+    chip.dataset.status = info.status === "visual" ? "editor" : info.status === "provisional" ? "provisional" : "simulated";
+    chip.textContent = { simulated: "simulated", visual: "visual only", provisional: "simulated · position provisional" }[info.status];
+    panel.append(title);
+    for (const line of info.lines) {
+      const row = document.createElement("p");
+      row.className = "muted";
+      row.textContent = line;
+      panel.append(row);
+    }
+    const livePins = COMPONENT_PINS[selection.id] ?? [];
+    if (livePins.length) {
+      const live = document.createElement("p");
+      live.className = "component-live";
+      live.textContent = simulationLive()
+        ? livePins.map((gpio) => `${gpio}: ${describePin(state.board, gpio).label}`).join(" · ")
+        : `Pins ${livePins.join(", ")} — run the simulation to see live values`;
+      panel.append(live);
+    }
+    return;
+  }
   if (selection.kind === "wire") {
     const connection = history.diagram.connections[selection.index];
     if (!connection) {
@@ -850,6 +888,9 @@ function scheduleRefresh() {
     refreshScheduled = false;
     reevaluateCircuit();
     render();
+    if (workspace.selection?.kind === "component") {
+      renderSelectionPanel(); // live pin values for the selected component
+    }
   });
 }
 

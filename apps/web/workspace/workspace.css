@@ -160,6 +160,10 @@
   stroke-width: 2;
 }
 
+.wire-end {
+  pointer-events: none;
+}
+
 .wire.is-selected .wire-casing {
   stroke: #58a6ff;
   stroke-width: 4.4;
@@ -292,6 +296,18 @@
   color: #7ee2a0;
   background: rgba(63, 185, 80, 0.14);
   border: 1px solid rgba(63, 185, 80, 0.35);
+}
+
+.status-chip[data-status="provisional"] {
+  color: #9ecbff;
+  background: rgba(47, 129, 247, 0.12);
+  border: 1px solid rgba(47, 129, 247, 0.4);
+}
+
+.selection-panel .component-live {
+  color: var(--text);
+  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  font-size: 11px;
 }
 
 .status-chip[data-status="editor"] {

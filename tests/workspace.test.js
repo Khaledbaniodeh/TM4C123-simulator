@@ -94,6 +94,16 @@ describe("geometry", () => {
     assert.deepEqual(zoomed, { x: 50, y: 25, width: 200, height: 100 });
     const rect = { left: 10, top: 20, width: 800, height: 400 };
     assert.deepEqual(clientToWorld(view, rect, 10 + 400, 20 + 200), { x: 200, y: 100 });
+    // preserveAspectRatio "meet": a 400x200 view in a 400x400 element is letterboxed 100 px top and bottom.
+    const square = { left: 0, top: 0, width: 400, height: 400 };
+    assert.deepEqual(clientToWorld(view, square, 0, 100), { x: 0, y: 0 });
+    assert.deepEqual(clientToWorld(view, square, 400, 300), { x: 400, y: 200 });
+    // Round trip: zooming keeps the anchor under the same client point.
+    const anchorClient = { x: 10 + 600, y: 20 + 100 };
+    const anchorWorld = clientToWorld(view, rect, anchorClient.x, anchorClient.y);
+    const zoomedIn = zoomViewBox(view, 2.5, anchorWorld);
+    const again = clientToWorld(zoomedIn, rect, anchorClient.x, anchorClient.y);
+    assert.ok(Math.abs(again.x - anchorWorld.x) < 1e-9 && Math.abs(again.y - anchorWorld.y) < 1e-9);
     const fit = fitViewBox({ x: 0, y: 0, width: 100, height: 100 }, 2, 0);
     assert.deepEqual(fit, { x: -50, y: 0, width: 200, height: 100 });
   });

@@ -336,6 +336,59 @@ function tactileSwitch(id, input, position, label, size = 6) {
     </g>`;
 }
 
+// ---------------------------------------------------------------------------
+// Selectable board components
+// ---------------------------------------------------------------------------
+
+/**
+ * Technical information for each selectable board component.
+ * status: "simulated" (behavior from the simulator), "visual" (drawn only),
+ * or "provisional" (simulated, but its position is not yet confirmed).
+ */
+const headerInfo = (header) => ({
+  title: `${header} · BoosterPack header (10 pins)`,
+  status: "simulated",
+  lines: [
+    "Every pin is a wire anchor; GPIO pins connect to the Renode GPIO model",
+    `Position: TI SPMR240 (${CAD_PLACEMENT[header][0]} mil column); pinout: SPMU296 ${{ J1: "Table 2-3", J2: "Table 2-4", J3: "Table 2-5", J4: "Table 2-6" }[header]}`,
+  ],
+});
+
+export const COMPONENTS = Object.freeze({
+  U1: { title: "U1 · TM4C123GH6PM target MCU", status: "simulated", lines: ["Cortex-M4F executed by Renode 1.17.0 at 16 MIPS (≈ 16 MHz PIOSC)", "Modeled: SYSCTL GPIO clock gating, GPIO A–F, GPIO interrupts → NVIC, bus faults", "Other peripherals report accesses instead of simulating them"] },
+  U2: { title: "U2 · In-Circuit Debug Interface (ICDI)", status: "visual", lines: ["On the real board, a second TM4C123G runs TI's debug firmware", "Not simulated: firmware is loaded into the target directly"] },
+  J11: { title: "J11 · DEBUG USB (micro-B)", status: "visual", lines: ["Connects the ICDI to a PC on the real board", "Not simulated"] },
+  J9: { title: "J9 · DEVICE USB (micro-AB)", status: "visual", lines: ["Target MCU USB 2.0 device/OTG port", "USB is not modeled"] },
+  SW3: { title: "SW3 · Power select (DEBUG / DEVICE)", status: "visual", lines: ["Selects which USB connector powers the real board", "The simulated board is always powered"] },
+  D1: { title: "D1 · RGB LED", status: "simulated", lines: ["Red = PF1, Blue = PF2, Green = PF3, driven through Q1–Q3", "Lit only while its pin is a GPIO output driven HIGH (Renode events)"] },
+  D4: { title: "D4 · Power LED", status: "visual", lines: ["Shown lit while a simulation session is live"] },
+  SW1: { title: "SW1 · User switch", status: "simulated", lines: ["PF4, active low; firmware must enable the internal pull-up", "Hold to press while the simulation runs"] },
+  SW2: { title: "SW2 · User switch", status: "simulated", lines: ["PF0, active low; PF0 is commit-protected (GPIOLOCK/GPIOCR)", "Hold to press while the simulation runs"] },
+  RESET: { title: "RESET pushbutton", status: "provisional", lines: ["Releasing it resets the simulated MCU (Renode machine Reset)", `Position provisional — ${RESET_SOURCE}`] },
+  Y1: { title: "Y1 · Crystal (target MCU)", status: "visual", lines: ["Clock tree not modeled; the simulator assumes the 16 MHz PIOSC reset clock"] },
+  Y2: { title: "Y2 · Crystal (target MCU)", status: "visual", lines: ["Clock tree and hibernation module not modeled"] },
+  Y5: { title: "Y5 · Crystal (ICDI)", status: "visual", lines: ["Part of the debug interface; not simulated"] },
+  R9: { title: "R9 · 0 Ω link PD0 ↔ PB6", status: "simulated", lines: ["Fitted by default for MSP430 BoosterPack compatibility (SPMU296)", "Modeled as a direct connection in the circuit netlist"] },
+  R10: { title: "R10 · 0 Ω link PD1 ↔ PB7", status: "simulated", lines: ["Fitted by default for MSP430 BoosterPack compatibility (SPMU296)", "Modeled as a direct connection in the circuit netlist"] },
+  J1: headerInfo("J1"), J2: headerInfo("J2"), J3: headerInfo("J3"), J4: headerInfo("J4"),
+});
+
+/** Wraps artwork in a selectable component group with a generous hit area (mm). */
+function component(id, bounds, inner) {
+  const minimum = 3.0; // keep small parts easy to hit
+  const w = Math.max(bounds.w, minimum);
+  const h = Math.max(bounds.h, minimum);
+  const x = bounds.x + bounds.w / 2 - w / 2;
+  const y = bounds.y + bounds.h / 2 - h / 2;
+  return `
+    <g class="lp-component" data-component="${id}" data-status="${COMPONENTS[id].status}">
+      <rect x="${S(x)}" y="${S(y)}" width="${S(w)}" height="${S(h)}" rx="${S(0.6)}" class="lp-hit" />
+      ${inner}
+    </g>`;
+}
+
+const around = (p, w, h) => ({ x: p.x - w / 2, y: p.y - h / 2, w, h });
+
 function render() {
   const g = GEOMETRY;
   const holes = CAD_TEST_HOLES.map(inch).map((p) => `<circle cx="${S(p.x)}" cy="${S(p.y)}" r="${S(0.75)}" class="lp-hole" /><circle cx="${S(p.x)}" cy="${S(p.y)}" r="${S(0.45)}" class="lp-drill" />`).join("");
@@ -358,44 +411,42 @@ function render() {
       ${resetHoles}
       <rect x="${S(1.2)}" y="${S(16.6)}" width="${S(48.4)}" height="${S(0.25)}" class="lp-divider" />
       <text x="${S(g.width / 2)}" y="${S(18.3)}" class="lp-silk small">IN-CIRCUIT DEBUG INTERFACE ABOVE · TARGET MCU BELOW</text>
-      ${usbTop(g.usbDebug, "DEBUG")}
-      ${usbLeft(g.usbDevice, "DEVICE")}
-      <g class="lp-power-switch">
+      ${component("J11", { x: g.usbDebug.x - 4, y: -1, w: 8, h: 5.2 }, usbTop(g.usbDebug, "DEBUG"))}
+      ${component("J9", { x: -1, y: g.usbDevice.y - 4, w: 5.2, h: 8 }, usbLeft(g.usbDevice, "DEVICE"))}
+      ${component("SW3", around(g.powerSwitch, 3.6, 7.6), `
         ${smdPart(g.powerSwitch, CAD_PLACEMENT.SW3[2], 7.0, 3.0, "lp-switch-body")}
-        <rect x="${S(g.powerSwitch.x - 0.9)}" y="${S(g.powerSwitch.y - 2.6)}" width="${S(1.8)}" height="${S(2.0)}" rx="0.3" class="lp-slider" />
-        <text x="${S(g.powerSwitch.x + 2.4)}" y="${S(g.powerSwitch.y - 1.6)}" class="lp-silk small start">DEBUG</text>
-        <text x="${S(g.powerSwitch.x + 2.4)}" y="${S(g.powerSwitch.y + 2.6)}" class="lp-silk small start">DEVICE</text>
-        <text x="${S(g.powerSwitch.x)}" y="${S(g.powerSwitch.y + 5.6)}" class="lp-silk small">PWR SELECT</text>
-      </g>
-      ${qfp(g.icdi.x, g.icdi.y, g.icdi.size, 0, "TM4C123G", "ICDI")}
-      ${qfp(g.mcu.x, g.mcu.y, g.mcu.size, g.mcu.rotation, "TM4C123G", "H6PM")}
-      ${["Y1", "Y2", "Y5"].map(crystal).join("")}
+        <rect x="${S(g.powerSwitch.x - 0.9)}" y="${S(g.powerSwitch.y - 2.6)}" width="${S(1.8)}" height="${S(2.0)}" rx="0.3" class="lp-slider" />`)}
+      <text x="${S(g.powerSwitch.x + 2.4)}" y="${S(g.powerSwitch.y - 1.6)}" class="lp-silk small start">DEBUG</text>
+      <text x="${S(g.powerSwitch.x + 2.4)}" y="${S(g.powerSwitch.y + 2.6)}" class="lp-silk small start">DEVICE</text>
+      <text x="${S(g.powerSwitch.x)}" y="${S(g.powerSwitch.y + 5.6)}" class="lp-silk small">PWR SELECT</text>
+      ${component("U2", around(g.icdi, 12, 12), qfp(g.icdi.x, g.icdi.y, g.icdi.size, 0, "TM4C123G", "ICDI"))}
+      ${component("U1", around(g.mcu, 14, 14), qfp(g.mcu.x, g.mcu.y, g.mcu.size, g.mcu.rotation, "TM4C123G", "H6PM"))}
+      ${["Y1", "Y2", "Y5"].map((y) => component(y, around(at(y), 5.2, 5.2), crystal(y))).join("")}
       ${passivesArt()}
       ${smdPart(at("U4"), 0, 2.9, 1.6, "lp-ic-small")}
       ${smdPart(at("U8"), 90, 3.0, 3.0, "lp-ic-small")}
       ${smdPart(at("D2"), 180, 2.9, 1.3, "lp-ic-small")}
       ${["Q1", "Q2", "Q3"].map((q) => smdPart(at(q), 0, 1.2, 0.8, "lp-ic-small")).join("")}
-      ${smdPart(r9, 0, 1.6, 0.8, "lp-res lp-zero")}
-      ${smdPart(r10, 0, 1.6, 0.8, "lp-res lp-zero")}
+      ${component("R9", around(r9, 2.4, 1.6), smdPart(r9, 0, 1.6, 0.8, "lp-res lp-zero"))}
+      ${component("R10", around(r10, 2.4, 1.6), smdPart(r10, 0, 1.6, 0.8, "lp-res lp-zero"))}
       <text x="${S(r9.x)}" y="${S(r9.y + 2.2)}" class="lp-silk small">R9</text>
       <text x="${S(r10.x)}" y="${S(r10.y + 2.2)}" class="lp-silk small">R10</text>
-      ${["J1", "J3", "J4", "J2"].map(headerArt).join("")}
+      ${["J1", "J3", "J4", "J2"].map((h) => component(h, { x: g.headers[h].x - 1.27, y: g.headers[h].y - 1.27, w: 2.54, h: 25.4 }, headerArt(h))).join("")}
       ${outerLabels()}
-      <g class="lp-power-led">
-        ${smdPart(g.powerLed, 270, 2.0, 1.25, "lp-led-off")}
-        <text x="${S(g.powerLed.x + 2.4)}" y="${S(g.powerLed.y + 0.8)}" class="lp-silk small start">PWR</text>
-      </g>
-      <g class="lp-rgb">
-        <circle cx="${S(g.rgbLed.x)}" cy="${S(g.rgbLed.y)}" r="${S(4.5)}" class="lp-rgb-glow" />
-        <rect x="${S(g.rgbLed.x - 1.0)}" y="${S(g.rgbLed.y - 1.0)}" width="${S(2.0)}" height="${S(2.0)}" rx="0.3" class="lp-rgb-body" />
-        <circle id="redLed" cx="${S(g.rgbLed.x - 0.5)}" cy="${S(g.rgbLed.y + 0.35)}" r="${S(0.33)}" class="lp-rgb-die red" />
-        <circle id="greenLed" cx="${S(g.rgbLed.x)}" cy="${S(g.rgbLed.y - 0.45)}" r="${S(0.33)}" class="lp-rgb-die green" />
-        <circle id="blueLed" cx="${S(g.rgbLed.x + 0.5)}" cy="${S(g.rgbLed.y + 0.35)}" r="${S(0.33)}" class="lp-rgb-die blue" />
-        <text x="${S(g.rgbLed.x - 1.8)}" y="${S(g.rgbLed.y + 0.8)}" class="lp-silk small end">RGB</text>
-      </g>
-      ${tactileSwitch("resetButton_board", "RESET", g.reset, "RESET", 4.0)}
-      ${tactileSwitch("sw1Button", "SW1", g.sw1, "SW1")}
-      ${tactileSwitch("sw2Button", "SW2", g.sw2, "SW2")}
+      ${component("D4", around(g.powerLed, 2.4, 2.4), `<g class="lp-power-led">${smdPart(g.powerLed, 270, 2.0, 1.25, "lp-led-off")}</g>`)}
+      <text x="${S(g.powerLed.x + 2.4)}" y="${S(g.powerLed.y + 0.8)}" class="lp-silk small start">PWR</text>
+      ${component("D1", around(g.rgbLed, 4, 4), `
+        <g class="lp-rgb">
+          <circle cx="${S(g.rgbLed.x)}" cy="${S(g.rgbLed.y)}" r="${S(4.5)}" class="lp-rgb-glow" />
+          <rect x="${S(g.rgbLed.x - 1.0)}" y="${S(g.rgbLed.y - 1.0)}" width="${S(2.0)}" height="${S(2.0)}" rx="0.3" class="lp-rgb-body" />
+          <circle id="redLed" cx="${S(g.rgbLed.x - 0.5)}" cy="${S(g.rgbLed.y + 0.35)}" r="${S(0.33)}" class="lp-rgb-die red" />
+          <circle id="greenLed" cx="${S(g.rgbLed.x)}" cy="${S(g.rgbLed.y - 0.45)}" r="${S(0.33)}" class="lp-rgb-die green" />
+          <circle id="blueLed" cx="${S(g.rgbLed.x + 0.5)}" cy="${S(g.rgbLed.y + 0.35)}" r="${S(0.33)}" class="lp-rgb-die blue" />
+        </g>`)}
+      <text x="${S(g.rgbLed.x - 1.8)}" y="${S(g.rgbLed.y + 0.8)}" class="lp-silk small end">RGB</text>
+      ${component("RESET", around(g.reset, 5.4, 5.4), tactileSwitch("resetButton_board", "RESET", g.reset, "RESET", 4.0))}
+      ${component("SW1", around(g.sw1, 7.4, 7.4), tactileSwitch("sw1Button", "SW1", g.sw1, "SW1"))}
+      ${component("SW2", around(g.sw2, 7.4, 7.4), tactileSwitch("sw2Button", "SW2", g.sw2, "SW2"))}
       <text x="${S(g.width / 2)}" y="${S(g.height - 6.4)}" class="lp-silk lp-title">TM4C123G LaunchPad</text>
       <text x="${S(g.width / 2)}" y="${S(g.height - 3.4)}" class="lp-silk small">EK-TM4C123GXL · simulated board view</text>
     </g>`;
@@ -435,6 +486,7 @@ export const BOARD_PART = Object.freeze({
   links,
   render,
   update,
+  components: COMPONENTS,
   geometry: GEOMETRY,
   geometrySource: GEOMETRY_SOURCE,
   resetSource: RESET_SOURCE,

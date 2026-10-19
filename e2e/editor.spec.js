@@ -34,7 +34,7 @@ async function viewBox(page) {
 test("renders the LaunchPad with 40 header pin anchors in portrait orientation", async ({ page }) => {
   const errors = await openWorkspace(page);
   const board = page.locator('.part[data-type="tm4c123gxl-launchpad"]');
-  await expect(board.locator(".pin-anchor")).toHaveCount(40);
+  await expect(page.locator('.part-anchors[data-part="board1"] .pin-anchor')).toHaveCount(40);
   const box = await board.locator(".part-hitbox").boundingBox();
   expect(box.height).toBeGreaterThan(box.width);
 
@@ -247,4 +247,129 @@ test("critical controls have accessible names", async ({ page }) => {
   await expect(page.getByRole("application", { name: /Circuit canvas/ })).toBeVisible();
   await expect(page.locator("#sw1Button")).toHaveAttribute("role", "button");
   await expect(page.locator("#sw1Button")).toHaveAttribute("aria-label", /SW1/);
+});
+
+test("pins stay hoverable and wireable after a wire is attached", async ({ page }) => {
+  await openWorkspace(page);
+  await page.getByRole("button", { name: /Part/ }).click();
+  await page.locator('.library-item[data-type="led"]').click();
+  await anchor(page, "board1", "J1.10").click();
+  await anchor(page, "led1", "A").click();
+  await expect(page.locator(".wire")).toHaveCount(1);
+
+  await anchor(page, "board1", "J1.10").hover();
+  await expect(page.locator("#pinTooltip")).toContainText("1 wire connected");
+  await anchor(page, "board1", "J1.10").click();
+  await expect(page.locator("#workspaceMessage")).toContainText("Wiring from board1:J1.10");
+  await anchor(page, "led1", "C").click();
+  await expect(page.locator(".wire")).toHaveCount(2);
+});
+
+test("pin hit targets, tooltips, and wire endpoints stay correct across zoom and pan", async ({ page }) => {
+  await openWorkspace(page);
+  const radius = () => page.locator('.pin-anchor[data-pin="J2.4"]').getAttribute("r").then(Number);
+  const views = [
+    { name: "fit", buttons: [], wheel: 0 },
+    { name: "zoomed-out", buttons: ["Zoom out", "Zoom out", "Zoom out"], wheel: 0 },
+    // Wheel zoom is anchored at the cursor, so zooming over the pin keeps it in view.
+    { name: "zoomed-in", buttons: [], wheel: 3 },
+  ];
+  const radii = {};
+  for (const view of views) {
+    await page.getByRole("button", { name: /Fit/ }).click();
+    for (const button of view.buttons) {
+      await page.getByRole("button", { name: button, exact: true }).click();
+    }
+    for (let i = 0; i < view.wheel; i++) {
+      const pin = await center(anchor(page, "board1", "J2.4"));
+      await page.mouse.move(pin.x, pin.y);
+      await page.mouse.wheel(0, -300);
+    }
+    radii[view.name] = await radius();
+    await anchor(page, "board1", "J2.4").hover();
+    await expect(page.locator("#pinTooltip")).toContainText("J2 pin 4 · PF0");
+    await page.screenshot({ path: `test-results/board-${view.name}.png` });
+  }
+  // Hit targets grow (in world units) when zoomed out, never below the drawn pad.
+  expect(radii["zoomed-out"]).toBeGreaterThan(radii["zoomed-in"]);
+  expect(radii["zoomed-in"]).toBeGreaterThanOrEqual(9.6 * 0.32 - 1e-9);
+  expect(radii["zoomed-out"]).toBeLessThanOrEqual(9.6 * 0.48 + 1e-9);
+
+  // Wire created while zoomed in and panned lands exactly on both pins.
+  await page.getByRole("button", { name: /Fit/ }).click();
+  await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+  const stage = await page.locator("#circuitCanvas").boundingBox();
+  await page.mouse.move(stage.x + 12, stage.y + 12);
+  await page.mouse.down();
+  await page.mouse.move(stage.x + 52, stage.y + 32, { steps: 4 });
+  await page.mouse.up();
+  await anchor(page, "board1", "J3.3").click();
+  await anchor(page, "board1", "J4.8").click();
+  const aligned = await page.evaluate(() => {
+    const { workspace } = window.__tm4c;
+    const ends = [...document.querySelectorAll('.wire[data-from="board1:J3.3"] .wire-end')].map((c) => [Number(c.getAttribute("cx")), Number(c.getAttribute("cy"))]);
+    const a = workspace.pinPosition("board1:J3.3");
+    const b = workspace.pinPosition("board1:J4.8");
+    return ends.length === 2 && Math.hypot(ends[0][0] - a.x, ends[0][1] - a.y) < 1e-6 && Math.hypot(ends[1][0] - b.x, ends[1][1] - b.y) < 1e-6;
+  });
+  expect(aligned).toBe(true);
+});
+
+test("dragging moves a part by the screen distance divided by the zoom", async ({ page }) => {
+  await openWorkspace(page);
+  await page.getByRole("button", { name: /Part/ }).click();
+  await page.locator('.library-item[data-type="resistor"]').click();
+  await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+  const part = page.locator('.part[data-part="r1"]');
+  const before = (await part.getAttribute("transform")).match(/translate\(([-\d.]+) ([-\d.]+)\)/).slice(1).map(Number);
+  const zoom = await page.evaluate(() => window.__tm4c.workspace.zoomLevel);
+  const box = await part.locator(".part-hitbox").boundingBox();
+  const start = { x: box.x + box.width / 2, y: box.y + box.height / 4 };
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(start.x + 96, start.y + 48, { steps: 8 });
+  await page.mouse.up();
+  const after = (await part.getAttribute("transform")).match(/translate\(([-\d.]+) ([-\d.]+)\)/).slice(1).map(Number);
+  const snap = (v) => Math.round(v / 9.6) * 9.6;
+  expect(after[0] - before[0]).toBeCloseTo(snap(96 / zoom), 3);
+  expect(after[1] - before[1]).toBeCloseTo(snap(48 / zoom), 3);
+  // The part's pin anchors moved with it.
+  const anchorsTransform = await page.locator('.part-anchors[data-part="r1"]').getAttribute("transform");
+  expect(anchorsTransform).toBe(await part.getAttribute("transform"));
+});
+
+test("board components are selectable with honest status", async ({ page }) => {
+  await openWorkspace(page);
+  const select = async (id) => {
+    const hit = page.locator(`[data-component="${id}"] > .lp-hit`);
+    const box = await hit.boundingBox();
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  };
+  await select("U1");
+  await expect(page.locator("#selectionPanel")).toContainText("TM4C123GH6PM target MCU");
+  await expect(page.locator("#selectionPanel .status-chip")).toHaveText("simulated");
+  await expect(page.locator('[data-component="U1"]')).toHaveClass(/is-selected/);
+  await select("J9");
+  await expect(page.locator("#selectionPanel")).toContainText("DEVICE USB");
+  await expect(page.locator("#selectionPanel .status-chip")).toHaveText("visual only");
+  await select("RESET");
+  await expect(page.locator("#selectionPanel .status-chip")).toContainText("position provisional");
+  // Clicking components must not move the board.
+  await expect(page.locator('.part[data-part="board1"]')).toHaveAttribute("transform", "translate(0 0)");
+});
+
+test("selected RGB LED shows firmware-driven pin state", async ({ page }) => {
+  await openWorkspace(page);
+  await page.selectOption("#exampleSelect", "gpiof-red-led");
+  const box = await page.locator('[data-component="D1"] > .lp-hit').boundingBox();
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(page.locator("#selectionPanel")).toContainText("run the simulation to see live values");
+  await expect(page.locator("#redLed")).not.toHaveClass(/active/);
+  await page.click("#runButton");
+  await expect(page.locator("#selectionPanel .component-live")).toContainText("PF1: HIGH");
+  await expect(page.locator("#redLed")).toHaveClass(/active/);
+  await expect(page.locator("#greenLed")).not.toHaveClass(/active/);
+  await expect(page.locator("#blueLed")).not.toHaveClass(/active/);
+  await page.screenshot({ path: "test-results/board-rgb-live.png" });
+  await page.click("#stopButton");
 });

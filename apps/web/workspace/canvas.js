@@ -82,6 +82,8 @@ export class Workspace extends EventTarget {
       grid: element("rect", { class: "grid", x: -1e5, y: -1e5, width: 2e5, height: 2e5, fill: "url(#grid-major)" }, svg),
       parts: element("g", { class: "layer-parts" }, svg),
       wires: element("g", { class: "layer-wires" }, svg),
+      // Pin anchors sit above wires so a connected pin stays hoverable and wireable.
+      anchors: element("g", { class: "layer-anchors" }, svg),
       overlay: element("g", { class: "layer-overlay" }, svg),
     };
 
@@ -302,12 +304,14 @@ export class Workspace extends EventTarget {
     const { x, y, width, height } = this.#viewBox;
     this.#svg.setAttribute("viewBox", `${x} ${y} ${width} ${height}`);
     this.#svg.style.setProperty("--zoom", String(this.zoomLevel));
+    this.#updateHitTargets();
     this.#emit("view");
   }
 
   #renderParts() {
     const layer = this.#layers.parts;
     layer.replaceChildren();
+    this.#layers.anchors.replaceChildren();
     for (const part of this.diagram.parts) {
       const definition = this.#catalog[part.type];
       const state = this.#options.getPartState?.(part) ?? {};
@@ -323,16 +327,36 @@ export class Workspace extends EventTarget {
       const body = element("g", { class: "part-body" }, group);
       body.innerHTML = definition.render(part, state);
       definition.update?.(body, part, state);
+      const anchors = element("g", {
+        class: "part-anchors",
+        transform: partTransform(part, definition.size),
+        "data-part": part.id,
+      }, this.#layers.anchors);
       for (const pin of definition.pins) {
         element("circle", {
           class: "pin-anchor",
           cx: pin.x,
           cy: pin.y,
-          r: GRID * 0.32,
+          r: this.#anchorRadius(),
           "data-part": part.id,
           "data-pin": pin.name,
-        }, group);
+        }, anchors);
       }
+    }
+  }
+
+  /**
+   * Pin hit radius in world units: about 7 CSS px on screen, but never
+   * below the drawn pad nor large enough to overlap the 0.1 in neighbour.
+   */
+  #anchorRadius() {
+    return Math.min(GRID * 0.48, Math.max(GRID * 0.32, 7 / (this.zoomLevel || 1)));
+  }
+
+  #updateHitTargets() {
+    const radius = this.#anchorRadius();
+    for (const anchor of this.#layers.anchors.querySelectorAll(".pin-anchor")) {
+      anchor.setAttribute("r", radius);
     }
   }
 
@@ -368,6 +392,8 @@ export class Workspace extends EventTarget {
     const selection = this.#selection;
     if (selection?.kind === "part") {
       this.#svg.querySelector(`.part[data-part="${CSS.escape(selection.id)}"]`)?.classList.add("is-selected");
+    } else if (selection?.kind === "component") {
+      this.#svg.querySelector(`.part[data-part="${CSS.escape(selection.partId)}"] [data-component="${CSS.escape(selection.id)}"]`)?.classList.add("is-selected");
     } else if (selection?.kind === "wire") {
       this.#svg.querySelector(`.wire[data-wire="${selection.index}"]`)?.classList.add("is-selected");
     }
@@ -445,6 +471,8 @@ export class Workspace extends EventTarget {
         start: world,
         origin: { left: part.left, top: part.top },
         moved: false,
+        // A click (no drag) on a board component selects that component.
+        component: target.closest?.("[data-component]")?.dataset.component ?? null,
         pointerId: event.pointerId,
       };
       this.#svg.setPointerCapture(event.pointerId);
@@ -505,8 +533,10 @@ export class Workspace extends EventTarget {
         gesture.part.left = left;
         gesture.part.top = top;
         gesture.moved = true;
-        const node = this.#svg.querySelector(`.part[data-part="${CSS.escape(gesture.part.id)}"]`);
-        node?.setAttribute("transform", partTransform(gesture.part, this.#catalog[gesture.part.type].size));
+        const transform = partTransform(gesture.part, this.#catalog[gesture.part.type].size);
+        for (const node of this.#svg.querySelectorAll(`[data-part="${CSS.escape(gesture.part.id)}"]:is(.part, .part-anchors)`)) {
+          node.setAttribute("transform", transform);
+        }
         this.#renderWires();
         this.#renderSelection();
       }
@@ -545,6 +575,8 @@ export class Workspace extends EventTarget {
       const to = { left: gesture.part.left, top: gesture.part.top };
       Object.assign(gesture.part, gesture.origin); // the command applies the move
       this.execute(commands.movePart(gesture.part.id, gesture.origin, to));
+    } else if (gesture.type === "drag-part" && gesture.component) {
+      this.select({ kind: "component", partId: gesture.part.id, id: gesture.component });
     } else if (gesture.type === "drag-segment" && gesture.moved && gesture.preview) {
       this.execute(commands.updateConnection(this.diagram, gesture.index, { routing: pointsToRouting(gesture.preview) }));
     }

@@ -102,6 +102,25 @@
   fill: #9aa1ab;
 }
 
+/* Selectable components: invisible hit areas, highlighted on hover/selection. */
+.lp-hit {
+  fill: transparent;
+  stroke: none;
+}
+
+.lp-component:hover > .lp-hit {
+  fill: rgba(255, 255, 255, 0.07);
+  stroke: rgba(255, 255, 255, 0.35);
+  stroke-width: 0.8;
+}
+
+.lp-component.is-selected > .lp-hit {
+  fill: rgba(88, 166, 255, 0.14);
+  stroke: #58a6ff;
+  stroke-width: 1.4;
+  stroke-dasharray: 3 2;
+}
+
 .lp-res {
   fill: #1f1f22;
   stroke: #c9ccd2;
