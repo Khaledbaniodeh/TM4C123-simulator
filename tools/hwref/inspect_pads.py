@@ -147,7 +147,9 @@ def parts(archive):
     rows = []
     for _, line in secs.get("PART", []):
         tokens = line.split()
-        if len(tokens) >= 5 and re.match(r"^[A-Z]+\d+$", tokens[0]):
+        # Any part line (refdes need not be LETTERS+DIGITS, e.g. "RESET"):
+        # name, type, then numeric x and y.
+        if len(tokens) >= 5 and re.match(r"^-?\d+(\.\d+)?$", tokens[2]) and re.match(r"^-?\d+(\.\d+)?$", tokens[3]):
             try:
                 x_mil = float(tokens[2]) / 38100.0
                 y_mil = float(tokens[3]) / 38100.0

@@ -80,12 +80,12 @@ const CAD_TEST_HOLES = [
 const CAD_J5_HOLES = [[1.832, 2.21], [1.912, 2.21], [1.872, 2.51]];
 
 /**
- * The SPMR240 part list contains only SW1, SW2 (user switches) and SW3
- * (power select): no reset pushbutton part. The board view therefore draws
- * no reset button; MCU reset is available from the toolbar and as the J2.5
- * RESET header signal.
+ * SPMU296 documents a RESET switch (feature list, board figure, §2.2.4), but
+ * its placement has not yet been confirmed from the SPMR240 export, so the
+ * board view does not draw it. MCU reset is available from the toolbar and
+ * as the J2.5 RESET header signal.
  */
-export const RESET_SOURCE = "no reset switch part in SPMR240 Rev A (SW1, SW2, SW3 only)";
+export const RESET_SOURCE = "RESET switch exists (SPMU296 §2.2.4); CAD position not yet confirmed — not drawn";
 
 const at = (refdes) => cad(CAD_PLACEMENT[refdes][0], CAD_PLACEMENT[refdes][1]);
 const inch = ([x, y]) => cad(x * 1000, y * 1000);

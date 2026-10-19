@@ -64,8 +64,9 @@ jobs:
           {
             echo "SPMU296 lines mentioning reset/switch:"
             grep -n -i -E "reset|switch" spmu296.txt | head -25
-            echo "BOM strings mentioning switch/reset/EVQ:"
-            strings "$(find . -name '*Bill Of Materials*.xls' | head -1)" | grep -i -E "switch|reset|EVQ|SW[0-9]" | head -20
+            bom="$(find . -name '*Bill Of Materials*.xls' | head -1)"
+            echo "BOM strings mentioning switch/reset/EVQ (8-bit and UTF-16):"
+            { strings "$bom"; strings -el "$bom"; } | grep -i -E "switch|reset|EVQ|SW[0-9]|button" | sort -u | head -30
           } | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}' | sed 's/^/::notice title=Reset switch evidence::/'; echo
 
       - name: Schematic nets for LEDs, switches, R9/R10

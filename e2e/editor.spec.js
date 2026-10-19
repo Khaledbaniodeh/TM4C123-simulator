@@ -355,7 +355,7 @@ test("board components are selectable with honest status", async ({ page }) => {
   await select("J5");
   await expect(page.locator("#selectionPanel")).toContainText("Tag-Connect TC2050");
   await expect(page.locator("#selectionPanel .status-chip")).toHaveText("visual only");
-  // SPMR240 contains no reset pushbutton part, so none is drawn.
+  // The RESET switch's CAD position is not confirmed yet, so it is not drawn.
   await expect(page.locator('[data-input="RESET"]')).toHaveCount(0);
   // Clicking components must not move the board.
   await expect(page.locator('.part[data-part="board1"]')).toHaveAttribute("transform", "translate(0 0)");

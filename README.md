@@ -54,12 +54,30 @@ reproducible, scriptable firmware experiments.
 | On-board RGB LED (PF1–PF3) and SW1/SW2 (PF4/PF0) | ✅ Implemented & tested |
 | Reset, deterministic virtual time, structured runtime events | ✅ Implemented & tested |
 | Browser workspace: editor, compile/run/pause/reset/stop, diagnostics, pin inspector | ✅ Implemented & tested (Playwright) |
+| EK-TM4C123GXL board placed from TI CAD data (SPMR240); J1–J4 pinout verified against SPMU296 in CI | ✅ Implemented & tested |
+| Interactive board: 40 wireable header pins with live tooltips, SW1/SW2, firmware-driven RGB LED, selectable components | ✅ Implemented & tested (Playwright) |
+| Circuit workspace: pan/zoom/fit, grid/snap, drag/rotate/duplicate/delete, undo/redo, orthogonal wiring with validation | ✅ Implemented & tested (Playwright) |
+| `diagram.json` save/load (Wokwi-inspired format; full Wokwi compatibility not claimed) | ✅ Implemented & tested |
+| External LED / resistor / pushbutton wired to header GPIOs (logic-level netlist → real GPIO model) | ✅ Implemented & tested (example F) |
+| Potentiometer, LCD1602, logic analyzer parts | 🟡 Editor only — placeable and wireable, **no electrical behavior yet** |
 | SysTick | 🟡 Provided by Renode's NVIC; not yet verified |
 | PLL/RCC clock tree, GPTM timers, ADC0, UART0, LCD1602 | 📋 Planned — accesses are **reported**, never silently accepted |
 | Keil ARMASM sources, CMSIS `TM4C123.h` lab code | ⛔ Not supported yet ([details](docs/EXPERIMENT_COMPATIBILITY.md)) |
 
 Lab coverage for Experiments 5–10 is tracked in
 [`docs/EXPERIMENT_COMPATIBILITY.md`](docs/EXPERIMENT_COMPATIBILITY.md).
+
+## Circuit workspace
+
+The board is an interactive component:
+- **Header pins.** Each of the 40 pins has a hover tooltip showing the header pin, GPIO, analog and alternate functions, on-board role, and the live simulated level. You can start or end a wire on any pin.
+- **On-board controls.** SW1/SW2 drive the real GPIO model while held. The RGB LED lights only from firmware-driven pin events.
+- **Components.** Clicking a component (MCU, ICDI, USB connectors, crystals, R9/R10, headers…) shows its technical details and whether it is *simulated* or *visual only*.
+
+Wires are orthogonal and snap to the 0.1 in grid. They stay attached when parts move, and you can recolor or reroute them. Wires between supply and ground, and duplicate wires, are rejected. Circuits save and load as `diagram.json`.
+
+Board provenance and the status of every element:
+[`docs/BOARD_MODEL.md`](docs/BOARD_MODEL.md).
 
 ## Architecture
 
@@ -120,6 +138,7 @@ down Renode cleanly.
 | [`gpiof-blink`](examples/gpiof-blink/main.c) | **C** — masked DATA alias + software delay blink |
 | [`sw1-red-led`](examples/sw1-red-led/main.c) | **D** — SW1 active-low input with internal pull-up, polled |
 | [`switch-interrupts`](examples/switch-interrupts/main.c) | **E** — PF0 unlock, falling-edge GPIO interrupts, NVIC IRQ 30, ISR |
+| [`external-led-button`](examples/external-led-button/main.c) | **F** — external LED (PA7 + 220 Ω) and pushbutton (PA6 → GND) wired in the workspace ([`diagram.json`](examples/external-led-button/diagram.json)) |
 
 Negative fixtures (missing clock / DIR / DEN, compile and link errors,
 unsupported accesses) are in [`tests/fixtures/firmware/`](tests/fixtures/firmware/).
@@ -127,10 +146,16 @@ unsupported accesses) are in [`tests/fixtures/firmware/`](tests/fixtures/firmwar
 ## Tests and evidence
 
 ```bash
-npm test                          # 31 tests: compiler, Renode integration, API, board state
-npm run test:e2e                  # 4 browser tests (after: npx playwright install chromium)
-PW_CHANNEL=msedge npm run test:e2e   # or use an installed Edge/Chrome instead
+npm test       # compiler, Renode integration, API, workspace model, netlist, board/pin map
+npm run test:e2e   # browser: firmware-driven LEDs, switches, reset, editor, wiring, zoom, diagram.json
 ```
+
+CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs both suites
+on every push with the pinned toolchains, reports failures as annotations,
+and publishes the browser screenshots to the
+[`ci-artifacts`](https://github.com/Khaledbaniodeh/TM4C123-simulator/tree/ci-artifacts)
+branch. [`hardware-reference.yml`](.github/workflows/hardware-reference.yml)
+checks the board model against TI's documents.
 
 Results, gate-by-gate evidence, and known limitations are in the
 [**RISK-001 Acceptance Report**](docs/RISK-001_Acceptance_Report.md). Some

@@ -1,6 +1,6 @@
 # Project Status
 
-**Last updated:** 2026-10-19
+**Last updated:** 2026-10-19 (workspace increment on `feat/wokwi-workspace`)
 **Stage:** Early technical prototype. The RISK-001 vertical slice is
 implemented and verified (decision D-016: GO WITH CONDITIONS).
 **Public hosted simulator:** No (local trusted mode only).
@@ -20,7 +20,12 @@ implemented and verified (decision D-016: GO WITH CONDITIONS).
 | Bus faults (unclocked, reserved) and unsupported-access reporting | ✅ Implemented and verified |
 | Runtime event bridge (JSON lines → SSE) | ✅ Implemented and verified |
 | Browser workspace | ✅ Implemented and verified (Playwright) |
-| CI (GitHub Actions, Linux) | 🔧 Workflow added; results on the PR |
+| Board model from TI CAD (SPMR240) + pinout check (SPMU296) | ✅ Implemented and verified in CI |
+| Interactive board (pins, tooltips, SW1/SW2, RGB LED, selectable components) | ✅ Implemented and verified (Playwright) |
+| Circuit workspace (pan/zoom, editing, undo/redo, wiring, diagram.json) | ✅ Implemented and verified (Playwright) |
+| External LED / resistor / pushbutton (logic-level netlist) | ✅ Implemented and verified (example F) |
+| Potentiometer / LCD1602 / logic analyzer parts | 🟡 Editor only — no electrical behavior |
+| CI (GitHub Actions, Linux) | ✅ Builds, simulates, and runs all suites on every push |
 | SysTick | 🟡 Engine-provided, not verified |
 | Clock tree (RCC/RCC2/PLL) | 📋 Planned |
 | GPTM TIMER0A–2A | 📋 Planned |
