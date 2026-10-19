@@ -1,0 +1,8 @@
+{
+  "id": "systick-blink",
+  "title": "G — SysTick 100 ms blink at 50 MHz (PLL)",
+  "summary": "Configures the PLL for a 50 MHz system clock, then a SysTick interrupt every 5,000,000 core clocks (100 ms) toggles the green LED (PF3).",
+  "experiment": 7,
+  "expected": "Green LED toggles every 100 ms of virtual time",
+  "inputs": []
+}

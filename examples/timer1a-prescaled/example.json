@@ -1,0 +1,8 @@
+{
+  "id": "timer1a-prescaled",
+  "title": "H — TIMER1A 16-bit periodic, prescaler 256",
+  "summary": "TIMER1A in 16-bit periodic mode (TAILR 0xFFFF, TAPR 255) at 50 MHz interrupts every 0.3355 s; the ISR toggles the blue LED (PF2).",
+  "experiment": 7,
+  "expected": "Blue LED toggles every 0.33554432 s of virtual time",
+  "inputs": []
+}

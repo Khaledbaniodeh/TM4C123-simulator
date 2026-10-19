@@ -3,8 +3,8 @@
  *
  * Lights PF1 first (so the test can confirm execution reached this point),
  * then touches addresses the simulator does not model:
- *   - SYSCTL RCC (0x400FE060): inside the modeled SYSCTL block, but the
- *     register itself is unsupported -> `unsupported-register-access` event.
+ *   - SYSCTL RCGCUART (0x400FE618): inside the modeled SYSCTL block, but
+ *     the register itself is unsupported (UART is not modeled yet) -> `unsupported-register-access` event.
  *   - ADC0 ACTSS (0x40038000): ADC0 exists on the device but is not
  *     modeled yet -> `unimplemented-peripheral-access` event.
  *   - 0x40080000: reserved address space -> precise bus fault, escalated to
@@ -15,7 +15,7 @@
 
 #define REG32(address) (*((volatile uint32_t *)(address)))
 
-#define SYSCTL_RCC_R      REG32(0x400FE060u)
+#define SYSCTL_RCGCUART_R REG32(0x400FE618u)
 #define SYSCTL_RCGCGPIO_R REG32(0x400FE608u)
 #define SYSCTL_PRGPIO_R   REG32(0x400FEA08u)
 #define ADC0_ACTSS_R      REG32(0x40038000u)
@@ -34,7 +34,7 @@ int main(void)
     GPIO_PORTF_DEN_R  |= (1u << 1);
     GPIO_PORTF_DATA_R |= (1u << 1);
 
-    SYSCTL_RCC_R = 0x078E3AD1u;
+    SYSCTL_RCGCUART_R = 0x1u;
     g_sink = ADC0_ACTSS_R;
     g_sink = RESERVED_R;
 

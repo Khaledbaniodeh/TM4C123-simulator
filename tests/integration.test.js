@@ -218,9 +218,9 @@ describe("execution: GPIOF PF1 vertical slice", { timeout: 600_000 }, () => {
     await withFirmware(await fixtureSource("unsupported-access.c"), async (session) => {
       await session.runFor(10n * MS);
       const unsupported = session.events.find((e) => e.type === "unsupported-register-access");
-      assert.ok(unsupported, "SYSCTL RCC write must be reported");
+      assert.ok(unsupported, "SYSCTL RCGCUART write must be reported");
       assert.equal(unsupported.peripheral, "SYSCTL");
-      assert.equal(unsupported.address, "0x400FE060");
+      assert.equal(unsupported.address, "0x400FE618");
       assert.equal(unsupported.access, "write");
       const adc = session.events.find((e) => e.type === "unimplemented-peripheral-access");
       assert.ok(adc, "ADC0 access must be reported as an unimplemented peripheral");
