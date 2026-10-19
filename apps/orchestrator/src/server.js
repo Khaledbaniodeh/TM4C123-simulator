@@ -15,8 +15,9 @@
  *   node apps/orchestrator/src/server.js [--port 5123]
  */
 import { randomUUID } from "node:crypto";
-import { readFile, readdir } from "node:fs/promises";
+import { readFile, readdir, rm, stat } from "node:fs/promises";
 import http from "node:http";
+import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { compileFirmware, removeBuild, run } from "./compiler.js";
@@ -424,6 +425,28 @@ export function createServer({ port }) {
   });
 }
 
+/**
+ * Removes build/session directories left behind by servers that did not
+ * shut down cleanly (e.g. killed processes). Only directories older than
+ * `maxAgeMs` are touched, so concurrently running instances are unaffected.
+ */
+export async function sweepStaleTempDirs(maxAgeMs = 6 * 60 * 60 * 1000) {
+  const root = os.tmpdir();
+  let removed = 0;
+  for (const entry of await readdir(root, { withFileTypes: true }).catch(() => [])) {
+    if (!entry.isDirectory() || !/^tm4c-(build|session)-/.test(entry.name)) {
+      continue;
+    }
+    const dir = path.join(root, entry.name);
+    const info = await stat(dir).catch(() => null);
+    if (info && Date.now() - info.mtimeMs > maxAgeMs) {
+      await rm(dir, { recursive: true, force: true }).catch(() => {});
+      removed++;
+    }
+  }
+  return removed;
+}
+
 export async function shutdown() {
   await active?.stop();
   active = null;
@@ -439,6 +462,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   if (process.env.HOST && process.env.HOST !== HOST) {
     console.error(`Refusing to bind to ${process.env.HOST}: this server is for local, trusted use only (${HOST}).`);
     process.exit(1);
+  }
+  const swept = await sweepStaleTempDirs();
+  if (swept) {
+    console.log(`Removed ${swept} stale build/session director${swept === 1 ? "y" : "ies"} from earlier runs.`);
   }
   const server = createServer({ port });
   server.listen(port, HOST, () => {
