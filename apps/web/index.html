@@ -2,19 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  >
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta
     name="description"
-    content="Visual UI prototype for the TM4C123 Educational Web Simulator."
+    content="TM4C123 Simulator — Cortex-M4 firmware and peripheral simulation. Real arm-none-eabi-gcc builds executed in Renode with TM4C123 register-level models."
   >
-
-  <title>TM4C123 Simulator — UI Prototype</title>
-
+  <meta name="application-name" content="TM4C123 Simulator">
+  <title>TM4C123 Simulator</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 
@@ -24,216 +18,125 @@
     <!-- Top Navigation -->
     <header class="topbar">
       <div class="brand">
-        <div class="brand-mark" aria-hidden="true">T</div>
-
+        <div class="brand-mark" aria-hidden="true">M4</div>
         <div class="brand-text">
           <strong>TM4C123 Simulator</strong>
-          <span>Educational Web Prototype</span>
+          <span>Cortex-M4 Firmware &amp; Peripheral Simulation</span>
         </div>
       </div>
 
       <div class="topbar-actions">
-        <span class="prototype-badge">
-          UI Prototype
-        </span>
+        <label class="example-picker">
+          <span>Example</span>
+          <select id="exampleSelect" aria-label="Firmware example"></select>
+        </label>
 
-        <button
-          id="compileButton"
-          class="toolbar-button secondary-button"
-          type="button"
-        >
+        <button id="compileButton" class="toolbar-button secondary-button" type="button" disabled>
           Compile
         </button>
-
-        <button
-          id="runButton"
-          class="toolbar-button primary-button"
-          type="button"
-        >
+        <button id="runButton" class="toolbar-button primary-button" type="button" disabled>
           ▶ Run
         </button>
-
-        <button
-          id="stopButton"
-          class="toolbar-button danger-button"
-          type="button"
-          disabled
-        >
-          ■ Stop
+        <button id="pauseButton" class="toolbar-button secondary-button" type="button" disabled>
+          ❚❚ Pause
         </button>
-
-        <button
-          id="resetButton"
-          class="toolbar-button secondary-button"
-          type="button"
-        >
-          ↻ Reset
+        <button id="resetButton" class="toolbar-button secondary-button" type="button" disabled>
+          ↻ Reset MCU
+        </button>
+        <button id="stopButton" class="toolbar-button danger-button" type="button" disabled>
+          ■ Stop
         </button>
       </div>
     </header>
 
-    <!-- Prototype Notice -->
-    <section class="prototype-notice">
-      <strong>Visual prototype only.</strong>
-
-      This interface does not currently compile or execute real Cortex-M4
-      firmware. Real execution will be connected after the feasibility
-      milestone is completed.
+    <!-- Mode Notice -->
+    <section id="modeNotice" class="prototype-notice">
+      <strong>Local trusted mode.</strong>
+      Firmware is compiled by arm-none-eabi-gcc and executed on a Renode Cortex-M4 with TM4C123
+      register models on this machine. Compilation is time- and size-limited but not sandboxed —
+      only run code you trust.
+      <span id="toolchainInfo" class="notice-detail"></span>
     </section>
 
     <!-- Main Workspace -->
     <main class="workspace">
 
       <!-- Code Workspace -->
-      <section class="editor-panel" aria-label="Code editor">
+      <section class="editor-panel" aria-label="Firmware editor">
         <div class="panel-header">
           <div>
             <span class="panel-eyebrow">Firmware</span>
-            <h1>Code Editor</h1>
+            <h1>main.c</h1>
           </div>
-
-          <span id="editorStatus" class="small-status">
-            Modified
-          </span>
+          <span id="editorStatus" class="small-status">Loading…</span>
         </div>
 
-        <nav class="file-tabs" aria-label="Project files">
-          <button
-            class="file-tab active"
-            type="button"
-            data-tab="main"
-          >
-            main.c
-          </button>
-
-          <button
-            class="file-tab"
-            type="button"
-            data-tab="diagram"
-          >
-            diagram.json
-          </button>
-
-          <button
-            class="file-tab"
-            type="button"
-            data-tab="project"
-          >
-            project.json
-          </button>
-        </nav>
+        <p id="exampleSummary" class="example-summary"></p>
 
         <div class="editor-container">
           <div id="lineNumbers" class="line-numbers" aria-hidden="true"></div>
-
           <textarea
             id="codeEditor"
             class="code-editor"
-            aria-label="Firmware source code"
+            aria-label="Firmware source code (main.c)"
             spellcheck="false"
+            wrap="off"
           ></textarea>
         </div>
 
         <div class="editor-footer">
-          <span>C</span>
-          <span>ARM Cortex-M4</span>
-          <span>UTF-8</span>
+          <span>C11</span>
+          <span>arm-none-eabi-gcc -mcpu=cortex-m4 -O0</span>
           <span id="cursorPosition">Ln 1, Col 1</span>
         </div>
       </section>
 
       <!-- Simulator Workspace -->
-      <section class="simulator-panel" aria-label="Simulator preview">
+      <section class="simulator-panel" aria-label="Simulator">
         <div class="panel-header simulator-header">
           <div>
             <span class="panel-eyebrow">Simulation</span>
             <h2>TM4C123G LaunchPad</h2>
           </div>
-
-          <div class="simulation-state">
-            <span
-              id="stateIndicator"
-              class="state-indicator stopped"
-              aria-hidden="true"
-            ></span>
-
-            <span id="simulationStatus">
-              Stopped
-            </span>
+          <div class="simulation-state" role="status" aria-live="polite">
+            <span id="stateIndicator" class="state-indicator stopped" aria-hidden="true"></span>
+            <span id="simulationStatus">No firmware</span>
           </div>
         </div>
 
         <div class="simulator-toolbar">
-          <button
-            id="zoomOutButton"
-            class="icon-button"
-            type="button"
-            aria-label="Zoom out"
-          >
-            −
-          </button>
-
+          <button id="zoomOutButton" class="icon-button" type="button" aria-label="Zoom out">−</button>
           <span id="zoomValue">100%</span>
-
-          <button
-            id="zoomInButton"
-            class="icon-button"
-            type="button"
-            aria-label="Zoom in"
-          >
-            +
-          </button>
-
-          <button
-            id="fitButton"
-            class="icon-button wide-icon-button"
-            type="button"
-          >
-            Fit
-          </button>
-
+          <button id="zoomInButton" class="icon-button" type="button" aria-label="Zoom in">+</button>
+          <button id="fitButton" class="icon-button wide-icon-button" type="button">Fit</button>
           <div class="toolbar-divider"></div>
-
-          <span class="virtual-time">
-            Virtual time:
-            <strong id="virtualTime">0 ms</strong>
+          <span class="virtual-time" title="Emulation virtual time reported by Renode (not wall-clock time)">
+            Virtual time: <strong id="virtualTime">—</strong>
           </span>
         </div>
 
         <div id="simulationCanvas" class="simulation-canvas">
 
-          <!-- TM4C123 Board -->
-          <article
-            id="launchpadBoard"
-            class="launchpad-board"
-            aria-label="Visual TM4C123G LaunchPad board"
-          >
+          <!-- TM4C123G LaunchPad (simplified board view) -->
+          <article id="launchpadBoard" class="launchpad-board" aria-label="TM4C123G LaunchPad board view">
             <div class="board-top">
               <div class="usb-port">USB</div>
-
               <span>DEBUG</span>
-
-              <div class="power-switch">
-                <span></span>
-              </div>
+              <div class="power-switch"><span></span></div>
             </div>
 
             <div class="board-label">
-              <small>Texas Instruments</small>
               <strong>TM4C123G</strong>
               <span>LaunchPad</span>
             </div>
 
-            <div class="header-pins left-header">
-              <span></span><span></span><span></span><span></span>
-              <span></span><span></span><span></span><span></span>
-              <span></span><span></span>
+            <div class="header-pins left-header" aria-hidden="true">
+              <span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span>
             </div>
-
-            <div class="header-pins right-header">
-              <span></span><span></span><span></span><span></span>
-              <span></span><span></span><span></span><span></span>
-              <span></span><span></span>
+            <div class="header-pins right-header" aria-hidden="true">
+              <span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span>
             </div>
 
             <div class="mcu-chip">
@@ -243,162 +146,79 @@
 
             <div class="rgb-led-area">
               <span class="component-label">RGB LED</span>
-
-              <div
-                id="redLed"
-                class="board-led red-led"
-                title="PF1 — Red LED"
-              ></div>
-
-              <div
-                id="blueLed"
-                class="board-led blue-led"
-                title="PF2 — Blue LED"
-              ></div>
-
-              <div
-                id="greenLed"
-                class="board-led green-led"
-                title="PF3 — Green LED"
-              ></div>
+              <div id="redLed" class="board-led red-led" role="img" aria-label="Red LED (PF1): off" title="PF1 — red"></div>
+              <div id="blueLed" class="board-led blue-led" role="img" aria-label="Blue LED (PF2): off" title="PF2 — blue"></div>
+              <div id="greenLed" class="board-led green-led" role="img" aria-label="Green LED (PF3): off" title="PF3 — green"></div>
             </div>
 
             <div class="button-area">
-              <button
-                id="sw2Button"
-                class="board-button"
-                type="button"
-                aria-label="Press SW2 connected to PF0"
-              >
-                <span></span>
-                SW2
-                <small>PF0</small>
+              <button id="sw2Button" class="board-button" type="button" data-input="SW2" aria-pressed="false" disabled
+                aria-label="SW2 (PF0). Hold to press.">
+                <span></span>SW2<small>PF0</small>
               </button>
-
-              <button
-                id="sw1Button"
-                class="board-button"
-                type="button"
-                aria-label="Press SW1 connected to PF4"
-              >
-                <span></span>
-                SW1
-                <small>PF4</small>
+              <button id="sw1Button" class="board-button" type="button" data-input="SW1" aria-pressed="false" disabled
+                aria-label="SW1 (PF4). Hold to press.">
+                <span></span>SW1<small>PF4</small>
               </button>
             </div>
 
-            <div class="board-footer-label">
-              Tiva™ C Series
-            </div>
+            <div id="faultBadge" class="fault-badge" hidden></div>
           </article>
 
-          <!-- Component Shelf -->
-          <aside class="component-shelf">
-            <div class="component-shelf-header">
-              <strong>Components</strong>
-              <span>Prototype</span>
-            </div>
+          <!-- Inspector -->
+          <aside class="inspector" aria-label="Inspector">
+            <section class="inspector-section">
+              <h3>Port F pins <small>from GPIO model</small></h3>
+              <table class="pin-table">
+                <thead>
+                  <tr><th scope="col">Pin</th><th scope="col">Board</th><th scope="col">Level</th><th scope="col">Driven by</th></tr>
+                </thead>
+                <tbody id="pinTable"></tbody>
+              </table>
+            </section>
 
-            <button class="component-card" type="button">
-              <span class="component-icon led-icon"></span>
+            <section class="inspector-section">
+              <h3>Firmware image <small>ELF</small></h3>
+              <dl id="elfInfo" class="elf-info"><dt>Status</dt><dd>Not built</dd></dl>
+            </section>
 
-              <span>
-                <strong>LED</strong>
-                <small>Digital output</small>
-              </span>
-            </button>
-
-            <button class="component-card" type="button">
-              <span class="component-icon button-icon"></span>
-
-              <span>
-                <strong>Pushbutton</strong>
-                <small>Digital input</small>
-              </span>
-            </button>
-
-            <button class="component-card" type="button">
-              <span class="component-icon resistor-icon"></span>
-
-              <span>
-                <strong>Resistor</strong>
-                <small>Passive component</small>
-              </span>
-            </button>
-
-            <button class="component-card" type="button">
-              <span class="component-icon lcd-icon">16×2</span>
-
-              <span>
-                <strong>LCD1602</strong>
-                <small>Character display</small>
-              </span>
-            </button>
-
-            <button class="component-card" type="button">
-              <span class="component-icon potentiometer-icon"></span>
-
-              <span>
-                <strong>Potentiometer</strong>
-                <small>Analog input</small>
-              </span>
-            </button>
+            <section class="inspector-section">
+              <h3>Capabilities</h3>
+              <ul id="capabilityList" class="capability-list"></ul>
+            </section>
           </aside>
         </div>
       </section>
     </main>
 
     <!-- Console -->
-    <section class="console-panel" aria-label="Build and simulation console">
+    <section class="console-panel" aria-label="Build and simulation output">
       <div class="console-header">
-        <div class="console-tabs">
-          <button class="console-tab active" type="button">
-            Console
+        <div class="console-tabs" role="tablist">
+          <button class="console-tab active" type="button" role="tab" data-console="console" aria-selected="true">Console</button>
+          <button class="console-tab" type="button" role="tab" data-console="problems" aria-selected="false">
+            Problems <span id="problemCount">0</span>
           </button>
-
-          <button class="console-tab" type="button">
-            Problems
-            <span id="problemCount">0</span>
-          </button>
-
-          <button class="console-tab" type="button">
-            Logic Analyzer
+          <button class="console-tab" type="button" role="tab" data-console="events" aria-selected="false">
+            Events <span id="eventCount">0</span>
           </button>
         </div>
-
-        <button
-          id="clearConsoleButton"
-          class="clear-console-button"
-          type="button"
-        >
-          Clear
-        </button>
+        <button id="clearConsoleButton" class="clear-console-button" type="button">Clear</button>
       </div>
 
-      <div
-        id="consoleOutput"
-        class="console-output"
-        role="log"
-        aria-live="polite"
-      ></div>
+      <div id="consoleOutput" class="console-output" role="log" aria-live="polite"></div>
+      <div id="problemsOutput" class="console-output" hidden></div>
+      <div id="eventsOutput" class="console-output events-output" hidden></div>
     </section>
 
     <!-- Footer -->
     <footer class="statusbar">
-      <span>
-        TM4C123 Educational Web Simulator
-      </span>
-
-      <span>
-        Prototype mode
-      </span>
-
-      <span id="footerStatus">
-        Ready
-      </span>
+      <span>TM4C123 Simulator · independent project, not affiliated with or endorsed by Texas Instruments</span>
+      <span>Simulated behavior · hardware equivalence not verified</span>
+      <span id="footerStatus">Ready</span>
     </footer>
   </div>
 
-  <script src="./script.js"></script>
+  <script type="module" src="./app.js"></script>
 </body>
 </html>
