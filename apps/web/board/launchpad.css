@@ -54,6 +54,17 @@
   font-size: 4.6px;
 }
 
+.lp-column-title {
+  font-size: 3.6px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-decoration: underline;
+}
+
+.lp-column-title.dim {
+  fill-opacity: 0.72;
+}
+
 .lp-title {
   font-size: 6.2px;
   letter-spacing: 0.04em;

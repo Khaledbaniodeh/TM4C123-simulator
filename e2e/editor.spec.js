@@ -290,6 +290,16 @@ test("pin hit targets, tooltips, and wire endpoints stay correct across zoom and
     await expect(page.locator("#pinTooltip")).toContainText("J2 pin 4 · PF0");
     await page.screenshot({ path: `test-results/board-${view.name}.png` });
   }
+  // Close-up of the right-hand headers and their label columns for visual review.
+  await page.getByRole("button", { name: /Fit/ }).click();
+  for (let i = 0; i < 2; i++) {
+    const pin = await center(anchor(page, "board1", "J4.3"));
+    await page.mouse.move(pin.x, pin.y);
+    await page.mouse.wheel(0, -300);
+  }
+  await page.mouse.move(5, 5);
+  await page.screenshot({ path: "test-results/board-headers-closeup.png" });
+
   // Hit targets grow (in world units) when zoomed out, never below the drawn pad.
   expect(radii["zoomed-out"]).toBeGreaterThan(radii["zoomed-in"]);
   expect(radii["zoomed-in"]).toBeGreaterThanOrEqual(9.6 * 0.32 - 1e-9);

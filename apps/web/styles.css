@@ -68,7 +68,8 @@ button {
 
 .application {
   display: grid;
-  grid-template-rows: 64px auto minmax(0, 1fr) 190px 28px;
+  /* Console kept compact so the circuit canvas gets the height. */
+  grid-template-rows: 64px auto minmax(0, 1fr) 150px 28px;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
@@ -446,7 +447,13 @@ button {
 }
 
 .virtual-time {
-  margin-left: auto;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.virtual-time strong {
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Simulator Canvas */

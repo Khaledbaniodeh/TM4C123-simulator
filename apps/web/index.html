@@ -86,6 +86,9 @@
           <div class="simulation-state" role="status" aria-live="polite">
             <span id="stateIndicator" class="state-indicator stopped" aria-hidden="true"></span>
             <span id="simulationStatus">No firmware</span>
+            <span class="virtual-time" title="Emulation virtual time reported by Renode (not wall-clock time)">
+              · Virtual time <strong id="virtualTime">—</strong>
+            </span>
           </div>
         </div>
 
@@ -112,9 +115,6 @@
           <label class="icon-button wide-icon-button file-button" title="Load diagram.json">
             Load<input id="loadDiagramInput" type="file" accept="application/json,.json" hidden>
           </label>
-          <span class="virtual-time" title="Emulation virtual time reported by Renode (not wall-clock time)">
-            Virtual time: <strong id="virtualTime">—</strong>
-          </span>
         </div>
 
         <div class="simulation-canvas">

@@ -234,12 +234,22 @@ function headerArt(header) {
     </g>`;
 }
 
-/** Outer-header labels (J1/J2) next to the inner header's labels, e.g. "PB5 · PD0". */
+/**
+ * Outer-header labels (J1/J2) in a second column beyond the inner header's
+ * labels. Each label column gets a small title (J3/J1, J4/J2) so it is clear
+ * which header a label belongs to.
+ */
 function outerLabels() {
   const rows = [];
   for (const [outer, inner] of [["J1", "J3"], ["J2", "J4"]]) {
     const right = outer === "J2";
     const origin = GEOMETRY.headers[inner];
+    const titleY = mm(origin.y - 1.9);
+    const innerX = right ? mm(origin.x) - mm(1.6) : mm(origin.x) + mm(1.6);
+    const outerX = right ? mm(origin.x) - mm(6.6) : mm(origin.x) + mm(6.6);
+    const anchor = right ? "end" : "start";
+    rows.push(`<text x="${innerX.toFixed(2)}" y="${titleY.toFixed(2)}" class="lp-silk lp-column-title ${anchor}">${inner}</text>`);
+    rows.push(`<text x="${outerX.toFixed(2)}" y="${titleY.toFixed(2)}" class="lp-silk lp-column-title dim ${anchor}">${outer}</text>`);
     for (let pin = 1; pin <= 10; pin++) {
       const entry = pinMap.headers[outer][pin - 1];
       const py = mm(origin.y + (pin - 1) * PITCH);

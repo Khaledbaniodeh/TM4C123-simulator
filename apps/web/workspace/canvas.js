@@ -247,7 +247,7 @@ export class Workspace extends EventTarget {
     const bounds = unionBounds(this.diagram.parts.map((part) => partBounds(part, this.#catalog[part.type].size)));
     const rect = this.#svg.getBoundingClientRect();
     const aspect = rect.width && rect.height ? rect.width / rect.height : 4 / 3;
-    this.#viewBox = fitViewBox(bounds, aspect, GRID * 4);
+    this.#viewBox = fitViewBox(bounds, aspect, GRID * 2.5);
     this.#applyViewBox();
   }
 
@@ -746,9 +746,19 @@ export class Workspace extends EventTarget {
     this.#tooltip.innerHTML = rows.join("");
     this.#tooltip.hidden = false;
     this.#tooltip.dataset.pin = endpoint;
-    const host = this.#tooltip.offsetParent?.getBoundingClientRect() ?? { left: 0, top: 0 };
-    this.#tooltip.style.left = `${event.clientX - host.left + 14}px`;
-    this.#tooltip.style.top = `${event.clientY - host.top + 14}px`;
+    // Keep the tooltip inside the canvas: flip left/up near the right/bottom edges.
+    const host = this.#tooltip.offsetParent?.getBoundingClientRect() ?? { left: 0, top: 0, width: Infinity, height: Infinity };
+    const { offsetWidth: width, offsetHeight: height } = this.#tooltip;
+    let left = event.clientX - host.left + 14;
+    let top = event.clientY - host.top + 14;
+    if (left + width > host.width - 4) {
+      left = Math.max(4, event.clientX - host.left - width - 14);
+    }
+    if (top + height > host.height - 4) {
+      top = Math.max(4, event.clientY - host.top - height - 14);
+    }
+    this.#tooltip.style.left = `${left}px`;
+    this.#tooltip.style.top = `${top}px`;
   }
 
   #hideTooltip() {
