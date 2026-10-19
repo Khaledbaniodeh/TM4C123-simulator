@@ -9,7 +9,10 @@
   >
   <meta name="application-name" content="TM4C123 Simulator">
   <title>TM4C123 Simulator</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23b5121b'/%3E%3Ctext x='16' y='21' font-family='sans-serif' font-size='13' font-weight='700' fill='white' text-anchor='middle'%3EM4%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./workspace/workspace.css">
+  <link rel="stylesheet" href="./board/launchpad.css">
 </head>
 
 <body>
@@ -30,22 +33,11 @@
           <span>Example</span>
           <select id="exampleSelect" aria-label="Firmware example"></select>
         </label>
-
-        <button id="compileButton" class="toolbar-button secondary-button" type="button" disabled>
-          Compile
-        </button>
-        <button id="runButton" class="toolbar-button primary-button" type="button" disabled>
-          ▶ Run
-        </button>
-        <button id="pauseButton" class="toolbar-button secondary-button" type="button" disabled>
-          ❚❚ Pause
-        </button>
-        <button id="resetButton" class="toolbar-button secondary-button" type="button" disabled>
-          ↻ Reset MCU
-        </button>
-        <button id="stopButton" class="toolbar-button danger-button" type="button" disabled>
-          ■ Stop
-        </button>
+        <button id="compileButton" class="toolbar-button secondary-button" type="button" disabled>Compile</button>
+        <button id="runButton" class="toolbar-button primary-button" type="button" disabled>▶ Run</button>
+        <button id="pauseButton" class="toolbar-button secondary-button" type="button" disabled>❚❚ Pause</button>
+        <button id="resetButton" class="toolbar-button secondary-button" type="button" disabled>↻ Reset MCU</button>
+        <button id="stopButton" class="toolbar-button danger-button" type="button" disabled>■ Stop</button>
       </div>
     </header>
 
@@ -53,8 +45,7 @@
     <section id="modeNotice" class="prototype-notice">
       <strong>Local trusted mode.</strong>
       Firmware is compiled by arm-none-eabi-gcc and executed on a Renode Cortex-M4 with TM4C123
-      register models on this machine. Compilation is time- and size-limited but not sandboxed —
-      only run code you trust.
+      register models. Compilation is time- and size-limited but not sandboxed — only run code you trust.
       <span id="toolchainInfo" class="notice-detail"></span>
     </section>
 
@@ -75,13 +66,7 @@
 
         <div class="editor-container">
           <div id="lineNumbers" class="line-numbers" aria-hidden="true"></div>
-          <textarea
-            id="codeEditor"
-            class="code-editor"
-            aria-label="Firmware source code (main.c)"
-            spellcheck="false"
-            wrap="off"
-          ></textarea>
+          <textarea id="codeEditor" class="code-editor" aria-label="Firmware source code (main.c)" spellcheck="false" wrap="off"></textarea>
         </div>
 
         <div class="editor-footer">
@@ -91,12 +76,12 @@
         </div>
       </section>
 
-      <!-- Simulator Workspace -->
-      <section class="simulator-panel" aria-label="Simulator">
+      <!-- Circuit Workspace -->
+      <section class="simulator-panel" aria-label="Circuit workspace">
         <div class="panel-header simulator-header">
           <div>
             <span class="panel-eyebrow">Simulation</span>
-            <h2>TM4C123G LaunchPad</h2>
+            <h2>EK-TM4C123GXL LaunchPad</h2>
           </div>
           <div class="simulation-state" role="status" aria-live="polite">
             <span id="stateIndicator" class="state-indicator stopped" aria-hidden="true"></span>
@@ -104,74 +89,54 @@
           </div>
         </div>
 
-        <div class="simulator-toolbar">
-          <button id="zoomOutButton" class="icon-button" type="button" aria-label="Zoom out">−</button>
-          <span id="zoomValue">100%</span>
-          <button id="zoomInButton" class="icon-button" type="button" aria-label="Zoom in">+</button>
-          <button id="fitButton" class="icon-button wide-icon-button" type="button">Fit</button>
+        <div class="simulator-toolbar" role="toolbar" aria-label="Workspace tools">
+          <div class="library-anchor">
+            <button id="addPartButton" class="icon-button wide-icon-button" type="button" aria-haspopup="menu" aria-expanded="false" title="Add a component">＋ Part</button>
+            <div id="partLibrary" class="part-library" role="menu" aria-label="Component library" hidden></div>
+          </div>
           <div class="toolbar-divider"></div>
+          <button id="undoButton" class="icon-button" type="button" aria-label="Undo" title="Undo (Ctrl+Z)" disabled>↶</button>
+          <button id="redoButton" class="icon-button" type="button" aria-label="Redo" title="Redo (Ctrl+Y)" disabled>↷</button>
+          <button id="rotateButton" class="icon-button" type="button" aria-label="Rotate selected part" title="Rotate (R)" disabled>⟳</button>
+          <button id="duplicateButton" class="icon-button" type="button" aria-label="Duplicate selected part" title="Duplicate (Ctrl+D)" disabled>⧉</button>
+          <button id="deleteButton" class="icon-button" type="button" aria-label="Delete selection" title="Delete (Del)" disabled>🗑</button>
+          <div class="toolbar-divider"></div>
+          <button id="zoomOutButton" class="icon-button" type="button" aria-label="Zoom out" title="Zoom out (−)">−</button>
+          <span id="zoomValue" class="zoom-value">100%</span>
+          <button id="zoomInButton" class="icon-button" type="button" aria-label="Zoom in" title="Zoom in (+)">+</button>
+          <button id="fitButton" class="icon-button wide-icon-button" type="button" title="Fit to screen (F)">Fit</button>
+          <button id="gridToggle" class="icon-button wide-icon-button" type="button" aria-pressed="true" title="Show grid (G)">Grid</button>
+          <button id="snapToggle" class="icon-button wide-icon-button" type="button" aria-pressed="true" title="Snap to 0.1 in grid">Snap</button>
+          <div class="toolbar-divider"></div>
+          <button id="saveDiagramButton" class="icon-button wide-icon-button" type="button" title="Download diagram.json">Save</button>
+          <label class="icon-button wide-icon-button file-button" title="Load diagram.json">
+            Load<input id="loadDiagramInput" type="file" accept="application/json,.json" hidden>
+          </label>
           <span class="virtual-time" title="Emulation virtual time reported by Renode (not wall-clock time)">
             Virtual time: <strong id="virtualTime">—</strong>
           </span>
         </div>
 
-        <div id="simulationCanvas" class="simulation-canvas">
-
-          <!-- TM4C123G LaunchPad (simplified board view) -->
-          <article id="launchpadBoard" class="launchpad-board" aria-label="TM4C123G LaunchPad board view">
-            <div class="board-top">
-              <div class="usb-port">USB</div>
-              <span>DEBUG</span>
-              <div class="power-switch"><span></span></div>
-            </div>
-
-            <div class="board-label">
-              <strong>TM4C123G</strong>
-              <span>LaunchPad</span>
-            </div>
-
-            <div class="header-pins left-header" aria-hidden="true">
-              <span></span><span></span><span></span><span></span><span></span>
-              <span></span><span></span><span></span><span></span><span></span>
-            </div>
-            <div class="header-pins right-header" aria-hidden="true">
-              <span></span><span></span><span></span><span></span><span></span>
-              <span></span><span></span><span></span><span></span><span></span>
-            </div>
-
-            <div class="mcu-chip">
-              <span>TM4C123</span>
-              <small>GH6PM</small>
-            </div>
-
-            <div class="rgb-led-area">
-              <span class="component-label">RGB LED</span>
-              <div id="redLed" class="board-led red-led" role="img" aria-label="Red LED (PF1): off" title="PF1 — red"></div>
-              <div id="blueLed" class="board-led blue-led" role="img" aria-label="Blue LED (PF2): off" title="PF2 — blue"></div>
-              <div id="greenLed" class="board-led green-led" role="img" aria-label="Green LED (PF3): off" title="PF3 — green"></div>
-            </div>
-
-            <div class="button-area">
-              <button id="sw2Button" class="board-button" type="button" data-input="SW2" aria-pressed="false" disabled
-                aria-label="SW2 (PF0). Hold to press.">
-                <span></span>SW2<small>PF0</small>
-              </button>
-              <button id="sw1Button" class="board-button" type="button" data-input="SW1" aria-pressed="false" disabled
-                aria-label="SW1 (PF4). Hold to press.">
-                <span></span>SW1<small>PF4</small>
-              </button>
-            </div>
-
+        <div class="simulation-canvas">
+          <div class="canvas-stage">
+            <svg id="circuitCanvas" class="circuit-canvas" role="application" aria-label="Circuit canvas: LaunchPad and wired parts. Scroll to zoom, drag empty space to pan, click a pin to start a wire."></svg>
+            <div id="pinTooltip" class="pin-tooltip" role="tooltip" hidden></div>
             <div id="faultBadge" class="fault-badge" hidden></div>
-          </article>
+            <p id="workspaceMessage" class="workspace-message" aria-live="polite"></p>
+          </div>
 
           <!-- Inspector -->
           <aside class="inspector" aria-label="Inspector">
             <section class="inspector-section">
-              <h3>Port F pins <small>from GPIO model</small></h3>
+              <h3>Selection</h3>
+              <div id="selectionPanel" class="selection-panel"></div>
+            </section>
+
+            <section class="inspector-section">
+              <h3>Pins <small>from GPIO model</small></h3>
               <table class="pin-table">
                 <thead>
-                  <tr><th scope="col">Pin</th><th scope="col">Board</th><th scope="col">Level</th><th scope="col">Driven by</th></tr>
+                  <tr><th scope="col">Pin</th><th scope="col">Role</th><th scope="col">Level</th><th scope="col">Driven by</th></tr>
                 </thead>
                 <tbody id="pinTable"></tbody>
               </table>
@@ -205,7 +170,6 @@
         </div>
         <button id="clearConsoleButton" class="clear-console-button" type="button">Clear</button>
       </div>
-
       <div id="consoleOutput" class="console-output" role="log" aria-live="polite"></div>
       <div id="problemsOutput" class="console-output" hidden></div>
       <div id="eventsOutput" class="console-output events-output" hidden></div>
