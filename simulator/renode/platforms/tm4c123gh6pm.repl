@@ -4,6 +4,7 @@
 //   simulator/renode/peripherals/TM4C123EventSink.cs
 //   simulator/renode/peripherals/TM4C123SystemControl.cs
 //   simulator/renode/peripherals/TM4C123GPIO.cs
+//   simulator/renode/peripherals/TM4C123GeneralPurposeTimer.cs
 //   simulator/renode/peripherals/TM4C123UnimplementedPeripheral.cs
 //
 // Addresses: TM4C123GH6PM datasheet (SPMS376E), Table 2-4 "Memory Map".
@@ -58,6 +59,42 @@ gpioPortF: GPIOPort.TM4C123GPIO @ sysbus 0x40025000
     systemControl: sysctl
     portIndex: 5
     IRQ -> nvic@30
+
+timer0: Timers.TM4C123GeneralPurposeTimer @ sysbus 0x40030000
+    systemControl: sysctl
+    timerIndex: 0
+    IRQA -> nvic@19
+    IRQB -> nvic@20
+
+timer1: Timers.TM4C123GeneralPurposeTimer @ sysbus 0x40031000
+    systemControl: sysctl
+    timerIndex: 1
+    IRQA -> nvic@21
+    IRQB -> nvic@22
+
+timer2: Timers.TM4C123GeneralPurposeTimer @ sysbus 0x40032000
+    systemControl: sysctl
+    timerIndex: 2
+    IRQA -> nvic@23
+    IRQB -> nvic@24
+
+timer3: Timers.TM4C123GeneralPurposeTimer @ sysbus 0x40033000
+    systemControl: sysctl
+    timerIndex: 3
+    IRQA -> nvic@35
+    IRQB -> nvic@36
+
+timer4: Timers.TM4C123GeneralPurposeTimer @ sysbus 0x40034000
+    systemControl: sysctl
+    timerIndex: 4
+    IRQA -> nvic@70
+    IRQB -> nvic@71
+
+timer5: Timers.TM4C123GeneralPurposeTimer @ sysbus 0x40035000
+    systemControl: sysctl
+    timerIndex: 5
+    IRQA -> nvic@92
+    IRQB -> nvic@93
 
 // ---------------------------------------------------------------------------
 // Peripherals present on TM4C123GH6PM but not modeled yet. Accesses produce
@@ -152,30 +189,6 @@ unimplQEI0: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x4002C000
 unimplQEI1: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x4002D000
     peripheralName: "QEI1"
     baseAddress: 0x4002D000
-
-unimplTIMER0: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40030000
-    peripheralName: "TIMER0"
-    baseAddress: 0x40030000
-
-unimplTIMER1: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40031000
-    peripheralName: "TIMER1"
-    baseAddress: 0x40031000
-
-unimplTIMER2: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40032000
-    peripheralName: "TIMER2"
-    baseAddress: 0x40032000
-
-unimplTIMER3: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40033000
-    peripheralName: "TIMER3"
-    baseAddress: 0x40033000
-
-unimplTIMER4: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40034000
-    peripheralName: "TIMER4"
-    baseAddress: 0x40034000
-
-unimplTIMER5: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40035000
-    peripheralName: "TIMER5"
-    baseAddress: 0x40035000
 
 unimplWTIMER0: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40036000
     peripheralName: "WTIMER0"

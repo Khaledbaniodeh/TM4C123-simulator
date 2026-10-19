@@ -30,6 +30,7 @@ export const PERIPHERAL_SOURCES = Object.freeze([
   path.join(RENODE_DIR, "peripherals", "TM4C123EventSink.cs"),
   path.join(RENODE_DIR, "peripherals", "TM4C123SystemControl.cs"),
   path.join(RENODE_DIR, "peripherals", "TM4C123GPIO.cs"),
+  path.join(RENODE_DIR, "peripherals", "TM4C123GeneralPurposeTimer.cs"),
   path.join(RENODE_DIR, "peripherals", "TM4C123UnimplementedPeripheral.cs"),
 ]);
 
