@@ -13,6 +13,7 @@
     "check:tools": "node scripts/setup-tools.mjs --check",
     "start": "node apps/orchestrator/src/server.js",
     "test": "node --test --test-concurrency=1 \"tests/*.test.js\"",
+    "test:ci": "node --test --test-concurrency=1 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=./tests/github-reporter.mjs --test-reporter-destination=stdout \"tests/*.test.js\"",
     "test:unit": "node --test tests/compiler.test.js tests/protocol.test.js",
     "test:integration": "node --test --test-concurrency=1 tests/integration.test.js tests/server.test.js",
     "test:e2e": "playwright test"

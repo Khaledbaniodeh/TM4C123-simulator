@@ -26,6 +26,21 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Syntax check (fast fail)
+        run: |
+          status=0
+          for file in $(git ls-files '*.js' '*.mjs'); do
+            if ! node --check "$file" 2> check.err; then
+              echo "::error file=$file,title=Syntax error::$(head -c 600 check.err | tr '\n' ' ')"
+              status=1
+            fi
+          done
+          for file in $(git ls-files '*.json'); do
+            node -e 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))' "$file" \
+              || { echo "::error file=$file,title=Invalid JSON::$file does not parse"; status=1; }
+          done
+          exit $status
+
       - name: Cache pinned toolchains
         uses: actions/cache@v4
         with:
@@ -38,14 +53,13 @@ jobs:
       - name: Toolchain versions
         run: |
           .tools/arm-none-eabi-gcc-*/xpack-arm-none-eabi-gcc-*/bin/arm-none-eabi-gcc --version | head -1
-          node -e 'import("./scripts/lib/tools.mjs").then(m => console.log(m.renodeBinary()))'
           "$(node -e 'import("./scripts/lib/tools.mjs").then(m => console.log(m.renodeBinary()))')" --version
 
       - name: Install Node dependencies
         run: npm ci
 
-      - name: Compiler, Renode integration, API, and board-state tests
-        run: npm test
+      - name: Compiler, Renode integration, API, workspace, and board tests
+        run: npm run test:ci
 
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
@@ -60,3 +74,42 @@ jobs:
           name: playwright-results
           path: test-results/
           retention-days: 14
+
+  publish-screenshots:
+    name: Publish screenshots to ci-artifacts branch
+    needs: test
+    if: always() && github.event_name == 'push' && needs.test.result != 'skipped'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: playwright-results
+          path: results
+        continue-on-error: true
+
+      - name: Commit PNG screenshots
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          shopt -s globstar nullglob
+          files=(results/**/*.png)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No screenshots produced."; exit 0
+          fi
+          git init -q publish && cd publish
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git fetch -q --depth=1 origin ci-artifacts; then git checkout -q -b ci-artifacts FETCH_HEAD; else git checkout -q --orphan ci-artifacts; fi
+          dest="${GITHUB_REF_NAME}"
+          rm -rf "$dest" && mkdir -p "$dest"
+          for f in "${files[@]}"; do cp "../$f" "$dest/$(basename "$f")"; done
+          printf 'Screenshots from %s @ %s (run %s, test result: %s)\n' "$GITHUB_REF_NAME" "$GITHUB_SHA" "$GITHUB_RUN_ID" "${{ needs.test.result }}" > "$dest/README.md"
+          git add -A
+          git commit -q -m "screenshots: ${GITHUB_REF_NAME} @ ${GITHUB_SHA::7}" || exit 0
+          git push -q origin ci-artifacts
+          echo "::notice title=Screenshots::https://github.com/${GITHUB_REPOSITORY}/tree/ci-artifacts/${dest}"

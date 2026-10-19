@@ -13,7 +13,8 @@ export default defineConfig({
   timeout: 180_000,
   expect: { timeout: 60_000 },
   workers: 1,
-  reporter: [["list"]],
+  // In CI, failures also become GitHub annotations (readable without logs).
+  reporter: process.env.CI ? [["list"], ["github"]] : [["list"]],
   outputDir: "test-results",
   use: {
     baseURL: `http://127.0.0.1:${port}`,
