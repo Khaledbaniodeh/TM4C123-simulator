@@ -481,6 +481,93 @@ CONFLICT state and a warning instead of being silently accepted.
 
 ---
 
+## Decision Updates — Workspace Increment
+
+Branch `feat/wokwi-workspace`.
+
+### D-025 — Circuit Workspace Architecture
+
+**Date:** 2026-10-19
+**Status:** Accepted
+
+**Decision:**
+
+The browser workspace is split into pure, Node-tested modules and a thin
+DOM layer:
+
+| Module | Responsibility |
+|---|---|
+| `workspace/geometry.js` | One world coordinate system (CSS px at 96 dpi, 0.1 in snap grid), rotation, routing, viewBox math |
+| `workspace/diagram.js` | `diagram.json` model, validation, serialization, undoable commands |
+| `workspace/netlist.js` | Logic-level evaluation of wired parts |
+| `workspace/parts.js`, `board/launchpad.js` | Part definitions and original SVG artwork |
+| `workspace/canvas.js` | SVG rendering and interaction only |
+| `app.js` | Wires the workspace to the real simulation session |
+
+Parts are drawn in one SVG `viewBox`, so parts, pins, and wires share
+coordinates through zoom, pan, and rotation. No absolute CSS positioning is
+used for the circuit.
+
+### D-026 — Board Geometry from TI CAD Data, Extracted in CI
+
+**Date:** 2026-10-19
+**Status:** Accepted
+
+**Decision:**
+
+Physical board coordinates come from TI's Rev A EAGLE design files
+(SPMR240). The header-to-GPIO map is checked against the user's guide
+(SPMU296) table text. Both TI documents are downloaded only on the CI
+runner (`hardware-reference` workflow). Only derived facts (dimensions,
+positions, pass/fail) are kept, and TI files are not committed. The SVG
+artwork is original.
+
+**Reason:** Guessing pin coordinates or mappings from photos is not
+acceptable for a hardware-accurate simulator. Redistributing TI files is
+unnecessary.
+
+### D-027 — External Parts Use a Logic-Level Netlist
+
+**Date:** 2026-10-19
+**Status:** Accepted (extends D-012)
+
+**Decision:**
+
+Wires, closed pushbuttons, and board-internal shorts (GND pins, R9/R10)
+are strong connections. Resistors are weak connections (pull-ups and
+series resistors). An external LED lights when its anode net is HIGH and its
+cathode net is LOW, using pin states reported by Renode. External drives on
+board GPIOs are applied through the real GPIO model (`DriveInput` /
+`ReleaseInput`), so the firmware reads them through its registers. Currents,
+voltages, and LED brightness are not modeled. Potentiometer, LCD1602, and
+logic analyzer are labeled **editor only** until their peripherals exist.
+
+### D-028 — Development Without Local Builds (GitHub Actions Mode)
+
+**Date:** 2026-10-19
+**Status:** Accepted
+
+**Decision:**
+
+The owner's workstation must not run builds or store toolchains. Source
+edits are pushed, and GitHub Actions runs every compile, Renode simulation,
+test, and screenshot. Test failures are reported as annotations, and
+screenshots are committed to the `ci-artifacts` branch, so results are
+reviewable in a browser without downloading artifacts.
+
+### D-029 — MCU Reset Keeps External Drivers Connected
+
+**Date:** 2026-10-19
+**Status:** Accepted
+
+**Decision:**
+
+`machine Reset` resets GPIO registers but keeps external drive state (a
+held switch, a wired pull). On a real board those circuits sit outside the
+MCU and are unaffected by its reset.
+
+---
+
 ## Adding a New Decision
 
 A new decision entry should include:
@@ -527,3 +614,8 @@ Architecture-changing implementation must not begin before the relevant decision
 | D-022 | UART0 added to planned scope | Accepted (planned) |
 | D-023 | Lab firmware prerequisites (header, clock, ARMASM) | Proposed |
 | D-024 | LCD1602 RW connection profile | Proposed |
+| D-025 | Circuit workspace architecture | Accepted |
+| D-026 | Board geometry from TI CAD data, extracted in CI | Accepted |
+| D-027 | Logic-level netlist for external parts | Accepted |
+| D-028 | Development without local builds (GitHub Actions mode) | Accepted |
+| D-029 | MCU reset keeps external drivers connected | Accepted |
