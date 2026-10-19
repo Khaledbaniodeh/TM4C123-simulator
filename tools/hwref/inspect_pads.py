@@ -56,7 +56,8 @@ def sections(lines):
     current = None
     for index, line in enumerate(lines):
         match = re.match(r"^\*([A-Z_]+)\*", line)
-        if match:
+        # "*REMARK*" lines are comments describing field layout, not sections.
+        if match and match.group(1) != "REMARK":
             current = match.group(1)
             result.setdefault(current, [])
             continue
@@ -98,56 +99,64 @@ def outline(archive):
     annotate("notice", "PADS board outline (*LINES* BOARD)", out[:120] or ["no BOARD lines found"])
 
 
+TOOL = re.compile(r"^T(\d+)(?:C([\d.]+))?")
+
+
 def drill(archive):
-    gerbers = member(archive, "Gerbers.zip")
-    with zipfile.ZipFile(io.BytesIO(archive.read(gerbers))) as inner:
-        names = [n for n in inner.namelist() if re.search(r"(drl|drill|\.txt|\.nc|\.xln|\.exc)$", n, re.I)]
-        report = []
-        for name in names:
-            text = inner.read(name).decode("latin-1")
-            head = text.splitlines()[:25]
-            report.append(f"== {name}")
-            report.extend(head)
-            # Tool table and hit counts per tool.
-            tools = collections.Counter()
-            current = None
-            for line in text.splitlines():
-                tool = re.match(r"^T(\d+)$", line.strip())
-                if tool:
-                    current = tool.group(1)
-                elif re.match(r"^X[-\d.]+Y[-\d.]+", line.strip()) and current:
-                    tools[current] += 1
-            report.append("hits per tool: " + ", ".join(f"T{t}={n}" for t, n in sorted(tools.items())))
-        annotate("notice", "Drill files", report)
-
-
-def drill_hits(archive, wanted_tools):
-    """Prints all hits for the given tools (e.g. header pin tool)."""
+    """Tool table, the .lst report, and every non-via hit (vias are the smallest tool)."""
     gerbers = member(archive, "Gerbers.zip")
     with zipfile.ZipFile(io.BytesIO(archive.read(gerbers))) as inner:
         for name in inner.namelist():
-            if not re.search(r"(drl|drill|\.txt|\.nc|\.xln|\.exc)$", name, re.I):
+            if name.lower().endswith(".lst"):
+                annotate("notice", "Drill list (.lst)", inner.read(name).decode("latin-1").splitlines()[:90])
+        for name in inner.namelist():
+            if not name.lower().endswith(".drl"):
                 continue
-            current, hits = None, []
-            for line in inner.read(name).decode("latin-1").splitlines():
+            text = inner.read(name).decode("latin-1").splitlines()
+            annotate("notice", "Drill header", [line for line in text if not re.match(r"^X", line.strip())][:40])
+            diameters, hits, current = {}, collections.defaultdict(list), None
+            for line in text:
                 line = line.strip()
-                tool = re.match(r"^T(\d+)$", line)
+                tool = TOOL.match(line)
                 if tool:
                     current = tool.group(1)
-                elif current in wanted_tools and re.match(r"^X[-\d.]+Y[-\d.]+", line):
-                    hits.append(f"T{current} {line}")
-            annotate("notice", f"Drill hits {name}", hits)
+                    if tool.group(2):
+                        diameters[current] = float(tool.group(2))
+                    continue
+                if current and re.match(r"^X[-\d.]+Y[-\d.]+", line):
+                    hits[current].append(line)
+            annotate("notice", "Drill tools", [f"T{t} dia={diameters.get(t)} hits={len(h)}" for t, h in sorted(hits.items(), key=lambda kv: int(kv[0]))])
+            smallest = min(hits, key=lambda t: diameters.get(t, 0)) if hits else None
+            for tool, rows in sorted(hits.items(), key=lambda kv: int(kv[0])):
+                if tool == smallest:
+                    continue
+                annotate("notice", f"Drill T{tool} dia={diameters.get(tool)}", rows)
+
+
+def board_outline_gerber(archive):
+    gerbers = member(archive, "Gerbers.zip")
+    with zipfile.ZipFile(io.BytesIO(archive.read(gerbers))) as inner:
+        name = next(n for n in inner.namelist() if "boardoutline" in n.lower())
+        annotate("notice", "Board outline Gerber", inner.read(name).decode("latin-1").splitlines())
 
 
 def parts(archive):
+    """Part placements. PADS 'BASIC' units: 38100 per mil."""
     _, lines = ascii_lines(archive)
     secs = sections(lines)
     rows = []
     for _, line in secs.get("PART", []):
         tokens = line.split()
         if len(tokens) >= 5 and re.match(r"^[A-Z]+\d+$", tokens[0]):
-            rows.append(" ".join(tokens[:8]))
-    annotate("notice", "All PADS parts (name type x y ori ...)", rows)
+            try:
+                x_mil = float(tokens[2]) / 38100.0
+                y_mil = float(tokens[3]) / 38100.0
+                rows.append(f"{tokens[0]} {tokens[1]} x={x_mil:.1f}mil y={y_mil:.1f}mil ori={tokens[4]} {' '.join(tokens[5:8])}")
+            except ValueError:
+                rows.append(" ".join(tokens[:8]))
+    annotate("notice", "PADS parts (BASIC units -> mils)", rows)
+    remarks = [line for line in lines if line.startswith("*REMARK*")][:30]
+    annotate("notice", "PADS field layout remarks", remarks)
 
 
 def main():
@@ -161,10 +170,9 @@ def main():
             parts(archive)
         elif mode == "outline":
             outline(archive)
+            board_outline_gerber(archive)
         elif mode == "drill":
             drill(archive)
-        elif mode == "hits":
-            drill_hits(archive, set(sys.argv[3].split(",")))
     except Exception:
         import traceback
         annotate("error", f"inspect_pads {mode} failed", traceback.format_exc().splitlines()[-12:])
