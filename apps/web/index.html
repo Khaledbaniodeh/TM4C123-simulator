@@ -102,7 +102,11 @@
           <button id="redoButton" class="icon-button" type="button" aria-label="Redo" title="Redo (Ctrl+Y)" disabled>↷</button>
           <button id="rotateButton" class="icon-button" type="button" aria-label="Rotate selected part" title="Rotate (R)" disabled>⟳</button>
           <button id="duplicateButton" class="icon-button" type="button" aria-label="Duplicate selected part" title="Duplicate (Ctrl+D)" disabled>⧉</button>
-          <button id="deleteButton" class="icon-button" type="button" aria-label="Delete selection" title="Delete (Del)" disabled>🗑</button>
+          <button id="deleteButton" class="icon-button" type="button" aria-label="Delete selection" title="Delete (Del)" disabled>
+            <svg class="toolbar-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <path d="M2.5 4.5h11M6.25 4.5V3a.75.75 0 0 1 .75-.75h2a.75.75 0 0 1 .75.75v1.5M3.9 4.5l.6 8.1a1.25 1.25 0 0 0 1.25 1.15h4.5a1.25 1.25 0 0 0 1.25-1.15l.6-8.1M6.75 7v4.25M9.25 7v4.25" />
+            </svg>
+          </button>
           <div class="toolbar-divider"></div>
           <button id="zoomOutButton" class="icon-button" type="button" aria-label="Zoom out" title="Zoom out (−)">−</button>
           <span id="zoomValue" class="zoom-value">100%</span>

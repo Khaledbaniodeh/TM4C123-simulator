@@ -438,6 +438,21 @@ button {
   background: #30363d;
 }
 
+/* Monochrome SVG toolbar icon: follows the button's text color (hover,
+   disabled opacity, pressed) and fits the 27 px button exactly (13 px icon
+   + 7 px padding on each side), like the text glyphs it replaces. */
+.toolbar-icon {
+  display: block;
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
 .wide-icon-button {
   min-width: 40px;
 }
