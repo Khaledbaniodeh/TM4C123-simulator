@@ -1,1 +1,1 @@
-Screenshots from feat/device-header @ 26a08fab2905d16657a82d95c7a64b3c51490cd8 (run 39379779532, test result: success)
+Screenshots from feat/device-header @ c98a89fa2e7e8a305a93d8e119d168c270cfa1b8 (run 39380516812, test result: success)
