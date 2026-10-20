@@ -300,9 +300,9 @@ describe("execution: Experiment 8 LCD1602", { timeout: 600_000 }, () => {
   });
 
   it("D-024: driving RW (PB1) HIGH against the GND tie is a pin conflict", async () => {
-    const source = (await exampleSource("lcd1602-hello")).replace("    while (1)\n    {\n        lcd_command(0xC0u + 12u);",
-      "    GPIOB->DATA |= LCD_RW;\n    while (1)\n    {\n        lcd_command(0xC0u + 12u);");
-    assert.match(source, /GPIOB->DATA \|= LCD_RW;/);
+    // Every transfer drives RW HIGH (a "read" wiring mistake) while the circuit ties RW to GND.
+    const source = (await exampleSource("lcd1602-hello")).replace("& LCD_DATA) | rs;", "& LCD_DATA) | rs | LCD_RW;");
+    assert.match(source, /\| rs \| LCD_RW;/);
     await runLcdFirmware(source, async ({ session, lcd, feed }) => {
       await session.runFor(300n * MS);
       feed();
