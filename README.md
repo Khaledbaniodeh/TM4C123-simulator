@@ -189,8 +189,10 @@ highlights it documents:
 - Timing is approximate: one instruction per clock at the configured system
   clock (16 MHz PIOSC at reset, 50 MHz with the lab PLL setup); not
   cycle-accurate.
-- Interactive runs are slower than real time (0.1–0.8× measured on Windows;
-  firmware that polls SysTick `COUNTFLAG` ran at ~0.05× in CI).
+- Interactive runs are slower than real time (0.1–0.8× measured on Windows).
+  Firmware that busy-polls a register (e.g. SysTick `COUNTFLAG`) runs at
+  ~0.06× for the first 200 ms and ~0.13× after warm-up in CI; interrupt +
+  `WFI` waits run at real time ([`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)).
 - UART, SSI, I2C, PWM, and other peripherals are placeholders that report
   accesses.
 - **No comparison with physical hardware has been performed.**
