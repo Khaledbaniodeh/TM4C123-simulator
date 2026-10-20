@@ -18,6 +18,9 @@ import { compileFirmware, removeBuild } from "../../apps/orchestrator/src/compil
 import { RenodeSession } from "../../apps/orchestrator/src/renode-session.js";
 
 const MS = 1_000_000n;
+const LABEL = process.env.PERF_LABEL ?? "default";
+const SUBSET = process.env.PERF_SUBSET ? new Set(process.env.PERF_SUBSET.split(",")) : null;
+const WINDOWS = Number(process.env.PERF_WINDOWS ?? 1);
 const WINDOW_NS = 200n * MS;
 const STEP_NS = 50n * MS;
 
@@ -114,7 +117,9 @@ async function measure(workload, steppedToo = true) {
   if (!build.ok) {
     throw new Error(`${workload.id}: build failed\n${build.log}`);
   }
+  const startT = performance.now();
   const session = await RenodeSession.start(build.elfPath);
+  const startupMs = performance.now() - startT;
   try {
     if (workload.setup) {
       await workload.setup(session);
@@ -134,9 +139,13 @@ async function measure(workload, steppedToo = true) {
 
     const eventsBefore = session.events.length;
     const i0 = await instructions();
-    const t0 = performance.now();
-    await session.command(`emulation RunFor "${(Number(WINDOW_NS) / 1e9).toFixed(9)}"`);
-    const raw = performance.now() - t0;
+    const windows = [];
+    for (let w = 0; w < WINDOWS; w++) {
+      const t0 = performance.now();
+      await session.command(`emulation RunFor "${(Number(WINDOW_NS) / 1e9).toFixed(9)}"`);
+      windows.push(performance.now() - t0);
+    }
+    const raw = windows[0];
     const i1 = await instructions();
     await session.poll();
     const events = session.events.length - eventsBefore;
@@ -150,8 +159,10 @@ async function measure(workload, steppedToo = true) {
       stepped = performance.now() - t1;
     }
 
-    const executed = i0 !== null && i1 !== null ? i1 - i0 : null;
+    const executed = i0 !== null && i1 !== null ? (i1 - i0) / WINDOWS : null;
     return {
+      startupMs,
+      windows,
       id: workload.id,
       what: workload.what,
       rawMs: raw,
@@ -186,14 +197,14 @@ async function roundTrip() {
 }
 
 const results = [];
-for (const workload of WORKLOADS) {
+for (const workload of WORKLOADS.filter((w) => !SUBSET || SUBSET.has(w.id))) {
   results.push(await measure(workload));
 }
 
 // The real Experiment 8 workload (example L) for reference.
 const { readFile } = await import("node:fs/promises");
 const lcdSource = await readFile(new URL("../../examples/lcd1602-hello/main.c", import.meta.url), "utf8");
-results.push(await measure({
+if (!SUBSET || SUBSET.has("example-L-lcd")) results.push(await measure({
   id: "example-L-lcd",
   what: "Example L (LCD1602, COUNTFLAG delays), RW tied low",
   source: lcdSource,
@@ -215,6 +226,6 @@ if (process.env.GITHUB_STEP_SUMMARY) {
   await appendFile(process.env.GITHUB_STEP_SUMMARY, `## COUNTFLAG performance probe\n\n${lines.join("\n")}\n`);
 }
 for (const r of results) {
-  console.log(`::notice title=perf ${r.id}::raw=${fmt(r.rawMs, 0)}ms stepped=${fmt(r.steppedMs, 0)}ms x=${fmt(r.realTime, 3)} instr=${r.instructions ?? "n/a"} mips=${fmt(r.mips, 2)} events=${r.events}`);
+  console.log(`::notice title=perf[${LABEL}] ${r.id}::startup=${fmt(r.startupMs, 0)}ms windows=${r.windows.map((w) => w.toFixed(0)).join("/")}ms stepped=${fmt(r.steppedMs, 0)}ms instr/window=${r.instructions ?? "n/a"} events=${r.events}`);
 }
-console.log(`::notice title=perf monitor-round-trip::median=${fmt(latency.medianMs, 2)}ms p90=${fmt(latency.p90Ms, 2)}ms`);
+console.log(`::notice title=perf[${LABEL}] monitor-round-trip::median=${fmt(latency.medianMs, 2)}ms p90=${fmt(latency.p90Ms, 2)}ms`);
