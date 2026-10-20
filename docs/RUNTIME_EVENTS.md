@@ -32,7 +32,7 @@ instruction is 62.5 ns.
 | Type | Emitted by | Key fields |
 |---|---|---|
 | `port-snapshot` | GPIO, on power-on and reset | `peripheral`, `cause` (`power-on`/`reset`), `pins[]` {`pinId`, `level`, `state`, `drive`} |
-| `digital-pin-changed` | GPIO, only when a pin's resolved state changes | `pin` {`partId`, `pinId`}, `level` (1/0/null), `state` (`high`/`low`/`floating`/`conflict`), `drive` (`output`/`pull-up`/`pull-down`/`external`/`conflict`/`none`) |
+| `digital-pin-changed` | GPIO, only when a pin's resolved state changes | `pin` {`partId`, `pinId`}, `level` (1/0/null), `state` (`high`/`low`/`floating`/`conflict`), `drive` (`output`/`pull-up`/`pull-down`/`external`/`conflict`/`none`), `update` (per-port number shared by all changes from one register write or external drive), `updateIndex`, `updateSize` |
 | `clock-gate-changed` | SYSCTL | `peripheral` (e.g. `GPIOF`, `TIMER1`), `enabled` |
 | `system-clock-changed` | SYSCTL, on reset and whenever RCC/RCC2 change the clock | `hz`, `source` (`PIOSC`, `MOSC`, `PLL(MOSC)`, …), `pll`, `divisor`, `cause` (`reset`/`clock-register`/`pll-powered`) |
 | `clock-configuration-warning` | SYSCTL | `detail`, `rcc`, `rcc2` — e.g. above 80 MHz, PLL selected while powered down |

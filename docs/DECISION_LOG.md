@@ -470,7 +470,7 @@ provided and native ARMASM support is not claimed.
 ### D-024 — LCD1602 RW Connection Profile
 
 **Date:** 2026-10-19
-**Status:** Proposed
+**Status:** Accepted (implemented by D-032)
 
 **Decision:**
 
@@ -636,6 +636,41 @@ compatibility is verified with original lab-style firmware (examples J, K).
 
 ---
 
+### D-032 — LCD1602 as a Workspace Part Driven by GPIO Events
+
+**Date:** 2026-10-20
+**Status:** Accepted
+
+**Decision:**
+
+The HD44780 controller is modeled in JavaScript (`apps/web/workspace/hd44780.js`)
+as a part of the circuit workspace, not as a Renode peripheral. Its inputs
+are the GPIO model's `digital-pin-changed` events from the running firmware,
+routed through the wired netlist (`lcd.js`), so any header pins can drive it
+and the board's R9/R10 shorts are respected. Pin changes caused by one
+register write carry a shared `update` number (`updateIndex`/`updateSize`)
+and are applied together; the controller latches on each falling edge of E.
+The same module runs in the browser and in the Node tests.
+
+Modeled: power-on reset state, 8-/4-bit transfers, the full write
+instruction set, DDRAM 1-/2-line addressing with wrap-around and display
+shift, CGRAM, cursor/blink, the A00 ROM (ASCII, ¥, arrows, half-width
+katakana; other symbols as a placeholder glyph), and execution-time checks
+(37 µs, 1.52 ms, 15 ms power-on). An instruction sent while the controller
+is busy is applied and reported as a warning, because on hardware it may or
+may not be lost. Not modeled: reads (busy flag, RAM), the 5x10 font, contrast,
+and electrical timing below the instruction level (E pulse width, setup and
+hold), which virtual time cannot resolve at translation-block granularity.
+Characters use a monospace font; CGRAM characters are drawn from the
+firmware's bitmaps. The LCD keeps its contents across an MCU reset (it is
+outside the MCU, as in D-029).
+
+This implements D-024: in the Experiment 8 diagram RW is wired to GND and
+to PB1; the workspace applies the GND tie as an external drive, so PB1
+driven HIGH resolves to a pin conflict.
+
+---
+
 ## Adding a New Decision
 
 A new decision entry should include:
@@ -681,7 +716,7 @@ Architecture-changing implementation must not begin before the relevant decision
 | D-021 | Project-local pinned toolchains; containers deferred | Accepted |
 | D-022 | UART0 added to planned scope | Accepted (planned) |
 | D-023 | Lab firmware prerequisites (header, clock, ARMASM) | Partially implemented (D-030, D-031) |
-| D-024 | LCD1602 RW connection profile | Proposed |
+| D-024 | LCD1602 RW connection profile | Accepted |
 | D-025 | Circuit workspace architecture | Accepted |
 | D-026 | Board geometry from TI CAD data, extracted in CI | Accepted |
 | D-027 | Logic-level netlist for external parts | Accepted |
@@ -689,3 +724,4 @@ Architecture-changing implementation must not begin before the relevant decision
 | D-029 | MCU reset keeps external drivers connected | Accepted |
 | D-030 | System clock drives CPU rate, SysTick, and GPTM | Accepted |
 | D-031 | Original CMSIS-style device header and device-support linking | Accepted |
+| D-032 | LCD1602 as a workspace part driven by GPIO events | Accepted |

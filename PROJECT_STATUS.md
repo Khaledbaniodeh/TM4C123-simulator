@@ -1,6 +1,6 @@
 # Project Status
 
-**Last updated:** 2026-10-20 (device-header increment on `feat/device-header`)
+**Last updated:** 2026-10-20 (LCD1602 increment on `feat/lcd1602`)
 **Stage:** Early technical prototype. The RISK-001 vertical slice is
 implemented and verified (decision D-016: GO WITH CONDITIONS).
 **Public hosted simulator:** No (local trusted mode only).
@@ -24,12 +24,12 @@ implemented and verified (decision D-016: GO WITH CONDITIONS).
 | Interactive board (pins, tooltips, SW1/SW2, RGB LED, selectable components) | ✅ Implemented and verified (Playwright) |
 | Circuit workspace (pan/zoom, editing, undo/redo, wiring, diagram.json) | ✅ Implemented and verified (Playwright) |
 | External LED / resistor / pushbutton (logic-level netlist) | ✅ Implemented and verified (example F) |
-| Potentiometer / LCD1602 / logic analyzer parts | 🟡 Editor only — no electrical behavior |
+| Potentiometer / logic analyzer parts | 🟡 Editor only — no electrical behavior |
 | CI (GitHub Actions, Linux) | ✅ Builds, simulates, and runs all suites on every push |
 | SysTick (interrupt mode, core clock) | ✅ Verified at 16 / 50 / 80 MHz (Renode NVIC; `COUNTFLAG` polling not yet tested) |
 | Clock tree (RCC/RCC2/PLL, PLL lock) | ✅ Implemented and verified (D-030; PLL locks instantly) |
 | GPTM timers (16/32-bit periodic, prescaler, timeout IRQs) | ✅ Implemented and verified for TIMER0A–2A (one-shot implemented, untested; capture/PWM reported unsupported) |
-| LCD1602 | 📋 Planned |
+| LCD1602 (HD44780) in the workspace | ✅ Implemented and verified (D-032; example L, Renode + Playwright) |
 | ADC0 SS3 | 📋 Planned |
 | UART0 + virtual terminal | 📋 Planned (scope added by D-022) |
 | CMSIS-style device header (`TM4C123.h`), `SystemInit`/`SystemCoreClock` | ✅ Implemented and verified (D-031; original code, lab-style examples J/K) |
@@ -44,7 +44,7 @@ implemented and verified (decision D-016: GO WITH CONDITIONS).
 | 5 | GPIO output | ✅ Hardware behavior verified with original C firmware; ⛔ Keil ARMASM source |
 | 6 | GPIO inputs & interrupts | ✅ Verified with original C firmware, including `TM4C123.h`-style code (J) |
 | 7 | SysTick & timers | ✅ Verified with original C firmware (G–I), including `TM4C123.h`-style code (K) |
-| 8 | LCD1602 | 📋 Planned |
+| 8 | LCD1602 | ✅ Verified with original C firmware (example L) using the Experiment 8 wiring |
 | 9 | ADC | 📋 Planned |
 | 10 | UART | 📋 Planned |
 
@@ -60,6 +60,6 @@ Details: [`docs/EXPERIMENT_COMPATIBILITY.md`](docs/EXPERIMENT_COMPATIBILITY.md).
 
 ## Next engineering task
 
-SysTick `COUNTFLAG` / GPTM one-shot tests, then the LCD1602 model (Experiment 8). See
+ADC0 sample sequencer 3 with a virtual potentiometer (Experiment 9). See
 the plan at the end of
 [`docs/EXPERIMENT_COMPATIBILITY.md`](docs/EXPERIMENT_COMPATIBILITY.md#next-engineering-task).

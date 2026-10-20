@@ -35,10 +35,9 @@ const CAPABILITIES = [
   { name: "SysTick interrupt at the core clock", status: "verified" },
   { name: "GPTM 16/32-bit periodic timers + IRQs", status: "verified" },
   { name: "CMSIS-style TM4C123.h + SystemInit (50 MHz)", status: "verified" },
-  { name: "SysTick COUNTFLAG polling", status: "unverified" },
   { name: "ADC0 SS3 / potentiometer", status: "missing" },
   { name: "UART0 / serial terminal", status: "missing" },
-  { name: "LCD1602 (HD44780)", status: "missing" },
+  { name: "LCD1602 (HD44780) in the workspace", status: "verified" },
   { name: "Logic analyzer capture", status: "missing" },
 ];
 

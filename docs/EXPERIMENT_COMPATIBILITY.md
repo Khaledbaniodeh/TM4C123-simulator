@@ -27,7 +27,7 @@ for every row**.
 | 5 | GPIO output | ✅ for the hardware behavior (C firmware) · ⛔ for the original ARMASM source | Keil ARMASM is not accepted by GNU `as`; see the conversion path below |
 | 6 | GPIO inputs and interrupts | ✅ Hardware behavior and `TM4C123.h`-style code verified | Example J uses `GPIOF->…`, `NVIC->IP`, `NVIC_EnableIRQ` with the project's original device header (D-031). Unmodified lab sources not tested here |
 | 7 | SysTick and GPTM timers | ✅ Core verified, incl. `TM4C123.h`-style code | PLL 50 MHz, SysTick, TIMER0A–2A verified (G–I); example K uses `SystemCoreClock`, `SysTick_Config`, `TIMER1->…` (D-031). Unmodified lab sources not tested here |
-| 8 | LCD1602 (HD44780, 4-bit, Port B) | 📋 Planned | GPIO Port B works; LCD model not implemented. Depends on SysTick and the 50 MHz clock |
+| 8 | LCD1602 (HD44780, 4-bit, Port B) | ✅ Verified | Example L with the Experiment 8 wiring; text comes only from firmware GPIO writes (D-032). Unmodified lab sources not tested here |
 | 9 | ADC0 SS3, PE3/AIN0 | 📋 Planned | ADC0 is a placeholder region (accesses are reported) |
 | 10 | UART0 echo, PA0/PA1 | 📋 Planned (scope added by D-022) | UART0 is a placeholder region; needs alternate functions + 50 MHz clock |
 
@@ -91,12 +91,16 @@ Native ARMASM input is **not implemented and not claimed**.
 
 | Requirement | Status |
 |---|---|
-| Port B GPIO outputs PB0–PB2, PB4–PB7 | ✅ (generic GPIO model; no LCD-specific test) |
-| Wiring: RS=PB0, RW=PB1 (also tied to GND), E=PB2, D4–D7=PB4–PB7 | 📋 Connection profile defined (D-024) |
-| HD44780 4-bit init (0x3 ×3, 0x2), function set 0x28, 0x0C, 0x06, clear 0x01 | 📋 Planned |
-| DDRAM addressing 0x80 / 0xC0, cursor, shift 0x18/0x1C | 📋 Planned |
-| Delays via SysTick COUNTFLAG at 50 MHz | 🟡 Clock model verified; COUNTFLAG polling not yet tested |
-| Text rendered only from firmware-driven LCD transactions | 📋 Design requirement |
+| Port B GPIO outputs PB0–PB2, PB4–PB7 | ✅ L |
+| Wiring: RS=PB0, RW=PB1 (also tied to GND), E=PB2, D4–D7=PB4–PB7 | ✅ `examples/lcd1602-hello/diagram.json`; PB1 HIGH against the GND tie is a pin conflict (D-024, tested) |
+| HD44780 4-bit init (0x3 ×3, 0x2), function set 0x28, 0x0C, 0x06, clear 0x01 | ✅ L + controller unit tests |
+| DDRAM addressing 0x80 / 0xC0, cursor, shift 0x18/0x1C | ✅ Unit tests (incl. 0x27→0x40 wrap, entry-mode decrement, shift on write) |
+| CGRAM custom characters (0x40) | ✅ L: heart glyph drawn from the firmware's bitmap |
+| Delays via SysTick COUNTFLAG at 50 MHz | ✅ L polls `COUNTFLAG`; LCD execution-time checks pass |
+| Execution-time violations (37 µs / 1.52 ms, 15 ms power-on) | ✅ Reported as LCD timing warnings (tested) |
+| Busy-flag / RAM reads (RW = 1) | ⛔ Not modeled — RW is tied to GND in the supported wiring; an RW = 1 strobe is reported |
+| Text rendered only from firmware-driven LCD transactions | ✅ Every character comes from E falling edges in the GPIO event stream |
+| Speed of `COUNTFLAG`-polling delays | 🟡 Correct in virtual time, but slow: each poll is an MMIO read, and CI observed ~0.05× real time at 50 MHz |
 
 ## Experiment 9 — ADC
 
@@ -136,7 +140,6 @@ today) compile but are reported at run time as unimplemented.
 
 ## Next engineering task
 
-1. Verify SysTick `COUNTFLAG` polling and `CLKSOURCE`=0, and GPTM one-shot
-   mode, with dedicated tests.
-2. LCD1602 (HD44780) model on Port B for Experiment 8.
-3. ADC0 sample sequencer 3 with a virtual potentiometer for Experiment 9.
+1. ADC0 sample sequencer 3 with a virtual potentiometer for Experiment 9.
+2. UART0 with a virtual serial terminal for Experiment 10.
+3. Dedicated tests for SysTick `CLKSOURCE`=0 and GPTM one-shot/up-count.
