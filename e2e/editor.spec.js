@@ -62,7 +62,7 @@ test("pin tooltips show header, GPIO, functions, and simulation state", async ({
   await expect(tooltip).toContainText("Simulation: not running");
   await anchor(page, "board1", "J3.9").hover();
   await expect(tooltip).toContainText("AIN0");
-  await expect(tooltip).toContainText("ADC not modeled yet");
+  await expect(tooltip).toContainText("sampled by ADC0/ADC1");
 });
 
 test("zooms, pans, and fits the view", async ({ page }) => {
