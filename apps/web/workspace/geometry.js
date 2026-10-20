@@ -190,6 +190,69 @@ export function editableSegment(points, segment) {
   return { points: expanded, segment: index };
 }
 
+/**
+ * Where to put pasted or duplicated items so they are visible without
+ * changing the view (smart paste).
+ *
+ * `bounds` is the world bounding box of the items at their source position,
+ * `view` the visible world rectangle, `preferred` the offset the editor would
+ * use by default (e.g. a 0.3 in cascade). If the items fit inside the view
+ * (minus `margin`) at the preferred offset and that spot is not in `avoid`,
+ * the preferred offset is kept. Otherwise the first free spot is searched in
+ * rings of `step` around the middle of the view (down-right first); when the
+ * items are larger than the view they are aligned to its top-left corner.
+ * Offsets are multiples of `grid`, so parts keep their grid alignment and
+ * relative positions. `avoid` holds placementKey()s already used, so repeated
+ * pastes never stack exactly while there is room.
+ *
+ * Returns { dx, dy, relocated }.
+ */
+export function placeInView(bounds, view, preferred, { margin = GRID * 2, grid = GRID, step = GRID * 3, avoid = new Set() } = {}) {
+  const inner = {
+    x: view.x + margin,
+    y: view.y + margin,
+    width: Math.max(0, view.width - 2 * margin),
+    height: Math.max(0, view.height - 2 * margin),
+  };
+  const fits = (dx, dy) =>
+    bounds.x + dx >= inner.x - 1e-6 && bounds.y + dy >= inner.y - 1e-6
+    && bounds.x + dx + bounds.width <= inner.x + inner.width + 1e-6
+    && bounds.y + dy + bounds.height <= inner.y + inner.height + 1e-6;
+  const free = (dx, dy) => fits(dx, dy) && !avoid.has(placementKey(bounds, dx, dy));
+  if (free(preferred.dx, preferred.dy)) {
+    return { dx: preferred.dx, dy: preferred.dy, relocated: false };
+  }
+  const x = bounds.width <= inner.width ? view.x + (view.width - bounds.width) / 2 : inner.x;
+  const y = bounds.height <= inner.height ? view.y + (view.height - bounds.height) / 2 : inner.y;
+  const center = { dx: snap(x - bounds.x, grid), dy: snap(y - bounds.y, grid) };
+  const rings = Math.ceil(Math.max(view.width, view.height) / step);
+  for (let ring = 0; ring <= rings; ring++) {
+    const offsets = [];
+    for (let ix = -ring; ix <= ring; ix++) {
+      for (let iy = -ring; iy <= ring; iy++) {
+        if (Math.max(Math.abs(ix), Math.abs(iy)) === ring) {
+          offsets.push([ix, iy]);
+        }
+      }
+    }
+    // Down-right diagonal first (the familiar cascade direction), then the rest in a fixed order.
+    offsets.sort((a, b) => Number(!(a[0] === a[1] && a[0] > 0)) - Number(!(b[0] === b[1] && b[0] > 0)) || a[1] - b[1] || a[0] - b[0]);
+    for (const [ix, iy] of offsets) {
+      const dx = center.dx + ix * step;
+      const dy = center.dy + iy * step;
+      if (free(dx, dy)) {
+        return { dx, dy, relocated: true };
+      }
+    }
+  }
+  return { ...center, relocated: true }; // no free spot: the middle of the view
+}
+
+/** Key of the position of `bounds` moved by (dx, dy), for placeInView's `avoid`. */
+export function placementKey(bounds, dx, dy) {
+  return `${(bounds.x + dx).toFixed(3)},${(bounds.y + dy).toFixed(3)}`;
+}
+
 // ---------------------------------------------------------------------------
 // Viewport (SVG viewBox) math
 // ---------------------------------------------------------------------------

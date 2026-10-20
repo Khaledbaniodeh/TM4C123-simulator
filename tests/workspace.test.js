@@ -11,6 +11,8 @@ import {
   fitViewBox,
   partBounds,
   partToWorld,
+  placeInView,
+  placementKey,
   pointsToRouting,
   routeWire,
   rotateQuarter,
@@ -123,6 +125,40 @@ describe("geometry", () => {
     assert.deepEqual(editableSegment(inner, 1), { points: inner, segment: 1 });
     assert.equal(editableSegment(inner, 3), null);
     assert.equal(editableSegment(inner, -1), null);
+  });
+
+  it("smart paste keeps the cascade position when visible, otherwise centers in the view", () => {
+    const view = { x: 0, y: 0, width: 960, height: 480 };
+    const bounds = { x: 96, y: 96, width: 96, height: 48 };
+    const step = { dx: GRID * 3, dy: GRID * 3 };
+    // Visible at the cascade offset: unchanged, the view is not involved.
+    assert.deepEqual(placeInView(bounds, view, step), { ...step, relocated: false });
+
+    // Cascade position off-screen: centered in the view, on the grid, same shape.
+    const far = placeInView(bounds, view, { dx: 2000, dy: 2000 });
+    assert.equal(far.relocated, true);
+    const left = bounds.x + far.dx;
+    const top = bounds.y + far.dy;
+    assert.ok(Math.abs(left + bounds.width / 2 - 480) <= GRID / 2 + 1e-9, "horizontally centered");
+    assert.ok(Math.abs(top + bounds.height / 2 - 240) <= GRID / 2 + 1e-9, "vertically centered");
+    assert.ok(Math.abs(far.dx / GRID - Math.round(far.dx / GRID)) < 1e-9, "dx on the grid");
+    assert.ok(Math.abs(far.dy / GRID - Math.round(far.dy / GRID)) < 1e-9, "dy on the grid");
+
+    // A used center position steps diagonally instead of stacking exactly.
+    const avoid = new Set([placementKey(bounds, far.dx, far.dy)]);
+    const next = placeInView(bounds, view, { dx: 2000, dy: 2000 }, { avoid });
+    assert.ok(Math.abs(next.dx - far.dx - GRID * 3) < 1e-9 && Math.abs(next.dy - far.dy - GRID * 3) < 1e-9, "one 0.3 in step");
+
+    // Larger than the view: aligned to the top-left margin, still no zoom.
+    const huge = { x: 0, y: 0, width: 2000, height: 1000 };
+    const placed = placeInView(huge, view, { dx: 5000, dy: 5000 });
+    assert.deepEqual({ left: placed.dx, top: placed.dy }, { left: snap(GRID * 2), top: snap(GRID * 2) });
+
+    // Works for views at negative coordinates (after panning).
+    const panned = { x: -1200, y: -800, width: 480, height: 320 };
+    const inPanned = placeInView(bounds, panned, step);
+    assert.ok(bounds.x + inPanned.dx >= panned.x && bounds.x + inPanned.dx + bounds.width <= panned.x + panned.width);
+    assert.ok(bounds.y + inPanned.dy >= panned.y && bounds.y + inPanned.dy + bounds.height <= panned.y + panned.height);
   });
 
   it("zooms about an anchor and converts client coordinates", () => {
