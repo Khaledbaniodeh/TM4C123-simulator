@@ -360,6 +360,11 @@ workspace.addEventListener("change", (event) => {
   renderPinTable();
   workspaceMessage(event.detail.label);
 });
+workspace.addEventListener("clipboard", (event) => {
+  const { action, parts, wires } = event.detail;
+  const what = `${parts} part${parts === 1 ? "" : "s"}${wires ? ` and ${wires} wire${wires === 1 ? "" : "s"} between them` : ""}`;
+  workspaceMessage(`${action === "cut" ? "Cut" : "Copied"} ${what}. Ctrl+V pastes.`);
+});
 workspace.addEventListener("select", () => {
   renderToolbar();
   renderSelectionPanel();
@@ -586,11 +591,12 @@ function renderToolbar() {
   const selection = workspace.selection;
   const part = selection?.kind === "part" ? findPart(history.diagram, selection.id) : null;
   const editable = part && CATALOG[part.type].kind !== "board";
+  const group = selection?.kind === "group";
   elements.undoButton.disabled = !history.canUndo;
   elements.redoButton.disabled = !history.canRedo;
   elements.rotateButton.disabled = !editable;
-  elements.duplicateButton.disabled = !editable;
-  elements.deleteButton.disabled = !(editable || selection?.kind === "wire");
+  elements.duplicateButton.disabled = !(editable || (group && selection.parts.length > 0));
+  elements.deleteButton.disabled = !(editable || selection?.kind === "wire" || group);
 }
 
 function componentLiveText(id) {
@@ -618,7 +624,24 @@ function renderSelectionPanel() {
   panel.replaceChildren();
   const selection = workspace.selection;
   if (!selection) {
-    panel.textContent = "Select a part or wire. Click a pin to start a wire.";
+    panel.textContent = "Select a part or wire. Click a pin to start a wire. Shift+click or Shift+drag selects several parts.";
+    return;
+  }
+  if (selection.kind === "group") {
+    const title = document.createElement("p");
+    const strong = document.createElement("strong");
+    const parts = selection.parts.length;
+    const wires = selection.wires.length;
+    strong.textContent = [parts && `${parts} part${parts === 1 ? "" : "s"}`, wires && `${wires} wire${wires === 1 ? "" : "s"}`].filter(Boolean).join(" and ") + " selected";
+    title.append(strong);
+    const list = document.createElement("p");
+    list.className = "muted";
+    list.textContent = selection.parts.join(", ");
+    const hint = document.createElement("p");
+    hint.className = "muted";
+    hint.id = "groupHint";
+    hint.textContent = "Drag a selected part to move them together · Arrows nudge 0.1 in (Shift: 1 in) · Ctrl+C / Ctrl+X / Ctrl+V · Ctrl+D duplicates · Delete removes · Shift+click adds or removes";
+    panel.append(title, ...(parts ? [list] : []), hint);
     return;
   }
   if (selection.kind === "component") {
