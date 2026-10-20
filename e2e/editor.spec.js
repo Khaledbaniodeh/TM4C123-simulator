@@ -22,7 +22,7 @@ async function openWorkspace(page) {
     }
   });
   await page.goto("/");
-  await expect(page.locator("#exampleSelect option")).toHaveCount(11);
+  await expect(page.locator("#exampleSelect option")).toHaveCount(12);
   await expect(page.locator('.part[data-type="tm4c123gxl-launchpad"]')).toBeVisible();
   return errors;
 }
@@ -393,4 +393,28 @@ test("selected RGB LED shows firmware-driven pin state", async ({ page }) => {
   await expect(page.locator("#consoleOutput")).toContainText("MCU reset");
   await expect(page.locator("#redLed")).toHaveClass(/active/);
   await page.click("#stopButton");
+});
+
+test("L: the LCD1602 shows text written by real firmware over Port B", async ({ page }) => {
+  const errors = await openWorkspace(page);
+  await page.selectOption("#exampleSelect", "lcd1602-hello");
+  const lcd = page.locator('.part[data-part="lcd1"] .part-lcd');
+  await expect(lcd).toHaveCount(1);
+  await expect(lcd).toHaveAttribute("data-row0", "");
+  await page.click("#runButton");
+  await expect(page.locator("#simulationStatus")).toHaveText("Running");
+  await expect(lcd).toHaveAttribute("data-row0", "Hello, TM4C123! ", { timeout: 60_000 });
+  await expect(lcd).toHaveAttribute("data-row1", /^LCD1602 □ n=\d {3}$/);
+  await expect(lcd).toHaveAttribute("aria-label", /Hello, TM4C123!/);
+  // The heart is drawn from the firmware's CGRAM bitmap, not from a font.
+  await expect(page.locator('.part[data-part="lcd1"] .lcd-dot').first()).toBeVisible();
+  // RW is tied to GND in the circuit and driven LOW by firmware (D-024).
+  await expect(page.locator('#pinTable tr[data-pin="PB1"]')).toContainText("LOW");
+  await page.screenshot({ path: "test-results/workspace-lcd1602.png" });
+
+  await anchor(page, "lcd1", "E").hover();
+  await expect(page.locator("#pinTooltip")).toContainText("Interface: 4-bit");
+  await page.click("#stopButton");
+  await expect(lcd).toHaveAttribute("data-row0", "");
+  expect(errors).toEqual([]);
 });

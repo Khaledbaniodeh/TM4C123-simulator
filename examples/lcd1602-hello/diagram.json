@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "author": "TM4C123 Simulator",
+  "editor": "tm4c123-simulator",
+  "parts": [
+    { "type": "tm4c123gxl-launchpad", "id": "board1", "top": 0, "left": 0, "rotate": 0, "attrs": {} },
+    { "type": "lcd1602", "id": "lcd1", "top": -201.6, "left": -76.8, "rotate": 0, "attrs": {} }
+  ],
+  "connections": [
+    ["lcd1:VSS", "board1:J2.1", "black", []],
+    ["lcd1:VDD", "board1:J3.1", "red", []],
+    ["lcd1:V0", "board1:J3.2", "black", []],
+    ["lcd1:RS", "board1:J1.3", "orange", []],
+    ["lcd1:RW", "board1:J1.4", "gray", []],
+    ["lcd1:RW", "board1:J3.2", "black", []],
+    ["lcd1:E", "board1:J2.2", "yellow", []],
+    ["lcd1:D4", "board1:J1.7", "green", []],
+    ["lcd1:D5", "board1:J1.2", "green", []],
+    ["lcd1:D6", "board1:J2.7", "blue", []],
+    ["lcd1:D7", "board1:J2.6", "blue", []],
+    ["lcd1:A", "board1:J3.1", "red", []],
+    ["lcd1:K", "board1:J2.1", "black", []]
+  ]
+}

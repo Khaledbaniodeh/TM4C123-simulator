@@ -147,7 +147,7 @@ describe("board part behavior", () => {
       }
     }
     assert.equal(CATALOG.potentiometer.status, "editor");
-    assert.equal(CATALOG.lcd1602.status, "editor");
+    assert.equal(CATALOG.lcd1602.status, "simulated"); // HD44780 model fed by GPIO events
     assert.equal(CATALOG["logic-analyzer"].status, "editor");
   });
 });
