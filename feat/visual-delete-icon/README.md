@@ -1,1 +1,1 @@
-Screenshots from feat/visual-delete-icon @ 4cf2a594d22b767d438baca40ed9fe4e4cac5776 (run 39502132891, test result: failure)
+Screenshots from feat/visual-delete-icon @ a8469f5ac7223b3002837e0b0e2bdbe9b1a7f2a8 (run 39503622234, test result: success)
