@@ -62,7 +62,7 @@ for (const size of SIZES) {
       svg: true,
       hidden: "true",
       focusable: "false",
-      size: "13x13",
+      size: "11x11",
       stroke: icon.color,
       fill: "none",
       color: icon.color,
