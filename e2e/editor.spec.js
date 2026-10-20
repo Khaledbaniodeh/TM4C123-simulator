@@ -464,3 +464,57 @@ test("N: the die temperature control reaches the ADC temperature sensor", async 
   await page.click("#stopButton");
   expect(errors).toEqual([]);
 });
+
+test("a freshly drawn wire can be rerouted by dragging any segment; undo restores it", async ({ page }) => {
+  const errors = await openWorkspace(page);
+  await page.getByRole("button", { name: /Part/ }).click();
+  await page.locator('.library-item[data-type="led"]').click();
+  await anchor(page, "board1", "J1.10").click();
+  await anchor(page, "led1", "A").click();
+  const wire = page.locator('.wire[data-from="board1:J1.10"][data-to="led1:A"]');
+  await expect(wire).toHaveCount(1);
+  expect(await page.evaluate(() => window.__tm4c.diagram.connections[0][3])).toEqual([]);
+
+  // Midpoint of the first segment (at the board pin) in screen coordinates, and its orientation.
+  const target = await page.evaluate(() => {
+    const path = document.querySelector('.wire[data-to="led1:A"] .wire-core');
+    const points = [...path.getAttribute("d").matchAll(/[ML]([-\d.]+) ([-\d.]+)/g)].map((m) => ({ x: Number(m[1]), y: Number(m[2]) }));
+    const [a, b] = points;
+    const svg = document.querySelector("#circuitCanvas");
+    const point = svg.createSVGPoint();
+    point.x = (a.x + b.x) / 2;
+    point.y = (a.y + b.y) / 2;
+    const screen = point.matrixTransform(path.getScreenCTM());
+    return { x: screen.x, y: screen.y, horizontal: a.y === b.y, count: points.length };
+  });
+  expect(target.count).toBeLessThanOrEqual(3); // straight or L-shaped: no inner segment before this change
+
+  await page.mouse.move(target.x, target.y);
+  await page.mouse.down();
+  const dx = target.horizontal ? 0 : 48;
+  const dy = target.horizontal ? 48 : 0;
+  await page.mouse.move(target.x + dx, target.y + dy, { steps: 6 });
+  await page.mouse.up();
+
+  const routing = await page.evaluate(() => window.__tm4c.diagram.connections[0][3]);
+  expect(routing.length).toBeGreaterThan(0);
+  // Ends still on their pins, and every segment axis-aligned.
+  const check = await page.evaluate(() => {
+    const { workspace } = window.__tm4c;
+    const ends = [...document.querySelectorAll('.wire[data-to="led1:A"] .wire-end')].map((c) => ({ x: Number(c.getAttribute("cx")), y: Number(c.getAttribute("cy")) }));
+    const close = (p, q) => Math.abs(p.x - q.x) < 1e-6 && Math.abs(p.y - q.y) < 1e-6;
+    const d = document.querySelector('.wire[data-to="led1:A"] .wire-core').getAttribute("d");
+    const points = [...d.matchAll(/[ML]([-\d.]+) ([-\d.]+)/g)].map((m) => [Number(m[1]), Number(m[2])]);
+    const aligned = points.every((p, i) => i === 0 || p[0] === points[i - 1][0] || p[1] === points[i - 1][1]);
+    return { attached: close(ends[0], workspace.pinPosition("board1:J1.10")) && close(ends[1], workspace.pinPosition("led1:A")), aligned, count: points.length };
+  });
+  expect(check).toEqual({ attached: true, aligned: true, count: expect.any(Number) });
+  expect(check.count).toBeGreaterThan(3);
+  await page.screenshot({ path: "test-results/workspace-wire-reroute.png" });
+
+  await page.locator("#circuitCanvas").press("Control+z");
+  expect(await page.evaluate(() => window.__tm4c.diagram.connections[0][3])).toEqual([]);
+  await page.locator("#circuitCanvas").press("Control+y");
+  expect(await page.evaluate(() => window.__tm4c.diagram.connections[0][3])).toEqual(routing);
+  expect(errors).toEqual([]);
+});

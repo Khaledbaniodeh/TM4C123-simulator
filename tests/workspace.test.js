@@ -7,9 +7,11 @@ import { describe, it } from "node:test";
 import {
   GRID,
   clientToWorld,
+  editableSegment,
   fitViewBox,
   partBounds,
   partToWorld,
+  pointsToRouting,
   routeWire,
   rotateQuarter,
   snap,
@@ -86,6 +88,41 @@ describe("geometry", () => {
     for (let i = 1; i < routed.length; i++) {
       assert.ok(routed[i].x === routed[i - 1].x || routed[i].y === routed[i - 1].y, "segments are axis-aligned");
     }
+  });
+
+  it("makes every wire segment draggable without moving the pins", () => {
+    const a = { x: 0, y: 0 };
+    const b = { x: 50, y: 30 };
+    const lShape = routeWire(a, b); // [a, corner, b]: no inner segment
+    // Dragging the segment that leaves the source vertically by -20 grows a jog at the source.
+    const first = editableSegment(lShape, 0);
+    assert.equal(first.segment, 1);
+    assert.deepEqual(first.points[0], a, "source pin stays");
+    const movedFirst = first.points.map((p, i) => (i === 1 || i === 2 ? { x: p.x, y: p.y - 20 } : p));
+    const routingFirst = pointsToRouting(movedFirst);
+    assert.deepEqual(routingFirst, ["v-20", "h50"]);
+    assert.deepEqual(routeWire(a, b, routingFirst), [a, { x: 0, y: -20 }, { x: 50, y: -20 }, b]);
+
+    // The segment that enters the target: the target keeps its position.
+    const last = editableSegment(lShape, 1);
+    assert.equal(last.points.length, 4);
+    assert.deepEqual(last.points.at(-1), b, "target pin stays");
+    const movedLast = last.points.map((p, i) => (i === last.segment || i === last.segment + 1 ? { x: p.x + 10, y: p.y } : p));
+    const routed = routeWire(a, b, pointsToRouting(movedLast));
+    assert.deepEqual(routed[0], a);
+    assert.deepEqual(routed.at(-1), b);
+    for (let i = 1; i < routed.length; i++) {
+      assert.ok(routed[i].x === routed[i - 1].x || routed[i].y === routed[i - 1].y, "segments stay axis-aligned");
+    }
+    assert.ok(routed.some((p) => p.x === 60), "the dragged vertical segment moved to x = 60");
+
+    // A straight wire becomes a detour; inner segments are unchanged.
+    const straight = editableSegment([a, { x: 40, y: 0 }], 0);
+    assert.deepEqual(straight, { points: [a, a, { x: 40, y: 0 }, { x: 40, y: 0 }], segment: 1 });
+    const inner = [a, { x: 0, y: 10 }, { x: 20, y: 10 }, { x: 20, y: 30 }];
+    assert.deepEqual(editableSegment(inner, 1), { points: inner, segment: 1 });
+    assert.equal(editableSegment(inner, 3), null);
+    assert.equal(editableSegment(inner, -1), null);
   });
 
   it("zooms about an anchor and converts client coordinates", () => {

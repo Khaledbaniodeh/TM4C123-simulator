@@ -655,7 +655,7 @@ function renderSelectionPanel() {
     label.append(select);
     const hint = document.createElement("p");
     hint.className = "muted";
-    hint.textContent = "Drag an inner segment to reroute. Delete removes the wire.";
+    hint.textContent = "Drag any segment to reroute (the ends stay on their pins). Delete removes the wire.";
     panel.append(title, label, hint);
     return;
   }

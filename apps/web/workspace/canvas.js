@@ -9,6 +9,7 @@
 import {
   GRID,
   clientToWorld,
+  editableSegment,
   fitViewBox,
   normalizeRotation,
   panViewBox,
@@ -484,10 +485,11 @@ export class Workspace extends EventTarget {
       const index = Number(wireNode.dataset.wire);
       this.select({ kind: "wire", index });
       const points = this.#wirePoints(this.diagram.connections[index]);
-      const segment = this.#segmentAt(points, world);
-      // Inner segments can be dragged perpendicular to reroute the wire.
-      if (segment > 0 && segment < points.length - 2) {
-        this.#gesture = { type: "drag-segment", index, points, segment, start: world, moved: false, pointerId: event.pointerId };
+      // Any segment can be dragged perpendicular to reroute the wire; a
+      // segment at a pin grows a short jog there, so the pins stay attached.
+      const editable = editableSegment(points, this.#segmentAt(points, world));
+      if (editable) {
+        this.#gesture = { type: "drag-segment", index, points: editable.points, segment: editable.segment, start: world, moved: false, pointerId: event.pointerId };
         this.#svg.setPointerCapture(event.pointerId);
       }
       event.preventDefault();
