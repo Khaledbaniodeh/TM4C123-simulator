@@ -71,7 +71,8 @@ export function sanitizeSelection(selection, diagram) {
     return null;
   }
   if (selection.kind === "component") {
-    return diagram.parts.some((p) => p.id === selection.partId) ? selection : null;
+    // Board components may be selected without a part id (there is one board).
+    return selection.partId === undefined || diagram.parts.some((p) => p.id === selection.partId) ? selection : null;
   }
   const ids = new Set(diagram.parts.map((p) => p.id));
   const parts = selectedParts(selection).filter((id) => ids.has(id));

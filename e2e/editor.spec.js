@@ -581,6 +581,22 @@ test("multi-selection: Shift+click, group drag, nudge, copy/paste, delete, box s
     });
   });
 
+  // Shift+drag on empty canvas (here: below btn1 in the example layout) draws a box;
+  // it selects the part it touches, never the board.
+  const btn = await page.locator('.part[data-part="btn1"] .part-hitbox').boundingBox();
+  const corner = await pointOn(null, { x: btn.x + btn.width * 0.25, y: btn.y + btn.height + 10 });
+  expect(corner).not.toBeNull();
+  await page.keyboard.down("Shift");
+  await page.mouse.move(corner.x, corner.y);
+  await page.mouse.down();
+  await page.mouse.move(btn.x + btn.width * 0.6, btn.y + btn.height * 0.6, { steps: 6 });
+  await expect(page.locator(".selection-box")).toHaveCount(1);
+  await page.mouse.up();
+  await page.keyboard.up("Shift");
+  await expect(page.locator(".selection-box")).toHaveCount(0);
+  expect(await page.evaluate(() => window.__tm4c.workspace.selection)).toEqual({ kind: "part", id: "btn1" });
+  await page.locator("#circuitCanvas").press("Escape");
+
   // Shift+click builds a group.
   const ledPoint = await pointOn("led1");
   await page.mouse.click(ledPoint.x, ledPoint.y);
@@ -641,21 +657,6 @@ test("multi-selection: Shift+click, group drag, nudge, copy/paste, delete, box s
   await page.locator("#circuitCanvas").press("Control+z");
   await expect(page.locator('.part[data-part="led2"]')).toHaveCount(1);
   await expect(page.locator('.wire[data-from="r2:1"][data-to="led2:A"]')).toHaveCount(1);
-
-  // Shift+drag on empty canvas draws a box that selects btn1 only; the board is never boxed.
-  await page.locator("#circuitCanvas").press("Escape");
-  const btn = await page.locator('.part[data-part="btn1"] .part-hitbox').boundingBox();
-  const corner = await pointOn(null, { x: btn.x - 6, y: btn.y - 6 });
-  expect(corner).not.toBeNull();
-  await page.keyboard.down("Shift");
-  await page.mouse.move(corner.x, corner.y);
-  await page.mouse.down();
-  await page.mouse.move(btn.x + btn.width / 3, btn.y + btn.height / 3, { steps: 6 });
-  await expect(page.locator(".selection-box")).toHaveCount(1);
-  await page.mouse.up();
-  await page.keyboard.up("Shift");
-  await expect(page.locator(".selection-box")).toHaveCount(0);
-  expect(await page.evaluate(() => window.__tm4c.workspace.selection)).toEqual({ kind: "part", id: "btn1" });
 
   // Select all: every part except the board, and every wire.
   await page.locator("#circuitCanvas").press("Control+a");

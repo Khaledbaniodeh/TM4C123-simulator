@@ -59,6 +59,8 @@ describe("selection model", () => {
     assert.deepEqual(sanitizeSelection(selection, diagram), { kind: "group", parts: ["led1"], wires: [0] });
     assert.equal(sanitizeSelection({ kind: "part", id: "gone" }, diagram), null);
     assert.equal(sanitizeSelection({ kind: "component", partId: "board1", id: "U1" }, diagram).id, "U1");
+    assert.deepEqual(sanitizeSelection({ kind: "component", id: "U1" }, diagram), { kind: "component", id: "U1" });
+    assert.equal(sanitizeSelection({ kind: "component", partId: "gone", id: "U1" }, diagram), null);
   });
 });
 
