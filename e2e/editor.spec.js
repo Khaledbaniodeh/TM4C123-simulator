@@ -531,9 +531,9 @@ test("selection-panel inputs keep their element, value, and focus while events s
   await input.evaluate((node) => { node.dataset.probe = "same-element"; });
   await input.focus();
   await input.fill("33");
-  const before = await page.locator("#eventCount, #consoleOutput").count();
+  const eventsBefore = Number(await page.locator("#eventCount").textContent());
   await page.waitForTimeout(1500); // many animation frames with simulator events
-  expect(before).toBeGreaterThan(0);
+  expect(Number(await page.locator("#eventCount").textContent())).toBeGreaterThan(eventsBefore);
   await expect(input).toHaveAttribute("data-probe", "same-element");
   await expect(input).toHaveValue("33");
   await expect(input).toBeFocused();
