@@ -37,7 +37,7 @@ reproducible, scriptable firmware experiments.
 > **Status: early technical prototype.** The first end-to-end path
 > (RISK-001) is implemented and verified by automated tests. GPIO, GPIO
 > interrupts, faults, the clock tree, SysTick, GPTM timers, and an LCD1602
-> work. ADC and UART are **not modeled yet**. Simulated behavior has **not**
+> work, and so do ADC0/ADC1. UART is **not modeled yet**. Simulated behavior has **not**
 > been compared against a physical LaunchPad.
 
 ## What works today
@@ -63,8 +63,10 @@ reproducible, scriptable firmware experiments.
 | SysTick interrupt and `COUNTFLAG` polling at the core clock | ✅ Implemented & tested (G, K, L) |
 | GPTM TIMER0–5: 16/32-bit periodic with prescaler, timeout IRQs | ✅ Implemented & tested (H, I, K) |
 | LCD1602 (HD44780) wired in the workspace, 4/8-bit, CGRAM | ✅ Implemented & tested (example L; driven only by firmware GPIO writes) |
-| Potentiometer, logic analyzer parts | 🟡 Editor only — placeable and wireable, **no electrical behavior yet** |
-| ADC0, UART0 | 📋 Planned — accesses are **reported**, never silently accepted |
+| ADC0/ADC1 sample sequencers, internal temperature sensor | ✅ Implemented & tested (examples M, N; SS3) |
+| Potentiometer wired to an AIN pin (ideal divider → real ADC model) | ✅ Implemented & tested (example M, Playwright) |
+| Logic analyzer part | 🟡 Editor only — placeable and wireable, **no electrical behavior yet** |
+| UART0 | 📋 Planned — accesses are **reported**, never silently accepted |
 | CMSIS-style `TM4C123.h` code (`GPIOF->DATA`, `NVIC_EnableIRQ`, `SystemCoreClock`) | ✅ Original device header + `SystemInit` (50 MHz) ([details](docs/EXPERIMENT_COMPATIBILITY.md#device-header-d-031)) |
 | Keil ARMASM sources | ⛔ Not supported ([details](docs/EXPERIMENT_COMPATIBILITY.md)) |
 
@@ -149,6 +151,8 @@ down Renode cleanly.
 | [`lab-gpio-interrupts`](examples/lab-gpio-interrupts/main.c) | **J** — Experiment 6 style with `TM4C123.h`: `GPIOF->…`, `NVIC->IP`, `NVIC_EnableIRQ(GPIOF_IRQn)` |
 | [`lab-systick-timer`](examples/lab-systick-timer/main.c) | **K** — Experiment 7 style with `TM4C123.h`: `SysTick_Config(SystemCoreClock / 10)`, `TIMER1->…` |
 | [`lcd1602-hello`](examples/lcd1602-hello/main.c) | **L** — Experiment 8: LCD1602 4-bit on Port B (RW tied to GND), CGRAM character, SysTick `COUNTFLAG` delays ([`diagram.json`](examples/lcd1602-hello/diagram.json)) |
+| [`adc-potentiometer`](examples/adc-potentiometer/main.c) | **M** — Experiment 9: ADC0 SS3 reads a potentiometer on PE3/AIN0 (workspace knob, [`diagram.json`](examples/adc-potentiometer/diagram.json)); LED colour follows the code |
+| [`adc-temperature`](examples/adc-temperature/main.c) | **N** — Experiment 9: internal temperature sensor on ADC1 SS3 with `ADC1SS3_Handler`; die temperature set in the workspace (select U1) |
 
 Negative fixtures (missing clock / DIR / DEN, compile and link errors,
 unsupported accesses) are in [`tests/fixtures/firmware/`](tests/fixtures/firmware/).
@@ -190,8 +194,8 @@ highlights it documents:
 
 ## Roadmap
 
-Next: ADC0 SS3 with a virtual potentiometer (Exp. 9) → UART0 + virtual
-terminal (Exp. 10) → logic analyzer → container worker. See [`ROADMAP.md`](ROADMAP.md) and
+Next: UART0 + virtual terminal (Exp. 10) → logic analyzer → container
+worker. See [`ROADMAP.md`](ROADMAP.md) and
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md).
 
 ## Repository layout
@@ -201,7 +205,7 @@ apps/orchestrator/   Node.js server: compiler runner, Renode session, HTTP/SSE A
 apps/web/            Browser workspace (no build step)
 simulator/firmware/  Startup, linker script, device header (include/), SystemInit
 simulator/renode/    Renode platform (.repl) and C# peripheral models
-examples/            Firmware examples A–L
+examples/            Firmware examples A–N
 tests/               Node test suites + negative firmware fixtures
 e2e/                 Playwright browser tests
 docs/                Architecture, decisions, models, events, reports

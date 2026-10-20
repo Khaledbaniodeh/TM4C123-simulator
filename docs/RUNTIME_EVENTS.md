@@ -36,12 +36,14 @@ instruction is 62.5 ns.
 | `clock-gate-changed` | SYSCTL | `peripheral` (e.g. `GPIOF`, `TIMER1`), `enabled` |
 | `system-clock-changed` | SYSCTL, on reset and whenever RCC/RCC2 change the clock | `hz`, `source` (`PIOSC`, `MOSC`, `PLL(MOSC)`, …), `pll`, `divisor`, `cause` (`reset`/`clock-register`/`pll-powered`) |
 | `clock-configuration-warning` | SYSCTL | `detail`, `rcc`, `rcc2` — e.g. above 80 MHz, PLL selected while powered down |
+| `adc-sequence-complete` | ADC, per processor-triggered sequence (first one only for continuous mode) | `peripheral`, `sequencer`, `trigger`, `samples[]` {`step`, `input` (`AIN0`…/`TS`), `volts`, `code`} |
+| `adc-input-warning` | ADC, once per input | `peripheral`, `input`, `kind` (`unconnected`/`not-analog`/`over-range`), `detail` |
 | `timer-started` | GPTM, when `TnEN` is set | `peripheral` (e.g. `TIMER1A`), `width` (16/32), `mode`, `direction`, `intervalLoad`, `prescale`, `periodClocks`, `clockHz` |
-| `interrupt-line-changed` | GPIO, GPTM (`TIMERnA`/`TIMERnB`) | `peripheral`, `asserted`, `mis` |
-| `bus-fault` | GPIO, GPTM (unclocked access) | `peripheral`, `address`, `access`, `value`, `reason` |
-| `unsupported-register-access` | SYSCTL, GPIO, GPTM | `peripheral`, `address`, `offset`, `access`, `value`, `reason` |
-| `unimplemented-peripheral-access` | Placeholder regions (UART, wide timers, ADC, …) | `peripheral`, `address`, `access`, `reason` — first access per register/direction |
-| `unsupported-feature` | GPIO (AFSEL, AMSEL, ADC/DMA triggers), GPTM (capture, PWM, RTC, …), SYSCTL (`clock-propagation`) | `peripheral`, `feature`, `detail` |
+| `interrupt-line-changed` | GPIO, GPTM (`TIMERnA`/`TIMERnB`), ADC (`ADCnSSm`) | `peripheral`, `asserted`, `mis` |
+| `bus-fault` | GPIO, GPTM, ADC (unclocked access) | `peripheral`, `address`, `access`, `value`, `reason` |
+| `unsupported-register-access` | SYSCTL, GPIO, GPTM, ADC | `peripheral`, `address`, `offset`, `access`, `value`, `reason` |
+| `unimplemented-peripheral-access` | Placeholder regions (UART, wide timers, SSI, …) | `peripheral`, `address`, `access`, `reason` — first access per register/direction |
+| `unsupported-feature` | GPIO (AFSEL, AMSEL, ADC/DMA triggers), GPTM (capture, PWM, RTC, …), ADC (triggers, differential, comparators), SYSCTL (`clock-propagation`) | `peripheral`, `feature`, `detail` |
 | `commit-protected-write-ignored` | GPIO (GPIOCR) | `peripheral`, `register`, `bits`, `reason` |
 | `locked-register-write-ignored` | GPIO (GPIOLOCK) | `peripheral`, `register`, `value` |
 | `floating-input-read` | GPIO | `peripheral`, `bits`, `reason` |

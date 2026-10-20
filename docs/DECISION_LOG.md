@@ -671,6 +671,36 @@ driven HIGH resolves to a pin conflict.
 
 ---
 
+### D-033 — ADC Model, Analog Inputs, and the Workspace Potentiometer
+
+**Date:** 2026-10-20
+**Status:** Accepted
+
+**Decision:**
+
+ADC0 and ADC1 are Renode peripherals (`TM4C123ADC.cs`) with all four
+sample sequencers, processor and continuous triggers, conversion time in
+virtual time, and an ideal 12-bit converter: `code = round(V / 3.3 V × 4095)`.
+The temperature sensor uses the data sheet's transfer function inverted for
+a settable die temperature (default 25 °C). A channel is converted only if
+its GPIO pin is in analog mode (`AMSEL` = 1, `DEN` = 0); otherwise, or when
+nothing is connected, the sample reads 0 and an `adc-input-warning` is
+emitted — real hardware gives undefined readings there.
+
+Analog values come from outside the MCU, through the session API
+(`setAnalogInput`, `setDieTemperature`). In the workspace, a potentiometer is
+an ideal voltage divider between the supply pins its ends are wired to; its
+wiper voltage is applied to every directly wired AIN pin. The circuit's
+initial inputs (wired digital drives, wiper voltages, die temperature) are
+applied before the CPU first runs, so firmware never samples a transient
+"unconnected" state that the circuit does not have.
+
+Not modeled: noise, INL/DNL, input loading and source impedance, sequencer
+priority arbitration, differential mode, digital comparators, external
+VREF, and hardware triggers other than the processor and continuous modes.
+
+---
+
 ## Adding a New Decision
 
 A new decision entry should include:
@@ -725,3 +755,4 @@ Architecture-changing implementation must not begin before the relevant decision
 | D-030 | System clock drives CPU rate, SysTick, and GPTM | Accepted |
 | D-031 | Original CMSIS-style device header and device-support linking | Accepted |
 | D-032 | LCD1602 as a workspace part driven by GPIO events | Accepted |
+| D-033 | ADC model, analog inputs, and the workspace potentiometer | Accepted |

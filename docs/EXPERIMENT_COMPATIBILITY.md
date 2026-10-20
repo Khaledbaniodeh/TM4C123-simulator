@@ -28,7 +28,7 @@ for every row**.
 | 6 | GPIO inputs and interrupts | ✅ Hardware behavior and `TM4C123.h`-style code verified | Example J uses `GPIOF->…`, `NVIC->IP`, `NVIC_EnableIRQ` with the project's original device header (D-031). Unmodified lab sources not tested here |
 | 7 | SysTick and GPTM timers | ✅ Core verified, incl. `TM4C123.h`-style code | PLL 50 MHz, SysTick, TIMER0A–2A verified (G–I); example K uses `SystemCoreClock`, `SysTick_Config`, `TIMER1->…` (D-031). Unmodified lab sources not tested here |
 | 8 | LCD1602 (HD44780, 4-bit, Port B) | ✅ Verified | Example L with the Experiment 8 wiring; text comes only from firmware GPIO writes (D-032). Unmodified lab sources not tested here |
-| 9 | ADC0 SS3, PE3/AIN0 | 📋 Planned | ADC0 is a placeholder region (accesses are reported) |
+| 9 | ADC0 SS3, PE3/AIN0, temperature sensor | ✅ Verified | Examples M (potentiometer on AIN0) and N (temperature sensor, ADC1, interrupt) (D-033). Unmodified lab sources not tested here |
 | 10 | UART0 echo, PA0/PA1 | 📋 Planned (scope added by D-022) | UART0 is a placeholder region; needs alternate functions + 50 MHz clock |
 
 ## Experiment 5 — GPIO output
@@ -106,12 +106,13 @@ Native ARMASM input is **not implemented and not claimed**.
 
 | Requirement | Status |
 |---|---|
-| `RCGCADC`, PE3 analog setup (`AFSEL/DEN/AMSEL`) | 🟡 GPIO side stored + reported; analog not modeled |
-| ADC0 `ACTSS/EMUX/SSMUX3/SSCTL3/PSSI/RIS/SSFIFO3/ISC/IM` | 📋 Planned (ADC0 is a placeholder region) |
-| `ADC0SS3_Handler` at IRQ 17 | 📋 Planned (vector exists in `startup.s`) |
-| 12-bit result, 0–3.3 V input from a virtual potentiometer | 📋 Planned |
-| Internal temperature sensor (`SSCTL3.TS0`) | 📋 Planned |
-| ADC1 / AIN1 (PE2) for Task 2 | 📋 Planned |
+| `RCGCADC`, PE3 analog setup (`AFSEL/DEN/AMSEL`) | ✅ M; a missing `AMSEL` reads 0 and is reported (tested) |
+| ADC0 `ACTSS/EMUX/SSMUX3/SSCTL3/PSSI/RIS/SSFIFO3/ISC/IM` | ✅ M (PSSI + RIS polling) |
+| SS3 interrupt handler (`ADC0SS3_Handler` IRQ 17, `ADC1SS3_Handler` IRQ 51) | ✅ N on ADC1; the ADC0 line uses the same code path |
+| 12-bit result, 0–3.3 V input from a virtual potentiometer | ✅ M + Playwright: the workspace knob drives PE3 |
+| Internal temperature sensor (`SSCTL3.TS0`) | ✅ N: die temperature set in the workspace (select U1) |
+| ADC1 / AIN1 (PE2) for Task 2 | ✅ ADC1 and every AIN pin are modeled; N exercises ADC1, PE2 has no dedicated test |
+| Hardware averaging, sample rate | 🟡 Affect conversion time; implemented, not yet tested |
 
 ## Experiment 10 — UART
 
@@ -135,11 +136,12 @@ Native ARMASM input is **not implemented and not claimed**.
 | System | `SystemInit()` (50 MHz PLL, called before `main`), `SystemCoreClock`, `SystemCoreClockUpdate()` |
 | Not provided | SSI, I2C, PWM, QEI, CAN, USB, uDMA, HIB, EEPROM, watchdog structs; ITM, MPU, FPU, and other CMSIS-Core extras — using them is a compile error |
 
-Compiling is not simulating: registers of unmodeled peripherals (UART, ADC
+Compiling is not simulating: registers of unmodeled peripherals (UART
 today) compile but are reported at run time as unimplemented.
 
 ## Next engineering task
 
-1. ADC0 sample sequencer 3 with a virtual potentiometer for Experiment 9.
-2. UART0 with a virtual serial terminal for Experiment 10.
-3. Dedicated tests for SysTick `CLKSOURCE`=0 and GPTM one-shot/up-count.
+1. UART0 with a virtual serial terminal for Experiment 10.
+2. Dedicated tests for SysTick `CLKSOURCE`=0, GPTM one-shot/up-count, ADC
+   SS0–SS2, continuous trigger, and hardware averaging.
+3. Wall-clock speed of `COUNTFLAG`-polling firmware.

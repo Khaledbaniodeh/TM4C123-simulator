@@ -64,7 +64,7 @@ Assumptions:
   verified.
 - `PRGPIO`/`PRTIMER` are ready immediately after a clock enable.
 - **Not modeled yet:** sleep/deep-sleep clock configuration, `MOSCCTL`,
-  `PIOSCCAL`, other run-mode clock gates (UART, ADC, …), `DID0/DID1`.
+  `PIOSCCAL`, other run-mode clock gates (UART, SSI, …), `DID0/DID1`.
 
 ## GPTM timers (`TM4C123GeneralPurposeTimer.cs`, TIMER0–5)
 
@@ -86,6 +86,30 @@ system clock.
 Simplifications: a `TnILR` write while running reloads the counter at once;
 `TnPV` reads 0 in prescaled mode; in 32-bit mode timer B is unused.
 
+## ADC (`TM4C123ADC.cs`, ADC0 `0x40038000`, ADC1 `0x40039000`)
+
+Both modules sample the same 12 inputs: AIN0–3 = PE3–PE0, AIN4–7 = PD3–PD0,
+AIN8–9 = PE5–PE4, AIN10–11 = PB4–PB5, plus the internal temperature sensor.
+NVIC lines: ADC0 SS0–SS3 → 14–17, ADC1 SS0–SS3 → 48–51.
+
+| Feature | Status |
+|---|---|
+| Clock gating: `RCGCADC` / legacy `RCGC0[17:16]`, `PRADC`; unclocked access → precise bus fault | ✅ Verified |
+| `ACTSS`, `SSMUXn`, `SSCTLn` (`END`, `IE`, `TS`), `SSFIFOn`, `SSFSTATn` for SS0–SS3 (8/4/4/1 steps) | ✅ SS3 verified on ADC0 and ADC1; SS0–SS2 implemented, not yet tested |
+| Processor trigger (`PSSI`), continuous trigger (`EMUX` = 0xF) | ✅ Processor trigger verified; continuous implemented, not yet tested |
+| Conversion time: `ADCPC` 125 k / 250 k / 500 k / 1 Msps × `ADCSAC` averaging, in virtual time | ✅ Implemented (RIS is 0 right after PSSI: verified) |
+| `RIS` / `IM` / `ISC` interrupts, `OSTAT` / `USTAT` | ✅ SS3 interrupt verified (ADC1SS3) |
+| 12-bit result `round(V / 3.3 V × 4095)`, clamped; > 3.3 V reported | ✅ Verified at 0.5 / 1.65 / 3.0 / 4.0 V |
+| Temperature sensor: data-sheet transfer function `TEMP = 147.5 − 75 × 3.3 × code / 4096` | ✅ Verified at 25 °C and 45 °C |
+| Input not analog (`AMSEL` = 0, `DEN` = 1, port clock off) or not connected | ✅ Sample reads 0, `adc-input-warning` once per input |
+| Differential sampling, digital comparators, external VREF, comparator/GPIO/timer/PWM triggers, `GSYNC` | ⛔ `unsupported-feature` event |
+
+Simplifications: ideal converter (no noise, INL/DNL, or source loading);
+`ADCSSPRI` is stored but simultaneous triggers are not arbitrated; `ADCPP`
+is not modeled (`unsupported-register-access`). Analog inputs and the die
+temperature come from outside the MCU (workspace potentiometer, die
+temperature control, or the session API) and survive an MCU reset.
+
 ## GPIO (`TM4C123GPIO.cs`, APB apertures)
 
 Ports A–D at `0x40004000 + n·0x1000`, E–F at `0x40024000 + (n−4)·0x1000`.
@@ -98,7 +122,7 @@ IRQ lines: A–E → 0–4, F → 30.
 | `GPIOIS/IBE/IEV/IM` | `0x404–0x410` | Edge/level, both-edge, polarity, mask |
 | `GPIORIS` / `GPIOMIS` | `0x414` / `0x418` | Read-only status; MIS = RIS & IM drives the NVIC line |
 | `GPIOICR` | `0x41C` | Write-1-to-clear edge status; level sources re-assert |
-| `GPIOAFSEL` | `0x420` | Stored; any set bit → `unsupported-feature` (alternate functions not modeled) |
+| `GPIOAFSEL` | `0x420` | Stored. With `PCTL` = 0 on an AIN pin it is part of the analog setup; any other set bit → `unsupported-feature` (digital alternate functions not modeled) |
 | `GPIODR2R/4R/8R` | `0x500–0x508` | Stored, mutually exclusive; no electrical effect |
 | `GPIOODR` | `0x50C` | Open drain: output HIGH becomes high-impedance |
 | `GPIOPUR` / `GPIOPDR` | `0x510` / `0x514` | Mutually exclusive weak pulls |
@@ -106,7 +130,7 @@ IRQ lines: A–E → 0–4, F → 30.
 | `GPIODEN` | `0x51C` | Digital enable (output driver and input buffer) |
 | `GPIOLOCK` | `0x520` | Write `0x4C4F434B` to unlock; any other value locks. Reads 1 locked / 0 unlocked |
 | `GPIOCR` | `0x524` | Writable only while unlocked; only commit-protected pins (PC[3:0], PD7, PF0) have writable bits |
-| `GPIOAMSEL` | `0x528` | Stored; set bits → `unsupported-feature` |
+| `GPIOAMSEL` | `0x528` | Analog mode on the 12 AIN pins (with `DEN` = 0 the ADC sees the pin voltage); bits on other pins → `unsupported-feature` |
 | `GPIOPCTL` | `0x52C` | Stored (32-bit) |
 | `GPIOADCCTL` / `GPIODMACTL` | `0x530` / `0x534` | Stored; set bits → `unsupported-feature` |
 | other offsets | — | `unsupported-register-access` |
@@ -152,7 +176,7 @@ real silicon behavior in that case is unverified.
 
 ## Unimplemented peripherals (`TM4C123UnimplementedPeripheral.cs`)
 
-UART0–7, WTIMER0–5, ADC0–1, SSI0–3, I2C0–3, PWM0–1, QEI0–1, WDT0–1,
+UART0–7, WTIMER0–5, SSI0–3, I2C0–3, PWM0–1, QEI0–1, WDT0–1,
 CAN0–1, COMP, USB0, GPIO AHB apertures, EEPROM, HIB, flash controller,
 system exception module, and uDMA are mapped as named placeholder regions.
 The first read and first write to each register emit
