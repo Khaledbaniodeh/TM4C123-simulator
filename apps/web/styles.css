@@ -883,6 +883,18 @@ button {
     padding: 0 10px;
     white-space: nowrap;
   }
+
+  /* The circuit toolbar wraps onto a second row instead of pushing Save and
+     Load past the panel edge. */
+  .simulator-toolbar {
+    flex-wrap: wrap;
+    row-gap: 4px;
+    padding: 4px 12px;
+  }
+
+  .wide-icon-button {
+    white-space: nowrap;
+  }
 }
 
 @media (max-width: 1050px) {

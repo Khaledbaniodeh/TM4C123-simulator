@@ -28,7 +28,7 @@ for (const size of SIZES) {
       const viewport = { width: innerWidth, height: innerHeight };
       const root = document.scrollingElement;
       const clipped = [];
-      for (const node of document.querySelectorAll("button, select, input, [role=button]")) {
+      for (const node of document.querySelectorAll("button, select, input, [role=button], label.file-button")) {
         const rect = node.getBoundingClientRect();
         const style = getComputedStyle(node);
         if (rect.width === 0 || style.visibility === "hidden" || node.closest("[hidden]")) {
