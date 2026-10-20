@@ -132,7 +132,7 @@ describe("geometry", () => {
     const bounds = { x: 96, y: 96, width: 96, height: 48 };
     const step = { dx: GRID * 3, dy: GRID * 3 };
     // Visible at the cascade offset: unchanged, the view is not involved.
-    assert.deepEqual(placeInView(bounds, view, step), { ...step, relocated: false });
+    assert.deepEqual(placeInView(bounds, view, step), { ...step, relocated: false, crowded: false });
 
     // Cascade position off-screen: centered in the view, on the grid, same shape.
     const far = placeInView(bounds, view, { dx: 2000, dy: 2000 });
@@ -159,6 +159,76 @@ describe("geometry", () => {
     const inPanned = placeInView(bounds, panned, step);
     assert.ok(bounds.x + inPanned.dx >= panned.x && bounds.x + inPanned.dx + bounds.width <= panned.x + panned.width);
     assert.ok(bounds.y + inPanned.dy >= panned.y && bounds.y + inPanned.dy + bounds.height <= panned.y + panned.height);
+  });
+
+  it("collision-aware placement prefers free, visible canvas and degrades predictably", () => {
+    const view = { x: 0, y: 0, width: 960, height: 576 };
+    const group = { x: 96, y: 96, width: 57.6, height: 38.4 }; // e.g. an LED + resistor
+    const cascade = { dx: GRID * 3, dy: GRID * 3 };
+    const clearance = GRID;
+    const moved = (b, place) => ({ x: b.x + place.dx, y: b.y + place.dy, width: b.width, height: b.height });
+    const hits = (a, o) => Math.min(a.x + a.width, o.x + o.width + clearance) - Math.max(a.x, o.x - clearance) > 1e-6
+      && Math.min(a.y + a.height, o.y + o.height + clearance) - Math.max(a.y, o.y - clearance) > 1e-6;
+    const inside = (a) => a.x >= view.x + GRID * 2 - 1e-6 && a.y >= view.y + GRID * 2 - 1e-6
+      && a.x + a.width <= view.x + view.width - GRID * 2 + 1e-6 && a.y + a.height <= view.y + view.height - GRID * 2 + 1e-6;
+    const onGrid = (v) => Math.abs(v / GRID - Math.round(v / GRID)) < 1e-9;
+
+    // The cascade may overlap its own family (the source and earlier copies), so it is kept.
+    const source = { ...group, family: true };
+    assert.deepEqual(placeInView(group, view, cascade, { obstacles: [source] }), { ...cascade, relocated: false, crowded: false });
+
+    // A board in the middle of the view and a part blocking the cascade: the result avoids both.
+    const board = { x: 384, y: 144, width: 192, height: 249.6 };
+    const blocker = { x: 110, y: 110, width: 60, height: 60 };
+    const obstacles = [board, blocker, source];
+    const place = placeInView(group, view, cascade, { obstacles });
+    assert.equal(place.relocated, true);
+    assert.equal(place.crowded, false);
+    const result = moved(group, place);
+    assert.ok(inside(result), "visible");
+    assert.ok(!hits(result, board) && !hits(result, blocker) && !hits(result, source), "on free canvas, with clearance");
+    assert.ok(onGrid(place.dx) && onGrid(place.dy), "grid offset");
+    assert.deepEqual(placeInView(group, view, cascade, { obstacles }), place, "deterministic");
+
+    // Cut, then paste in place: kept even where it overlaps (it was there before).
+    assert.deepEqual(placeInView(group, view, { dx: 0, dy: 0 }, { obstacles: [{ ...group }], inPlace: true }), { dx: 0, dy: 0, relocated: false, crowded: false });
+
+    // Repeated placements do not stack: each result is added as an obstacle and to `avoid`.
+    const avoid = new Set();
+    const placed = [];
+    for (let i = 0; i < 8; i++) {
+      const next = placeInView(group, view, { dx: 5000, dy: 5000 }, { obstacles: [board, ...placed], avoid });
+      avoid.add(placementKey(group, next.dx, next.dy));
+      const box = moved(group, next);
+      assert.ok(inside(box) && !hits(box, board), `placement ${i} visible and off the board`);
+      assert.ok(placed.every((other) => !hits(box, other)), `placement ${i} does not overlap earlier ones`);
+      placed.push(box);
+    }
+
+    // Crowded view (one obstacle covers everything): still visible, flagged, least overlap, deterministic.
+    const wall = { x: -100, y: -100, width: 2000, height: 2000 };
+    const crowded = placeInView(group, view, cascade, { obstacles: [wall] });
+    assert.equal(crowded.crowded, true);
+    assert.ok(inside(moved(group, crowded)));
+    assert.deepEqual(placeInView(group, view, cascade, { obstacles: [wall] }), crowded);
+
+    // Partly crowded: the spot with the least overlap wins over heavier overlap.
+    const left = { x: 0, y: 0, width: 600, height: 576 };
+    const partial = placeInView(group, view, cascade, { obstacles: [left] });
+    const box = moved(group, partial);
+    assert.ok(box.x >= left.x + left.width + clearance - 1e-6, "uses the free right-hand strip");
+
+    // Items larger than the view: top-left margin, no zoom (unchanged from smart paste).
+    const huge = { x: 0, y: 0, width: 2000, height: 1000 };
+    const big = placeInView(huge, view, { dx: 5000, dy: 5000 }, { obstacles: [board] });
+    assert.deepEqual({ dx: big.dx, dy: big.dy }, { dx: snap(GRID * 2), dy: snap(GRID * 2) });
+    assert.equal(big.crowded, true);
+
+    // Efficient: a large view with many obstacles completes quickly.
+    const many = Array.from({ length: 60 }, (_, i) => ({ x: (i % 10) * 200, y: Math.floor(i / 10) * 200, width: 150, height: 150 }));
+    const start = performance.now();
+    placeInView(group, { x: 0, y: 0, width: 2000, height: 1200 }, cascade, { obstacles: many });
+    assert.ok(performance.now() - start < 250, "placement search is fast");
   });
 
   it("zooms about an anchor and converts client coordinates", () => {

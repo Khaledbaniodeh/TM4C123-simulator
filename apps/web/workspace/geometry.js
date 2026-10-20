@@ -191,23 +191,45 @@ export function editableSegment(points, segment) {
 }
 
 /**
- * Where to put pasted or duplicated items so they are visible without
- * changing the view (smart paste).
+ * Where to put pasted or duplicated items so they are visible, preferably
+ * on free canvas, without changing the view or moving existing parts
+ * (smart, collision-aware placement).
  *
  * `bounds` is the world bounding box of the items at their source position,
  * `view` the visible world rectangle, `preferred` the offset the editor would
- * use by default (e.g. a 0.3 in cascade). If the items fit inside the view
- * (minus `margin`) at the preferred offset and that spot is not in `avoid`,
- * the preferred offset is kept. Otherwise the first free spot is searched in
- * rings of `step` around the middle of the view (down-right first); when the
- * items are larger than the view they are aligned to its top-left corner.
- * Offsets are multiples of `grid`, so parts keep their grid alignment and
- * relative positions. `avoid` holds placementKey()s already used, so repeated
- * pastes never stack exactly while there is room.
+ * use by default (e.g. a 0.3 in cascade). Options:
+ *   margin     keep this far inside the view edges
+ *   grid       every offset is a multiple of it (grid alignment and relative
+ *              positions are preserved)
+ *   step       spacing of the search rings around the middle of the view
+ *   avoid      placementKey()s already used, so placements never stack exactly
+ *   obstacles  [{ x, y, width, height, family? }] occupied regions (existing
+ *              parts, the board); `family` marks the source and earlier copies,
+ *              which the familiar cascade may overlap
+ *   clearance  minimum gap to an obstacle
+ *   inPlace    keep `preferred` whenever it is visible (paste after cut)
  *
- * Returns { dx, dy, relocated }.
+ * Order of preference:
+ *   1. `preferred`, if visible, unused, and clear of non-family obstacles;
+ *   2. the first visible, unused, collision-free spot in rings around the
+ *      middle of the view (down-right first);
+ *   3. crowded view: the visible, unused spot with the least overlap (the
+ *      earliest in the same ring order on ties);
+ *   4. nothing fits (items larger than the view): centered, or aligned to
+ *      the view's top-left margin.
+ * With no obstacles this is exactly the visibility-only placement.
+ *
+ * Returns { dx, dy, relocated, crowded }.
  */
-export function placeInView(bounds, view, preferred, { margin = GRID * 2, grid = GRID, step = GRID * 3, avoid = new Set() } = {}) {
+export function placeInView(bounds, view, preferred, {
+  margin = GRID * 2,
+  grid = GRID,
+  step = GRID * 3,
+  avoid = new Set(),
+  obstacles = [],
+  clearance = GRID,
+  inPlace = false,
+} = {}) {
   const inner = {
     x: view.x + margin,
     y: view.y + margin,
@@ -218,14 +240,32 @@ export function placeInView(bounds, view, preferred, { margin = GRID * 2, grid =
     bounds.x + dx >= inner.x - 1e-6 && bounds.y + dy >= inner.y - 1e-6
     && bounds.x + dx + bounds.width <= inner.x + inner.width + 1e-6
     && bounds.y + dy + bounds.height <= inner.y + inner.height + 1e-6;
-  const free = (dx, dy) => fits(dx, dy) && !avoid.has(placementKey(bounds, dx, dy));
-  if (free(preferred.dx, preferred.dy)) {
-    return { dx: preferred.dx, dy: preferred.dy, relocated: false };
+  const unused = (dx, dy) => !avoid.has(placementKey(bounds, dx, dy));
+  const overlap = (dx, dy, includeFamily) => {
+    let area = 0;
+    for (const o of obstacles) {
+      if (o.family && !includeFamily) {
+        continue;
+      }
+      const w = Math.min(bounds.x + dx + bounds.width, o.x + o.width + clearance) - Math.max(bounds.x + dx, o.x - clearance);
+      const h = Math.min(bounds.y + dy + bounds.height, o.y + o.height + clearance) - Math.max(bounds.y + dy, o.y - clearance);
+      if (w > 1e-6 && h > 1e-6) {
+        area += w * h;
+      }
+    }
+    return area;
+  };
+
+  if (fits(preferred.dx, preferred.dy) && unused(preferred.dx, preferred.dy)
+    && (inPlace || overlap(preferred.dx, preferred.dy, false) === 0)) {
+    return { dx: preferred.dx, dy: preferred.dy, relocated: false, crowded: false };
   }
+
   const x = bounds.width <= inner.width ? view.x + (view.width - bounds.width) / 2 : inner.x;
   const y = bounds.height <= inner.height ? view.y + (view.height - bounds.height) / 2 : inner.y;
   const center = { dx: snap(x - bounds.x, grid), dy: snap(y - bounds.y, grid) };
   const rings = Math.ceil(Math.max(view.width, view.height) / step);
+  let best = null;
   for (let ring = 0; ring <= rings; ring++) {
     const offsets = [];
     for (let ix = -ring; ix <= ring; ix++) {
@@ -240,12 +280,22 @@ export function placeInView(bounds, view, preferred, { margin = GRID * 2, grid =
     for (const [ix, iy] of offsets) {
       const dx = center.dx + ix * step;
       const dy = center.dy + iy * step;
-      if (free(dx, dy)) {
-        return { dx, dy, relocated: true };
+      if (!fits(dx, dy) || !unused(dx, dy)) {
+        continue;
+      }
+      const area = overlap(dx, dy, true);
+      if (area === 0) {
+        return { dx, dy, relocated: true, crowded: false };
+      }
+      if (!best || area < best.area - 1e-6) {
+        best = { dx, dy, area };
       }
     }
   }
-  return { ...center, relocated: true }; // no free spot: the middle of the view
+  if (best) {
+    return { dx: best.dx, dy: best.dy, relocated: true, crowded: true };
+  }
+  return { ...center, relocated: true, crowded: true };
 }
 
 /** Key of the position of `bounds` moved by (dx, dy), for placeInView's `avoid`. */
