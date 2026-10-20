@@ -358,6 +358,7 @@ namespace Antmicro.Renode.Peripherals.GPIOPort
         {
             var clock = ClockEnabled;
             uint newInput = 0;
+            uint changedPins = 0;
 
             for(var pin = 0; pin < PinCount; pin++)
             {
@@ -409,11 +410,7 @@ namespace Antmicro.Renode.Peripherals.GPIOPort
 
                 if(emitChanges && (levels[pin] != level || drives[pin] != drive))
                 {
-                    TM4C123EventSink.Emit(machine, "digital-pin-changed",
-                        "\"pin\":{\"partId\":\"board1\",\"pinId\":" + TM4C123EventSink.Str(pinPrefix + pin) + "}" +
-                        ",\"level\":" + LevelJson(level) +
-                        ",\"state\":" + TM4C123EventSink.Str(LevelName(level)) +
-                        ",\"drive\":" + TM4C123EventSink.Str(drive));
+                    changedPins |= bit;
                 }
                 levels[pin] = level;
                 drives[pin] = drive;
@@ -421,10 +418,51 @@ namespace Antmicro.Renode.Peripherals.GPIOPort
 
             if(emitChanges)
             {
+                EmitPinChanges(changedPins);
                 floatingReadReported &= ~(inputValue ^ newInput);
                 UpdateInterrupts(inputValue, newInput);
             }
             inputValue = newInput;
+        }
+
+        /// <summary>
+        /// Emits one digital-pin-changed event per changed pin. Changes caused
+        /// by the same register write (or external drive) share an `update`
+        /// number and carry `updateIndex`/`updateSize`, so consumers such as
+        /// the LCD model can apply them atomically.
+        /// </summary>
+        private void EmitPinChanges(uint changedPins)
+        {
+            if(changedPins == 0)
+            {
+                return;
+            }
+            updateCount++;
+            var size = 0;
+            for(var pin = 0; pin < PinCount; pin++)
+            {
+                if((changedPins & (1u << pin)) != 0)
+                {
+                    size++;
+                }
+            }
+            var index = 0;
+            for(var pin = 0; pin < PinCount; pin++)
+            {
+                if((changedPins & (1u << pin)) == 0)
+                {
+                    continue;
+                }
+                TM4C123EventSink.Emit(machine, "digital-pin-changed",
+                    "\"pin\":{\"partId\":\"board1\",\"pinId\":" + TM4C123EventSink.Str(pinPrefix + pin) + "}" +
+                    ",\"level\":" + LevelJson(levels[pin]) +
+                    ",\"state\":" + TM4C123EventSink.Str(LevelName(levels[pin])) +
+                    ",\"drive\":" + TM4C123EventSink.Str(drives[pin]) +
+                    ",\"update\":" + TM4C123EventSink.Num((long)updateCount) +
+                    ",\"updateIndex\":" + TM4C123EventSink.Num(index) +
+                    ",\"updateSize\":" + TM4C123EventSink.Num(size));
+                index++;
+            }
         }
 
         private void UpdateInterrupts(uint oldInput, uint newInput)
@@ -561,6 +599,7 @@ namespace Antmicro.Renode.Peripherals.GPIOPort
         private bool locked;
         private uint externalDriven, externalLevel;
         private uint inputValue;
+        private ulong updateCount; // not reset with the MCU, so numbers stay unique per session
         private uint floatingReadReported;
         private bool irqAsserted;
 
