@@ -165,6 +165,31 @@ export function pointsToRouting(points) {
   return routing;
 }
 
+/**
+ * Makes any segment of a routed wire draggable without moving its pins.
+ * Dragging moves both ends of the chosen segment perpendicular to it, which
+ * is only possible for inner segments; for a segment that touches a pin, a
+ * zero-length stub is inserted at that pin first, so the drag grows a short
+ * perpendicular jog there instead. Returns { points, segment } (a new list;
+ * the dragged segment is points[segment] → points[segment + 1]), or null for
+ * an invalid segment index.
+ */
+export function editableSegment(points, segment) {
+  if (!Number.isInteger(segment) || segment < 0 || segment >= points.length - 1) {
+    return null;
+  }
+  let expanded = points.map((point) => ({ ...point }));
+  let index = segment;
+  if (index === 0) {
+    expanded = [expanded[0], { ...expanded[0] }, ...expanded.slice(1)];
+    index = 1;
+  }
+  if (index === expanded.length - 2) {
+    expanded = [...expanded, { ...expanded.at(-1) }];
+  }
+  return { points: expanded, segment: index };
+}
+
 // ---------------------------------------------------------------------------
 // Viewport (SVG viewBox) math
 // ---------------------------------------------------------------------------

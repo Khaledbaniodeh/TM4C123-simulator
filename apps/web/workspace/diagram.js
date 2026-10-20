@@ -279,6 +279,22 @@ export const commands = {
     };
   },
 
+  /**
+   * Replaces the diagram content (parts and connections) as one undo step.
+   * Used by multi-item edits: `before` and `after` are full snapshots, so
+   * undo/redo restore the exact content regardless of how it was computed.
+   */
+  setContent(label, before, after) {
+    const snapshot = (content) => ({ parts: structuredClone(content.parts), connections: structuredClone(content.connections) });
+    const from = snapshot(before);
+    const to = snapshot(after);
+    return {
+      label,
+      apply: (d) => { Object.assign(d, snapshot(to)); },
+      revert: (d) => { Object.assign(d, snapshot(from)); },
+    };
+  },
+
   /** Several commands applied and reverted as one undo step. */
   batch(label, list) {
     return {

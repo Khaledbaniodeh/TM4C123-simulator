@@ -70,6 +70,9 @@ button {
   display: grid;
   /* Console kept compact so the circuit canvas gets the height. */
   grid-template-rows: 64px auto minmax(0, 1fr) 150px 28px;
+  /* One column exactly as wide as the viewport: a row's min-content (e.g.
+     the top bar) must not widen the page and push controls off-screen. */
+  grid-template-columns: minmax(0, 1fr);
   width: 100vw;
   height: 100vh;
   overflow: hidden;
@@ -845,6 +848,54 @@ button {
 }
 
 /* Responsive */
+
+/* Compact top bar so every control fits from 1024 px up (projectors, small
+   laptops): no subtitle or visible "Example" label (the select keeps its
+   aria-label), tighter spacing, single-line buttons. */
+@media (max-width: 1200px) {
+  .topbar {
+    gap: 12px;
+    padding: 0 12px;
+  }
+
+  .brand {
+    min-width: 0;
+  }
+
+  .brand-text span,
+  .example-picker > span {
+    display: none;
+  }
+
+  .example-picker {
+    margin-right: 0;
+  }
+
+  .example-picker select {
+    max-width: 220px;
+  }
+
+  .topbar-actions {
+    gap: 6px;
+  }
+
+  .toolbar-button {
+    padding: 0 10px;
+    white-space: nowrap;
+  }
+
+  /* The circuit toolbar wraps onto a second row instead of pushing Save and
+     Load past the panel edge. */
+  .simulator-toolbar {
+    flex-wrap: wrap;
+    row-gap: 4px;
+    padding: 4px 12px;
+  }
+
+  .wide-icon-button {
+    white-space: nowrap;
+  }
+}
 
 @media (max-width: 1050px) {
   .workspace {
