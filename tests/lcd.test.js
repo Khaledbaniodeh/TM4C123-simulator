@@ -215,9 +215,9 @@ describe("LCD binding", () => {
 
   it("reports an unpowered or incompletely wired LCD", async () => {
     const diagram = await exampleDiagram("lcd1602-hello");
-    const unpowered = { ...diagram, connections: diagram.connections.filter(([from]) => from !== "lcd1:VDD") };
+    const unpowered = { ...diagram, connections: diagram.connections.filter((c) => !c.includes("lcd1:VDD")) };
     assert.equal(bindLcd(unpowered, CATALOG, "lcd1").powered, false);
-    const noEnable = { ...diagram, connections: diagram.connections.filter(([from]) => from !== "lcd1:E") };
+    const noEnable = { ...diagram, connections: diagram.connections.filter((c) => !c.includes("lcd1:E")) };
     const binding = bindLcd(noEnable, CATALOG, "lcd1");
     assert.equal(binding.interface, "incomplete");
     assert.ok(binding.errors.some((error) => /RS, E, and D4-D7/.test(error)));
