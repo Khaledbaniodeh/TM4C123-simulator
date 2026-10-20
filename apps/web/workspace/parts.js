@@ -144,30 +144,76 @@ const potentiometer = {
 
 const LCD_PINS = ["VSS", "VDD", "V0", "RS", "RW", "E", "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "A", "K"];
 
+const LCD_PIN_LABELS = {
+  VSS: "VSS (GND)", VDD: "VDD (+5 V)", V0: "V0 (contrast)", RS: "RS (register select)", RW: "RW (read/write)",
+  E: "E (enable)", A: "A (backlight +)", K: "K (backlight −)",
+};
+
+function lcdCell(cell, x, y, cgram, lit) {
+  const width = 1.35 * G;
+  const height = 2.2 * G;
+  if (cell.custom !== null) {
+    // Custom character: draw the firmware's CGRAM bitmap as 5x8 dots.
+    const dots = [];
+    const pitchX = width / 5;
+    const pitchY = height / 8;
+    cgram[cell.custom].forEach((row, r) => {
+      for (let c = 0; c < 5; c++) {
+        if (row & (1 << (4 - c))) {
+          dots.push(`<rect x="${(x + c * pitchX + 0.2).toFixed(2)}" y="${(y + r * pitchY + 0.2).toFixed(2)}" width="${(pitchX - 0.4).toFixed(2)}" height="${(pitchY - 0.4).toFixed(2)}" class="lcd-dot" />`);
+        }
+      }
+    });
+    return dots.join("");
+  }
+  if (!cell.char || cell.char === " ") {
+    return "";
+  }
+  return `<text x="${(x + width / 2).toFixed(2)}" y="${(y + height * 0.78).toFixed(2)}" class="lcd-char${lit ? " lit" : ""}">${escapeXml(cell.char)}</text>`;
+}
+
 const lcd1602 = {
   title: "LCD1602 (HD44780)",
   kind: "lcd1602",
-  status: "editor",
+  status: "simulated",
   idPrefix: "lcd",
-  description: "Placeable and wireable. The HD44780 controller is not modeled yet; the display shows no firmware text.",
+  description: "HD44780 controller driven by the firmware's GPIO writes (4- or 8-bit). Wire VDD/VSS, RS, E, D4–D7, and RW to GND (D-024).",
   size: { width: 34 * G, height: 14 * G },
   defaultAttrs: {},
-  pins: LCD_PINS.map((name, index) => ({ name, x: (2 + index) * G, y: 0 })),
-  render() {
+  pins: LCD_PINS.map((name, index) => ({ name, x: (2 + index) * G, y: 0, label: LCD_PIN_LABELS[name] ?? name })),
+  render(part, state = {}) {
+    const lcd = state.lcd ?? null;
     const labels = LCD_PINS.map((name, index) =>
       `<text x="${(2 + index) * G}" y="${1.45 * G}" class="pin-silk">${name}</text>`).join("");
     const cells = [];
     for (let row = 0; row < 2; row++) {
       for (let col = 0; col < 16; col++) {
-        cells.push(`<rect x="${(4.2 + col * 1.6) * G}" y="${(5.2 + row * 2.6) * G}" width="${1.35 * G}" height="${2.2 * G}" rx="0.6" class="lcd-cell" />`);
+        const x = (4.2 + col * 1.6) * G;
+        const y = (5.2 + row * 2.6) * G;
+        cells.push(`<rect x="${x}" y="${y}" width="${1.35 * G}" height="${2.2 * G}" rx="0.6" class="lcd-cell" />`);
+        if (lcd?.powered) {
+          cells.push(lcdCell(lcd.cells[row][col], x, y, lcd.cgram, lcd.backlight));
+          const cursor = lcd.cursor;
+          if (cursor && cursor.row === row && cursor.column === col) {
+            if (cursor.blink) {
+              cells.push(`<rect x="${x}" y="${y}" width="${1.35 * G}" height="${2.2 * G}" class="lcd-blink" />`);
+            }
+            if (cursor.underline) {
+              cells.push(`<rect x="${x}" y="${y + 2.0 * G}" width="${1.35 * G}" height="${0.2 * G}" class="lcd-underline" />`);
+            }
+          }
+        }
       }
     }
+    const screenClass = !lcd ? "" : !lcd.powered ? " off" : lcd.backlight ? " backlit" : "";
+    const label = lcd?.powered ? `LCD: "${lcd.rows[0].trimEnd()}" / "${lcd.rows[1].trimEnd()}"` : "LCD: no simulated content";
     return `
-      <g class="part-lcd">
+      <g class="part-lcd" role="img" aria-label="${escapeXml(label)}"
+         data-row0="${escapeXml(lcd?.powered ? lcd.rows[0] : "")}" data-row1="${escapeXml(lcd?.powered ? lcd.rows[1] : "")}">
         <rect x="0" y="0" width="${34 * G}" height="${14 * G}" rx="4" fill="#1d6b3a" stroke="#0f3f22" stroke-width="1" />
         ${labels}
         <rect x="${2.6 * G}" y="${3.4 * G}" width="${28.8 * G}" height="${9.2 * G}" rx="3" fill="#20262c" />
-        <rect x="${3.4 * G}" y="${4.4 * G}" width="${27.2 * G}" height="${7.2 * G}" rx="2" fill="#7da24a" />
+        <rect x="${3.4 * G}" y="${4.4 * G}" width="${27.2 * G}" height="${7.2 * G}" rx="2" class="lcd-screen${screenClass}" />
         ${cells.join("")}
       </g>`;
   },

@@ -18,6 +18,7 @@ import { CATALOG, LIBRARY } from "./workspace/parts.js";
 import { Workspace } from "./workspace/canvas.js";
 import { History, WIRE_COLORS, commands, createDiagram, findPart, parseDiagram, serializeDiagram, splitEndpoint } from "./workspace/diagram.js";
 import { evaluateCircuit } from "./workspace/netlist.js";
+import { LcdSimulation, bindLcd } from "./workspace/lcd.js";
 
 const CAPABILITIES = [
   { name: "ARM GCC build → Cortex-M4 ELF", status: "verified" },
@@ -124,6 +125,8 @@ const state = {
   circuit: { leds: {}, boardInputs: {}, errors: [] },
   /** External drives currently applied to the simulator, by GPIO name. */
   appliedDrives: new Map(),
+  /** HD44780 simulations for the LCD1602 parts, by part id (live sessions only). */
+  lcds: new Map(),
 };
 
 const history = new History(loadDraft() ?? createDiagram({ author: "" }));
@@ -271,6 +274,10 @@ const workspace = new Workspace(elements.canvas, elements.tooltip, {
     if (definition.kind === "pushbutton") {
       return { pressed: state.pressed.has(part.id) };
     }
+    if (definition.kind === "lcd1602") {
+      const lcd = simulationLive() ? state.lcds.get(part.id) : null;
+      return { lcd: lcd ? lcd.snapshot() : null };
+    }
     return {};
   },
   getPinInfo(part, pinName) {
@@ -291,6 +298,16 @@ const workspace = new Workspace(elements.canvas, elements.tooltip, {
     if (definition.kind === "led" && simulationLive()) {
       const led = state.circuit.leds[part.id];
       lines.push(led ? `LED ${led.on ? "ON" : "off"}: ${led.reason}` : "LED off");
+    }
+    if (definition.kind === "lcd1602") {
+      lines[0] = "HD44780 model driven by firmware GPIO writes";
+      const binding = bindLcd(history.diagram, CATALOG, part.id);
+      lines.push(`Interface: ${binding.interface}${binding.powered ? "" : " (not powered)"}`);
+      const lcd = simulationLive() ? state.lcds.get(part.id)?.snapshot() : null;
+      if (lcd) {
+        lines.push(`${lcd.mode.bits}-bit, ${lcd.mode.lines}-line, display ${lcd.displayOn ? "on" : "off"}, ${lcd.instructions} transfers`);
+      }
+      lines.push(...binding.errors, ...binding.notes);
     }
     return { kind: "part", title: `${part.id} · ${pin?.label ?? pinName}`, lines };
   },
@@ -326,6 +343,7 @@ const workspace = new Workspace(elements.canvas, elements.tooltip, {
 
 workspace.addEventListener("change", (event) => {
   saveDraft();
+  syncLcds();
   reevaluateCircuit();
   renderToolbar();
   renderPinTable();
@@ -363,6 +381,48 @@ function reevaluateCircuit() {
     workspaceMessage(state.circuit.errors[0], "error");
   }
   syncExternalDrives();
+}
+
+/**
+ * Keeps one HD44780 simulation per LCD1602 part. Rewiring during a run
+ * re-binds the pins but keeps the controller state; a newly added LCD powers
+ * up at the current virtual time.
+ */
+function syncLcds({ restart = false } = {}) {
+  if (restart) {
+    state.lcds.clear();
+  }
+  const ids = new Set();
+  for (const part of history.diagram.parts) {
+    if (CATALOG[part.type]?.kind !== "lcd1602") {
+      continue;
+    }
+    ids.add(part.id);
+    const binding = bindLcd(history.diagram, CATALOG, part.id);
+    const existing = state.lcds.get(part.id);
+    if (existing) {
+      existing.binding = binding;
+    } else {
+      const powerOnNs = restart ? 0n : BigInt(state.board.virtualTimeNs ?? 0);
+      state.lcds.set(part.id, Object.assign(new LcdSimulation(binding, { powerOnNs }), { reportedWarnings: 0 }));
+    }
+  }
+  for (const id of [...state.lcds.keys()]) {
+    if (!ids.has(id)) {
+      state.lcds.delete(id);
+    }
+  }
+}
+
+function feedLcds(event) {
+  for (const [id, lcd] of state.lcds) {
+    lcd.handleEvent(event);
+    const { warnings } = lcd.controller;
+    while (lcd.reportedWarnings < warnings.length) {
+      const warning = warnings[lcd.reportedWarnings++];
+      log(`${id}: ${warning.detail}`, "warning", warning.virtualTimeNs);
+    }
+  }
 }
 
 function syncExternalDrives() {
@@ -761,6 +821,7 @@ async function startSession() {
   closeStream();
   state.board = createBoardState();
   state.appliedDrives.clear();
+  syncLcds({ restart: true });
   state.busy = "starting";
   state.session = { id: null, state: "starting", stream: null };
   render();
@@ -926,6 +987,7 @@ function handleMessage(sessionId, message) {
   case "simulator-event": {
     const event = message.event;
     applyEvent(state.board, event);
+    feedLcds(event);
     const described = describeEvent(event);
     if (described) {
       log(described[0], described[1], event.virtualTimeNs);

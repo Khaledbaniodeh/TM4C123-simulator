@@ -93,6 +93,47 @@
   fill: rgba(0, 40, 0, 0.12);
 }
 
+.lcd-screen {
+  fill: #7da24a;
+}
+
+.lcd-screen.backlit {
+  fill: #9ccc5a;
+}
+
+.lcd-screen.off {
+  fill: #4f6634;
+}
+
+.lcd-char {
+  fill: #13240b;
+  font: 600 16px "Consolas", "DejaVu Sans Mono", "Menlo", monospace;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.lcd-dot {
+  fill: #13240b;
+}
+
+.lcd-underline {
+  fill: #13240b;
+}
+
+.lcd-blink {
+  fill: #13240b;
+  opacity: 0.55;
+  animation: lcd-blink 1.06s steps(1, end) infinite;
+}
+
+@keyframes lcd-blink {
+  50% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lcd-blink { animation: none; }
+}
+
 .led-glow {
   opacity: 0.38;
   filter: blur(4px);
