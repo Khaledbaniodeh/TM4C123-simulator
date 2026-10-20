@@ -25,8 +25,8 @@ for every row**.
 | Exp. | Topic | Overall | Notes |
 |---|---|---|---|
 | 5 | GPIO output | ✅ for the hardware behavior (C firmware) · ⛔ for the original ARMASM source | Keil ARMASM is not accepted by GNU `as`; see the conversion path below |
-| 6 | GPIO inputs and interrupts | ✅ for the hardware behavior (C firmware) · ⛔ for unmodified lab code | Lab code uses `TM4C123.h` (`GPIOF->DIR`, `NVIC->ISER[0]`) — needs a compatible device header (D-023) |
-| 7 | SysTick and GPTM timers | 🟡 Core verified | PLL to 50 MHz, SysTick, and TIMER0A–2A periodic verified with examples G–I. Lab code still needs the `TM4C123.h` device header (D-023) |
+| 6 | GPIO inputs and interrupts | ✅ Hardware behavior and `TM4C123.h`-style code verified | Example J uses `GPIOF->…`, `NVIC->IP`, `NVIC_EnableIRQ` with the project's original device header (D-031). Unmodified lab sources not tested here |
+| 7 | SysTick and GPTM timers | ✅ Core verified, incl. `TM4C123.h`-style code | PLL 50 MHz, SysTick, TIMER0A–2A verified (G–I); example K uses `SystemCoreClock`, `SysTick_Config`, `TIMER1->…` (D-031). Unmodified lab sources not tested here |
 | 8 | LCD1602 (HD44780, 4-bit, Port B) | 📋 Planned | GPIO Port B works; LCD model not implemented. Depends on SysTick and the 50 MHz clock |
 | 9 | ADC0 SS3, PE3/AIN0 | 📋 Planned | ADC0 is a placeholder region (accesses are reported) |
 | 10 | UART0 echo, PA0/PA1 | 📋 Planned (scope added by D-022) | UART0 is a placeholder region; needs alternate functions + 50 MHz clock |
@@ -69,7 +69,7 @@ Native ARMASM input is **not implemented and not claimed**.
 | `GPIOIM`, `GPIOMIS`, `GPIOICR` | ✅ | E: ISR reads MIS and clears via ICR; IRQ line de-asserts |
 | NVIC enable (`ISER0` bit 30) and real ISR execution | ✅ | E: `GPIOF_Handler` toggles LEDs |
 | Software debounce with a 20 ms delay | 🟡 | Depends on delay-loop timing (approximate) |
-| CMSIS `TM4C123.h` (`GPIOF->…`, `NVIC_EnableIRQ`) | ⛔ | Needs a license-compatible device header (D-023) |
+| CMSIS-style `TM4C123.h` (`GPIOF->…`, `NVIC->IP`, `NVIC_EnableIRQ`) | ✅ | J: original device header (D-031) |
 | Switch bounce on real hardware | ⛔ Not modeled | Simulated switches are ideal |
 
 ## Experiment 7 — SysTick and GPTM timers
@@ -84,7 +84,7 @@ Native ARMASM input is **not implemented and not claimed**.
 | 16-bit periodic mode with prescaler (TAPR = 255, TAILR = 0xFFFF) | ✅ H: TIMER1A every 0.33554432 s at 50 MHz |
 | 32-bit periodic mode, TIMER0A/1A/2A at IRQ 19/21/23 | ✅ I: 250 / 500 / 1000 ms concurrently |
 | One-shot mode, up-count, capture/PWM modes | 🟡 One-shot/up implemented, untested; capture/PWM reported as `unsupported-feature` |
-| CMSIS `TM4C123.h` (`TIMER1->CTL`, `SystemCoreClock`) | ⛔ Needs a license-compatible device header (D-023) |
+| CMSIS-style `TM4C123.h` (`TIMER1->CTL`, `SystemCoreClock`, `SysTick_Config`) | ✅ K: `SystemInit` sets 50 MHz before `main` (D-031) |
 | Deterministic virtual timing | ✅ Determinism test on the three-timer trace |
 
 ## Experiment 8 — LCD1602
@@ -119,11 +119,24 @@ Native ARMASM input is **not implemented and not claimed**.
 | Polling TX/RX on `TXFF` / `RXFE` | 📋 Planned |
 | Virtual serial terminal with input injection | 📋 Planned (Renode UART analyzers/socket terminals are candidates) |
 
+## Device header (D-031)
+
+`#include "TM4C123.h"` provides, as original code:
+
+| Area | Provided |
+|---|---|
+| Peripheral structs + instances | `SYSCTL`, `GPIOA`–`GPIOF` (+ `_AHB`), `TIMER0`–`5`, `WTIMER0`–`5`, `UART0`–`7`, `ADC0`–`1` |
+| Interrupt numbers | `IRQn_Type` for every implemented IRQ (0–138) and the system exceptions |
+| Core | `NVIC`, `SCB`, `SysTick` structs; `NVIC_Enable/DisableIRQ`, `Set/Get/ClearPendingIRQ`, `Set/GetPriority`, `SetPriorityGrouping`, `NVIC_SystemReset`, `SysTick_Config`; `__enable_irq`, `__disable_irq`, `__WFI`, `__WFE`, `__NOP`, `__DSB`, `__ISB`, `__DMB`, PRIMASK/BASEPRI access |
+| System | `SystemInit()` (50 MHz PLL, called before `main`), `SystemCoreClock`, `SystemCoreClockUpdate()` |
+| Not provided | SSI, I2C, PWM, QEI, CAN, USB, uDMA, HIB, EEPROM, watchdog structs; ITM, MPU, FPU, and other CMSIS-Core extras — using them is a compile error |
+
+Compiling is not simulating: registers of unmodeled peripherals (UART, ADC
+today) compile but are reported at run time as unimplemented.
+
 ## Next engineering task
 
-1. Provide an original, license-compatible `TM4C123.h`-compatible device
-   header + `SystemInit`/`SystemCoreClock` so Experiment 6–7 style code
-   compiles unchanged (D-023).
-2. Verify SysTick `COUNTFLAG` polling and `CLKSOURCE`=0, and GPTM one-shot
+1. Verify SysTick `COUNTFLAG` polling and `CLKSOURCE`=0, and GPTM one-shot
    mode, with dedicated tests.
-3. LCD1602 (HD44780) model on Port B for Experiment 8.
+2. LCD1602 (HD44780) model on Port B for Experiment 8.
+3. ADC0 sample sequencer 3 with a virtual potentiometer for Experiment 9.

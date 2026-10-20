@@ -33,6 +33,7 @@ const CAPABILITIES = [
   { name: "PLL / RCC / RCC2 system clock (16–80 MHz)", status: "verified" },
   { name: "SysTick interrupt at the core clock", status: "verified" },
   { name: "GPTM 16/32-bit periodic timers + IRQs", status: "verified" },
+  { name: "CMSIS-style TM4C123.h + SystemInit (50 MHz)", status: "verified" },
   { name: "SysTick COUNTFLAG polling", status: "unverified" },
   { name: "ADC0 SS3 / potentiometer", status: "missing" },
   { name: "UART0 / serial terminal", status: "missing" },

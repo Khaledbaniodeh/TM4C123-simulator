@@ -62,7 +62,8 @@ reproducible, scriptable firmware experiments.
 | Potentiometer, LCD1602, logic analyzer parts | 🟡 Editor only — placeable and wireable, **no electrical behavior yet** |
 | SysTick | 🟡 Provided by Renode's NVIC; not yet verified |
 | PLL/RCC clock tree, GPTM timers, ADC0, UART0, LCD1602 | 📋 Planned — accesses are **reported**, never silently accepted |
-| Keil ARMASM sources, CMSIS `TM4C123.h` lab code | ⛔ Not supported yet ([details](docs/EXPERIMENT_COMPATIBILITY.md)) |
+| CMSIS-style `TM4C123.h` code (`GPIOF->DATA`, `NVIC_EnableIRQ`, `SystemCoreClock`) | ✅ Original device header + `SystemInit` (50 MHz) ([details](docs/EXPERIMENT_COMPATIBILITY.md#device-header-d-031)) |
+| Keil ARMASM sources | ⛔ Not supported ([details](docs/EXPERIMENT_COMPATIBILITY.md)) |
 
 Lab coverage for Experiments 5–10 is tracked in
 [`docs/EXPERIMENT_COMPATIBILITY.md`](docs/EXPERIMENT_COMPATIBILITY.md).
@@ -142,6 +143,8 @@ down Renode cleanly.
 | [`systick-blink`](examples/systick-blink/main.c) | **G** — RCC2/PLL to 50 MHz, SysTick interrupt every 100 ms toggles PF3 |
 | [`timer1a-prescaled`](examples/timer1a-prescaled/main.c) | **H** — TIMER1A 16-bit periodic, prescaler 256: 0.3355 s timeouts toggle PF2 |
 | [`three-timers`](examples/three-timers/main.c) | **I** — TIMER0A/1A/2A 32-bit periodic at 250/500/1000 ms on PF1/PF2/PF3 |
+| [`lab-gpio-interrupts`](examples/lab-gpio-interrupts/main.c) | **J** — Experiment 6 style with `TM4C123.h`: `GPIOF->…`, `NVIC->IP`, `NVIC_EnableIRQ(GPIOF_IRQn)` |
+| [`lab-systick-timer`](examples/lab-systick-timer/main.c) | **K** — Experiment 7 style with `TM4C123.h`: `SysTick_Config(SystemCoreClock / 10)`, `TIMER1->…` |
 
 Negative fixtures (missing clock / DIR / DEN, compile and link errors,
 unsupported accesses) are in [`tests/fixtures/firmware/`](tests/fixtures/firmware/).
@@ -193,9 +196,9 @@ LCD1602 (Exp. 8) → container worker. See [`ROADMAP.md`](ROADMAP.md) and
 ```text
 apps/orchestrator/   Node.js server: compiler runner, Renode session, HTTP/SSE API
 apps/web/            Browser workspace (no build step)
-simulator/firmware/  Bare-metal startup.s and linker.ld for TM4C123GH6PM
+simulator/firmware/  Startup, linker script, device header (include/), SystemInit
 simulator/renode/    Renode platform (.repl) and C# peripheral models
-examples/            Firmware examples A–I
+examples/            Firmware examples A–K
 tests/               Node test suites + negative firmware fixtures
 e2e/                 Playwright browser tests
 docs/                Architecture, decisions, models, events, reports

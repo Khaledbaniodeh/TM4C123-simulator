@@ -1,6 +1,6 @@
 # Project Status
 
-**Last updated:** 2026-10-20 (Experiment 7 increment on `feat/exp7-timers`)
+**Last updated:** 2026-10-20 (device-header increment on `feat/device-header`)
 **Stage:** Early technical prototype. The RISK-001 vertical slice is
 implemented and verified (decision D-016: GO WITH CONDITIONS).
 **Public hosted simulator:** No (local trusted mode only).
@@ -32,7 +32,8 @@ implemented and verified (decision D-016: GO WITH CONDITIONS).
 | LCD1602 | 📋 Planned |
 | ADC0 SS3 | 📋 Planned |
 | UART0 + virtual terminal | 📋 Planned (scope added by D-022) |
-| CMSIS-compatible device header, Keil ARMASM conversion | 📋 Planned / ⛔ ARMASM unsupported |
+| CMSIS-style device header (`TM4C123.h`), `SystemInit`/`SystemCoreClock` | ✅ Implemented and verified (D-031; original code, lab-style examples J/K) |
+| Keil ARMASM sources | ⛔ Unsupported (conversion path documented) |
 | Container-isolated worker | 📋 Planned — required before any shared deployment |
 | Logic analyzer, component wiring editor | 📋 Planned |
 
@@ -41,8 +42,8 @@ implemented and verified (decision D-016: GO WITH CONDITIONS).
 | Exp. | Topic | Status |
 |---|---|---|
 | 5 | GPIO output | ✅ Hardware behavior verified with original C firmware; ⛔ Keil ARMASM source |
-| 6 | GPIO inputs & interrupts | ✅ Hardware behavior verified with original C firmware; ⛔ `TM4C123.h` lab code |
-| 7 | SysTick & timers | ✅ Hardware behavior verified with original C firmware (examples G–I); ⛔ `TM4C123.h` lab code |
+| 6 | GPIO inputs & interrupts | ✅ Verified with original C firmware, including `TM4C123.h`-style code (J) |
+| 7 | SysTick & timers | ✅ Verified with original C firmware (G–I), including `TM4C123.h`-style code (K) |
 | 8 | LCD1602 | 📋 Planned |
 | 9 | ADC | 📋 Planned |
 | 10 | UART | 📋 Planned |
@@ -55,10 +56,10 @@ Details: [`docs/EXPERIMENT_COMPATIBILITY.md`](docs/EXPERIMENT_COMPATIBILITY.md).
 |---|---|
 | No physical LaunchPad comparison | Run examples A–E and the negative fixtures on hardware; record the results |
 | No container isolation | Build and validate a compile/execute worker image (no network, CPU/memory/PID limits, read-only FS) |
-| Lab code needs `TM4C123.h` | Original, license-compatible device header + `SystemInit`/`SystemCoreClock` (D-023); the 50 MHz clock model is done (D-030) |
+| Unmodified lab sources not run in CI | The lab sources are not redistributable; an instructor can compile them against `simulator/firmware/include` and report any missing names |
 
 ## Next engineering task
 
-Original `TM4C123.h`-compatible device header so lab code compiles unchanged, then the LCD1602 model (Experiment 8). See
+SysTick `COUNTFLAG` / GPTM one-shot tests, then the LCD1602 model (Experiment 8). See
 the plan at the end of
 [`docs/EXPERIMENT_COMPATIBILITY.md`](docs/EXPERIMENT_COMPATIBILITY.md#next-engineering-task).

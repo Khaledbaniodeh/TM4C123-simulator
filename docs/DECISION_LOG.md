@@ -453,7 +453,7 @@ modules remain out of scope.
 ### D-023 — Lab Firmware Compatibility Prerequisites
 
 **Date:** 2026-10-19
-**Status:** Proposed
+**Status:** Partially implemented — (a) and (b) by D-031, (c) by D-030; ARMASM open
 
 **Decision:**
 
@@ -600,6 +600,42 @@ approximately because instruction timing is not modeled.
 
 ---
 
+### D-031 — Original CMSIS-Style Device Header and Device-Support Linking
+
+**Date:** 2026-10-20
+**Status:** Accepted
+
+**Decision:**
+
+The simulator ships its own device header in `simulator/firmware/include/`:
+`TM4C123.h` → `TM4C123GH6PM.h` (interrupt numbers, register structs, and
+instances for SYSCTL, GPIO A–F APB/AHB, TIMER0–5, WTIMER0–5, UART0–7,
+ADC0–1) plus `tm4c123_cm4.h`, an independent implementation of the
+CMSIS-Core subset lab code uses (`NVIC`, `SCB`, `SysTick` layouts,
+`NVIC_EnableIRQ`/`SetPriority`/…, `SysTick_Config`, `__enable_irq`, `__WFI`).
+Facts come from the TM4C123GH6PM data sheet and the ARMv7-M ARM; no TI or
+Arm header text is copied. Every register offset is checked by static
+asserts in `tests/fixtures/firmware/device-header-layout.c`.
+
+When the firmware includes `TM4C123.h` or `TM4C123GH6PM.h`, the build also
+links `system_TM4C123.c`, and the startup code calls `SystemInit()` (weak
+reference) after `.data`/`.bss` initialization, then `main()`. `SystemInit()`
+configures the 50 MHz PLL clock that the lab material assumes;
+`SystemCoreClockUpdate()` recomputes `SystemCoreClock` from RCC/RCC2.
+Register-level firmware that does not include the header is unchanged and
+starts at the 16 MHz reset clock.
+
+CMSIS features outside the subset (ITM, MPU helpers, FPU intrinsics, …) are
+compile errors, never silent no-ops. Priority bytes are written with
+aligned word read-modify-write; the result equals CMSIS byte writes.
+
+**Rationale:** Lab code for Experiments 6–7 then compiles without edits,
+while every earlier example builds exactly as before. The actual lab
+sources are not redistributable and are not in the repository;
+compatibility is verified with original lab-style firmware (examples J, K).
+
+---
+
 ## Adding a New Decision
 
 A new decision entry should include:
@@ -644,7 +680,7 @@ Architecture-changing implementation must not begin before the relevant decision
 | D-020 | Hardware-faithful bus faults | Accepted |
 | D-021 | Project-local pinned toolchains; containers deferred | Accepted |
 | D-022 | UART0 added to planned scope | Accepted (planned) |
-| D-023 | Lab firmware prerequisites (header, clock, ARMASM) | Proposed |
+| D-023 | Lab firmware prerequisites (header, clock, ARMASM) | Partially implemented (D-030, D-031) |
 | D-024 | LCD1602 RW connection profile | Proposed |
 | D-025 | Circuit workspace architecture | Accepted |
 | D-026 | Board geometry from TI CAD data, extracted in CI | Accepted |
@@ -652,3 +688,4 @@ Architecture-changing implementation must not begin before the relevant decision
 | D-028 | Development without local builds (GitHub Actions mode) | Accepted |
 | D-029 | MCU reset keeps external drivers connected | Accepted |
 | D-030 | System clock drives CPU rate, SysTick, and GPTM | Accepted |
+| D-031 | Original CMSIS-style device header and device-support linking | Accepted |
