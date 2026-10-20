@@ -9,6 +9,7 @@
 import {
   GRID,
   clientToWorld,
+  editableSegment,
   fitViewBox,
   normalizeRotation,
   panViewBox,
@@ -16,6 +17,8 @@ import {
   partToWorld,
   partTransform,
   pathData,
+  placeInView,
+  placementKey,
   pointsToRouting,
   routeWire,
   snap,
@@ -23,6 +26,8 @@ import {
   zoomViewBox,
 } from "./geometry.js";
 import { WIRE_COLORS, commands, findPart, nextPartId, sameConnection, splitEndpoint } from "./diagram.js";
+import { copyItems, moveParts, pasteItems, removeItems } from "./editing.js";
+import { isItemSelected, sanitizeSelection, selectedParts, selectedWires, selectionOf, toggleItem } from "./selection.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const WIRE_HEX = {
@@ -39,6 +44,18 @@ function element(name, attributes = {}, parent = null) {
   return node;
 }
 
+/** "2 parts and 1 wire" style label for history entries. */
+function describeCount(parts, wires) {
+  const list = [];
+  if (parts) {
+    list.push(`${parts} part${parts === 1 ? "" : "s"}`);
+  }
+  if (wires) {
+    list.push(`${wires} wire${wires === 1 ? "" : "s"}`);
+  }
+  return list.join(" and ") || "nothing";
+}
+
 export class Workspace extends EventTarget {
   #svg;
   #layers;
@@ -46,7 +63,12 @@ export class Workspace extends EventTarget {
   #history;
   #options;
   #viewBox = { x: -60, y: -60, width: 800, height: 600 };
-  #selection = null; // { kind: "part", id } | { kind: "wire", index }
+  #selection = null; // see selection.js (single part/wire/component, or a group)
+  #clipboard = null; // { parts, connections } from copyItems()
+  #lastPaste = null; // { dx, dy } offset of the last paste of this clipboard
+  #pasteInPlace = false; // the first paste after a cut goes back to the cut position
+  #placedPositions = new Set(); // placementKey()s used by pastes and duplicates (no exact stacking)
+  #pastedIds = new Set(); // ids created by pastes of this clipboard (the cascade may overlap them)
   #gesture = null;
   #wireDraft = null; // { from, fromPoint, pointer }
   #tooltip;
@@ -147,6 +169,7 @@ export class Workspace extends EventTarget {
   /** Executes an editing command through the undo history and re-renders. */
   execute(command) {
     this.#history.execute(command);
+    this.#selection = sanitizeSelection(this.#selection, this.diagram);
     this.render();
     this.#emit("change", { label: command.label });
   }
@@ -163,13 +186,14 @@ export class Workspace extends EventTarget {
   redo() {
     const command = this.#history.redo();
     if (command) {
+      this.#selection = sanitizeSelection(this.#selection, this.diagram);
       this.render();
       this.#emit("change", { label: `Redo ${command.label}` });
     }
   }
 
   select(selection) {
-    this.#selection = selection;
+    this.#selection = sanitizeSelection(selection, this.diagram);
     this.#renderSelection();
     this.#emit("select", { selection });
   }
@@ -199,18 +223,39 @@ export class Workspace extends EventTarget {
   }
 
   duplicateSelection() {
+    if (this.#selection?.kind === "group") {
+      const ids = this.#editableParts();
+      if (ids.length) {
+        const content = copyItems(this.diagram, ids);
+        const bounds = this.#boundsOf(content.parts);
+        const place = placeInView(bounds, this.#viewBox, { dx: GRID * 3, dy: GRID * 3 }, {
+          avoid: this.#placedPositions,
+          obstacles: this.#obstacles(new Set(ids)),
+        });
+        this.#placedPositions.add(placementKey(bounds, place.dx, place.dy));
+        this.#pasteContent(content, `Duplicate ${ids.length} parts`, place);
+      }
+      return;
+    }
     const part = this.#selectedPart();
     if (!part || this.#catalog[part.type].kind === "board") {
       return;
     }
+    const bounds = this.#boundsOf([part]);
+    const place = placeInView(bounds, this.#viewBox, { dx: GRID * 3, dy: GRID * 3 }, {
+      avoid: this.#placedPositions,
+      obstacles: this.#obstacles(new Set([part.id])),
+    });
+    this.#placedPositions.add(placementKey(bounds, place.dx, place.dy));
     const copy = {
       ...structuredClone(part),
       id: nextPartId(this.diagram, this.#catalog[part.type].idPrefix),
-      left: part.left + GRID * 3,
-      top: part.top + GRID * 3,
+      left: part.left + place.dx,
+      top: part.top + place.dy,
     };
     this.execute(commands.addPart(copy));
     this.select({ kind: "part", id: copy.id });
+    this.#reportPlacement("duplicate", place, 1, 0);
   }
 
   deleteSelection() {
@@ -224,6 +269,97 @@ export class Workspace extends EventTarget {
     } else if (selection?.kind === "wire" && this.diagram.connections[selection.index]) {
       this.execute(commands.removeConnection(this.diagram, selection.index));
       this.select(null);
+    } else if (selection?.kind === "group") {
+      const parts = selectedParts(selection);
+      const wires = selectedWires(selection);
+      const after = removeItems(this.diagram, parts, wires);
+      this.execute(commands.setContent(`Delete ${describeCount(parts.length, wires.length)}`, this.diagram, after));
+      this.select(null);
+    }
+  }
+
+  /** Selects every part except the board, and every wire. */
+  selectAll() {
+    const parts = this.diagram.parts.filter((part) => !this.#isBoard(part.id)).map((part) => part.id);
+    this.select(selectionOf(parts, this.diagram.connections.map((_, index) => index)));
+  }
+
+  /**
+   * Copies the selected parts (not the board) and the wires between them.
+   * Returns false when there is nothing to copy.
+   */
+  copySelection() {
+    const ids = this.#editableParts();
+    if (!ids.length) {
+      return false;
+    }
+    this.#clipboard = copyItems(this.diagram, ids);
+    this.#lastPaste = null;
+    this.#pasteInPlace = false;
+    this.#placedPositions.clear();
+    this.#pastedIds.clear();
+    this.#emit("clipboard", { action: "copy", parts: this.#clipboard.parts.length, wires: this.#clipboard.connections.length });
+    return true;
+  }
+
+  cutSelection() {
+    const ids = this.#editableParts();
+    if (!this.copySelection()) {
+      return;
+    }
+    this.#pasteInPlace = true; // the first paste after a cut lands where the parts were
+    this.execute(commands.setContent(`Cut ${describeCount(ids.length, 0)}`, this.diagram, removeItems(this.diagram, ids, [])));
+    this.select(null);
+    this.#emit("clipboard", { action: "cut", parts: this.#clipboard.parts.length, wires: this.#clipboard.connections.length });
+  }
+
+  /**
+   * Pastes the clipboard with fresh ids. Successive pastes cascade by 0.3 in;
+   * when that position is not fully visible, the items are placed in the
+   * middle of the current view instead (smart paste). The view itself never
+   * pans or zooms, and the pasted items stay selected.
+   */
+  paste() {
+    if (!this.#clipboard?.parts.length) {
+      return;
+    }
+    const bounds = this.#boundsOf(this.#clipboard.parts);
+    const step = GRID * 3;
+    const preferred = this.#pasteInPlace
+      ? { dx: 0, dy: 0 }
+      : this.#lastPaste
+        ? { dx: this.#lastPaste.dx + step, dy: this.#lastPaste.dy + step }
+        : { dx: step, dy: step };
+    const inPlace = this.#pasteInPlace;
+    this.#pasteInPlace = false;
+    // The cascade may overlap the copied parts and earlier pastes of this clipboard, nothing else.
+    const family = new Set([...this.#clipboard.parts.map((part) => part.id), ...this.#pastedIds]);
+    const place = placeInView(bounds, this.#viewBox, preferred, {
+      avoid: this.#placedPositions,
+      obstacles: this.#obstacles(family),
+      inPlace,
+    });
+    this.#lastPaste = { dx: place.dx, dy: place.dy };
+    this.#placedPositions.add(placementKey(bounds, place.dx, place.dy));
+    const newIds = this.#pasteContent(this.#clipboard, `Paste ${describeCount(this.#clipboard.parts.length, 0)}`, place);
+    for (const id of newIds) {
+      this.#pastedIds.add(id);
+    }
+  }
+
+  /** Moves the selected part(s) by (dx, dy) world units as one undo step. */
+  nudgeSelection(dx, dy) {
+    const selection = this.#selection;
+    if (selection?.kind === "part") {
+      const part = findPart(this.diagram, selection.id);
+      if (part) {
+        this.execute(commands.movePart(part.id, { left: part.left, top: part.top }, { left: part.left + dx, top: part.top + dy }));
+      }
+    } else if (selection?.kind === "group") {
+      const ids = selectedParts(selection);
+      if (ids.length) {
+        this.execute(commands.setContent(`Move ${describeCount(ids.length, 0)}`, this.diagram, moveParts(this.diagram, ids, dx, dy)));
+      }
     }
   }
 
@@ -390,12 +526,15 @@ export class Workspace extends EventTarget {
       node.classList.remove("is-selected");
     }
     const selection = this.#selection;
-    if (selection?.kind === "part") {
-      this.#svg.querySelector(`.part[data-part="${CSS.escape(selection.id)}"]`)?.classList.add("is-selected");
-    } else if (selection?.kind === "component") {
+    if (selection?.kind === "component") {
       this.#svg.querySelector(`.part[data-part="${CSS.escape(selection.partId)}"] [data-component="${CSS.escape(selection.id)}"]`)?.classList.add("is-selected");
-    } else if (selection?.kind === "wire") {
-      this.#svg.querySelector(`.wire[data-wire="${selection.index}"]`)?.classList.add("is-selected");
+      return;
+    }
+    for (const id of selectedParts(selection)) {
+      this.#svg.querySelector(`.part[data-part="${CSS.escape(id)}"]`)?.classList.add("is-selected");
+    }
+    for (const index of selectedWires(selection)) {
+      this.#svg.querySelector(`.wire[data-wire="${index}"]`)?.classList.add("is-selected");
     }
   }
 
@@ -418,6 +557,95 @@ export class Workspace extends EventTarget {
 
   #world(event) {
     return clientToWorld(this.#viewBox, this.#svg.getBoundingClientRect(), event.clientX, event.clientY);
+  }
+
+  #isBoard(id) {
+    const part = findPart(this.diagram, id);
+    return Boolean(part) && this.#catalog[part.type].kind === "board";
+  }
+
+  /** Selected part ids that can be copied, moved as a group, or deleted (not the board). */
+  #editableParts() {
+    return selectedParts(this.#selection).filter((id) => !this.#isBoard(id));
+  }
+
+  #pasteContent(clipboard, label, place) {
+    const result = pasteItems(this.diagram, clipboard, place.dx, place.dy, (part) => this.#catalog[part.type].idPrefix);
+    this.execute(commands.setContent(label, this.diagram, result));
+    this.select(selectionOf(result.newIds, result.newWires));
+    this.#reportPlacement(label.startsWith("Duplicate") ? "duplicate" : "paste", place, result.newIds.length, result.newWires.length);
+    return result.newIds;
+  }
+
+  /**
+   * Occupied canvas regions for placement: every existing part (the board
+   * included). Parts in `family` (the source of a paste/duplicate and its
+   * earlier copies) may be overlapped by the familiar cascade.
+   */
+  #obstacles(family) {
+    return this.diagram.parts.map((part) => ({
+      ...partBounds(part, this.#catalog[part.type].size),
+      family: family.has(part.id),
+    }));
+  }
+
+  /** World bounding box of parts (at their stored positions). */
+  #boundsOf(parts) {
+    return unionBounds(parts.map((part) => partBounds(part, this.#catalog[part.type].size)));
+  }
+
+  /** Tells the app when smart paste placed items in the view instead of at the cascade position. */
+  #reportPlacement(action, place, parts, wires) {
+    if (place.relocated) {
+      this.#emit("clipboard", { action, parts, wires, relocated: true, crowded: place.crowded });
+    }
+  }
+
+  #moveGroupLive(ids, origins, dx, dy) {
+    for (const id of ids) {
+      const part = findPart(this.diagram, id);
+      const origin = origins.get(id);
+      part.left = origin.left + dx;
+      part.top = origin.top + dy;
+      const transform = partTransform(part, this.#catalog[part.type].size);
+      for (const node of this.#svg.querySelectorAll(`[data-part="${CSS.escape(id)}"]:is(.part, .part-anchors)`)) {
+        node.setAttribute("transform", transform);
+      }
+    }
+    this.#renderWires();
+    this.#renderSelection();
+  }
+
+  #renderBox(start, end) {
+    const overlay = this.#layers.overlay;
+    overlay.replaceChildren();
+    element("rect", {
+      class: "selection-box",
+      x: Math.min(start.x, end.x),
+      y: Math.min(start.y, end.y),
+      width: Math.abs(end.x - start.x),
+      height: Math.abs(end.y - start.y),
+    }, overlay);
+  }
+
+  /** Parts (not the board) overlapping a world rectangle, and the wires between them. */
+  #itemsInBox(start, end) {
+    const box = { x: Math.min(start.x, end.x), y: Math.min(start.y, end.y), x2: Math.max(start.x, end.x), y2: Math.max(start.y, end.y) };
+    const parts = this.diagram.parts.filter((part) => {
+      if (this.#isBoard(part.id)) {
+        return false;
+      }
+      const b = partBounds(part, this.#catalog[part.type].size);
+      return b.x < box.x2 && b.x + b.width > box.x && b.y < box.y2 && b.y + b.height > box.y;
+    }).map((part) => part.id);
+    const inside = new Set(parts);
+    const wires = [];
+    this.diagram.connections.forEach(([from, to], index) => {
+      if (inside.has(splitEndpoint(from)?.partId) && inside.has(splitEndpoint(to)?.partId)) {
+        wires.push(index);
+      }
+    });
+    return { parts, wires };
   }
 
   #selectedPart() {
@@ -464,6 +692,31 @@ export class Workspace extends EventTarget {
         event.preventDefault();
         return;
       }
+      // Shift/Ctrl/Cmd+click adds or removes the part from the selection.
+      if (event.shiftKey || event.ctrlKey || event.metaKey) {
+        this.select(toggleItem(this.#selection, { part: part.id }, (id) => this.#isBoard(id)));
+        event.preventDefault();
+        return;
+      }
+      // Dragging any member of a group moves the whole group.
+      if (this.#selection?.kind === "group" && isItemSelected(this.#selection, { part: part.id })) {
+        const ids = selectedParts(this.#selection);
+        this.#gesture = {
+          type: "drag-group",
+          ids,
+          origins: new Map(ids.map((id) => {
+            const member = findPart(this.diagram, id);
+            return [id, { left: member.left, top: member.top }];
+          })),
+          start: world,
+          delta: { x: 0, y: 0 },
+          clicked: part.id,
+          pointerId: event.pointerId,
+        };
+        this.#svg.setPointerCapture(event.pointerId);
+        event.preventDefault();
+        return;
+      }
       this.select({ kind: "part", id: part.id });
       this.#gesture = {
         type: "drag-part",
@@ -482,14 +735,29 @@ export class Workspace extends EventTarget {
 
     if (event.button === 0 && wireNode) {
       const index = Number(wireNode.dataset.wire);
+      if (event.shiftKey || event.ctrlKey || event.metaKey) {
+        this.select(toggleItem(this.#selection, { wire: index }, (id) => this.#isBoard(id)));
+        event.preventDefault();
+        return;
+      }
       this.select({ kind: "wire", index });
       const points = this.#wirePoints(this.diagram.connections[index]);
-      const segment = this.#segmentAt(points, world);
-      // Inner segments can be dragged perpendicular to reroute the wire.
-      if (segment > 0 && segment < points.length - 2) {
-        this.#gesture = { type: "drag-segment", index, points, segment, start: world, moved: false, pointerId: event.pointerId };
+      // Any segment can be dragged perpendicular to reroute the wire; a
+      // segment at a pin grows a short jog there, so the pins stay attached.
+      const editable = editableSegment(points, this.#segmentAt(points, world));
+      if (editable) {
+        this.#gesture = { type: "drag-segment", index, points: editable.points, segment: editable.segment, start: world, moved: false, pointerId: event.pointerId };
         this.#svg.setPointerCapture(event.pointerId);
       }
+      event.preventDefault();
+      return;
+    }
+
+    // Shift+drag on empty canvas draws a selection box (added to the selection).
+    if (event.button === 0 && event.shiftKey) {
+      this.#gesture = { type: "box", start: world, end: world, pointerId: event.pointerId };
+      this.#svg.setPointerCapture(event.pointerId);
+      this.#renderBox(world, world);
       event.preventDefault();
       return;
     }
@@ -540,6 +808,20 @@ export class Workspace extends EventTarget {
         this.#renderWires();
         this.#renderSelection();
       }
+    } else if (gesture.type === "drag-group") {
+      let dx = world.x - gesture.start.x;
+      let dy = world.y - gesture.start.y;
+      if (this.#snapToGrid) {
+        dx = snap(dx);
+        dy = snap(dy);
+      }
+      if (dx !== gesture.delta.x || dy !== gesture.delta.y) {
+        gesture.delta = { x: dx, y: dy };
+        this.#moveGroupLive(gesture.ids, gesture.origins, dx, dy);
+      }
+    } else if (gesture.type === "box") {
+      gesture.end = world;
+      this.#renderBox(gesture.start, world);
     } else if (gesture.type === "drag-segment") {
       const a = gesture.points[gesture.segment];
       const b = gesture.points[gesture.segment + 1];
@@ -577,6 +859,23 @@ export class Workspace extends EventTarget {
       this.execute(commands.movePart(gesture.part.id, gesture.origin, to));
     } else if (gesture.type === "drag-part" && gesture.component) {
       this.select({ kind: "component", partId: gesture.part.id, id: gesture.component });
+    } else if (gesture.type === "drag-group") {
+      const { x: dx, y: dy } = gesture.delta;
+      // Restore the live preview; the command applies the move (one undo step).
+      this.#moveGroupLive(gesture.ids, gesture.origins, 0, 0);
+      if (dx !== 0 || dy !== 0) {
+        this.execute(commands.setContent(`Move ${describeCount(gesture.ids.length, 0)}`, this.diagram, moveParts(this.diagram, gesture.ids, dx, dy)));
+      } else {
+        // A click without dragging selects just that part.
+        this.select({ kind: "part", id: gesture.clicked });
+      }
+    } else if (gesture.type === "box") {
+      this.#layers.overlay.replaceChildren();
+      const found = this.#itemsInBox(gesture.start, gesture.end);
+      const current = this.#selection?.kind === "group" || this.#selection?.kind === "part" || this.#selection?.kind === "wire"
+        ? { parts: selectedParts(this.#selection).filter((id) => !this.#isBoard(id)), wires: selectedWires(this.#selection) }
+        : { parts: [], wires: [] };
+      this.select(selectionOf([...current.parts, ...found.parts], [...current.wires, ...found.wires]));
     } else if (gesture.type === "drag-segment" && gesture.moved && gesture.preview) {
       this.execute(commands.updateConnection(this.diagram, gesture.index, { routing: pointsToRouting(gesture.preview) }));
     }
@@ -608,6 +907,22 @@ export class Workspace extends EventTarget {
       this.redo();
     } else if (ctrl && key === "d") {
       this.duplicateSelection();
+    } else if (ctrl && key === "a") {
+      this.selectAll();
+    } else if (ctrl && key === "c") {
+      this.copySelection();
+    } else if (ctrl && key === "x") {
+      this.cutSelection();
+    } else if (ctrl && key === "v") {
+      this.paste();
+    } else if (!ctrl && key.startsWith("arrow")) {
+      // 0.1 in per press (the header pitch), 1 in with Shift.
+      const step = event.shiftKey ? GRID * 10 : GRID;
+      const delta = { arrowleft: [-step, 0], arrowright: [step, 0], arrowup: [0, -step], arrowdown: [0, step] }[key];
+      if (!delta) {
+        return;
+      }
+      this.nudgeSelection(...delta);
     } else if (!ctrl && key === "r") {
       this.rotateSelection();
     } else if (key === "delete" || key === "backspace") {

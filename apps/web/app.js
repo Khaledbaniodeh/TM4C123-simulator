@@ -360,6 +360,17 @@ workspace.addEventListener("change", (event) => {
   renderPinTable();
   workspaceMessage(event.detail.label);
 });
+workspace.addEventListener("clipboard", (event) => {
+  const { action, parts, wires, relocated, crowded } = event.detail;
+  const what = `${parts} part${parts === 1 ? "" : "s"}${wires ? ` and ${wires} wire${wires === 1 ? "" : "s"} between them` : ""}`;
+  if (relocated) {
+    // Short enough for one line at 1024 px.
+    const verb = action === "duplicate" ? "Duplicated" : "Pasted";
+    workspaceMessage(crowded ? `${verb} into view; no free space, so it overlaps.` : `${verb} into free space in view.`);
+    return;
+  }
+  workspaceMessage(`${action === "cut" ? "Cut" : "Copied"} ${what}. Ctrl+V pastes.`);
+});
 workspace.addEventListener("select", () => {
   renderToolbar();
   renderSelectionPanel();
@@ -586,11 +597,32 @@ function renderToolbar() {
   const selection = workspace.selection;
   const part = selection?.kind === "part" ? findPart(history.diagram, selection.id) : null;
   const editable = part && CATALOG[part.type].kind !== "board";
+  const group = selection?.kind === "group";
   elements.undoButton.disabled = !history.canUndo;
   elements.redoButton.disabled = !history.canRedo;
   elements.rotateButton.disabled = !editable;
-  elements.duplicateButton.disabled = !editable;
-  elements.deleteButton.disabled = !(editable || selection?.kind === "wire");
+  elements.duplicateButton.disabled = !(editable || (group && selection.parts.length > 0));
+  elements.deleteButton.disabled = !(editable || selection?.kind === "wire" || group);
+}
+
+function componentLiveText(id) {
+  const livePins = COMPONENT_PINS[id] ?? [];
+  return simulationLive()
+    ? livePins.map((gpio) => `${gpio}: ${describePin(state.board, gpio).label}`).join(" · ")
+    : `Pins ${livePins.join(", ")} — run the simulation to see live values`;
+}
+
+/**
+ * Updates only the live pin values of a selected board component. The panel
+ * is not rebuilt, so its inputs (e.g. the die temperature) keep their value
+ * and focus while simulator events stream in.
+ */
+function refreshSelectionLive() {
+  const selection = workspace.selection;
+  const live = elements.selectionPanel.querySelector(".component-live");
+  if (selection?.kind === "component" && live) {
+    live.textContent = componentLiveText(selection.id);
+  }
 }
 
 function renderSelectionPanel() {
@@ -598,7 +630,24 @@ function renderSelectionPanel() {
   panel.replaceChildren();
   const selection = workspace.selection;
   if (!selection) {
-    panel.textContent = "Select a part or wire. Click a pin to start a wire.";
+    panel.textContent = "Select a part or wire. Click a pin to start a wire. Shift+click or Shift+drag selects several parts.";
+    return;
+  }
+  if (selection.kind === "group") {
+    const title = document.createElement("p");
+    const strong = document.createElement("strong");
+    const parts = selection.parts.length;
+    const wires = selection.wires.length;
+    strong.textContent = [parts && `${parts} part${parts === 1 ? "" : "s"}`, wires && `${wires} wire${wires === 1 ? "" : "s"}`].filter(Boolean).join(" and ") + " selected";
+    title.append(strong);
+    const list = document.createElement("p");
+    list.className = "muted";
+    list.textContent = selection.parts.join(", ");
+    const hint = document.createElement("p");
+    hint.className = "muted";
+    hint.id = "groupHint";
+    hint.textContent = "Drag a selected part to move them together · Arrows nudge 0.1 in (Shift: 1 in) · Ctrl+C / Ctrl+X / Ctrl+V · Ctrl+D duplicates · Delete removes · Shift+click adds or removes";
+    panel.append(title, ...(parts ? [list] : []), hint);
     return;
   }
   if (selection.kind === "component") {
@@ -622,13 +671,10 @@ function renderSelectionPanel() {
     if (selection.id === "U1") {
       panel.append(temperatureControl());
     }
-    const livePins = COMPONENT_PINS[selection.id] ?? [];
-    if (livePins.length) {
+    if ((COMPONENT_PINS[selection.id] ?? []).length) {
       const live = document.createElement("p");
       live.className = "component-live";
-      live.textContent = simulationLive()
-        ? livePins.map((gpio) => `${gpio}: ${describePin(state.board, gpio).label}`).join(" · ")
-        : `Pins ${livePins.join(", ")} — run the simulation to see live values`;
+      live.textContent = componentLiveText(selection.id);
       panel.append(live);
     }
     return;
@@ -655,7 +701,7 @@ function renderSelectionPanel() {
     label.append(select);
     const hint = document.createElement("p");
     hint.className = "muted";
-    hint.textContent = "Drag an inner segment to reroute. Delete removes the wire.";
+    hint.textContent = "Drag any segment to reroute (the ends stay on their pins). Delete removes the wire.";
     panel.append(title, label, hint);
     return;
   }
@@ -1075,9 +1121,7 @@ function scheduleRefresh() {
     refreshScheduled = false;
     reevaluateCircuit();
     render();
-    if (workspace.selection?.kind === "component") {
-      renderSelectionPanel(); // live pin values for the selected component
-    }
+    refreshSelectionLive();
   });
 }
 

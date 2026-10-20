@@ -1,0 +1,48 @@
+name: Performance probe
+
+# Measures wall-clock cost of firmware workloads in Renode (COUNTFLAG polling
+# vs. interrupts, MMIO polling of different peripherals). Measurement only;
+# results appear as annotations and in the job summary.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "tools/perf/**"
+      - ".github/workflows/perf-probe.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Cache pinned toolchains
+        uses: actions/cache@v4
+        with:
+          path: .tools
+          key: tools-${{ runner.os }}-${{ hashFiles('tools.lock.json') }}
+      - run: npm run setup:tools
+      - run: npm ci
+      - name: COUNTFLAG performance probe
+        run: node tools/perf/countflag-bench.mjs
+      # JIT warm-up hypothesis: same workloads, four consecutive 200 ms
+      # windows, under .NET runtime JIT settings (no simulator change).
+      - name: JIT comparison — default
+        env: { PERF_LABEL: default, PERF_WINDOWS: "4", PERF_SUBSET: "spin-ram,countflag-poll,gpio-poll,systick-irq-wfi,example-L-lcd" }
+        run: node tools/perf/countflag-bench.mjs
+      - name: JIT comparison — TieredCompilation=0
+        env: { PERF_LABEL: tc0, DOTNET_TieredCompilation: "0", PERF_WINDOWS: "4", PERF_SUBSET: "spin-ram,countflag-poll,gpio-poll,systick-irq-wfi,example-L-lcd" }
+        run: node tools/perf/countflag-bench.mjs
+      - name: JIT comparison — TieredPGO=0
+        env: { PERF_LABEL: pgo0, DOTNET_TieredPGO: "0", PERF_WINDOWS: "4", PERF_SUBSET: "spin-ram,countflag-poll,gpio-poll,systick-irq-wfi,example-L-lcd" }
+        run: node tools/perf/countflag-bench.mjs
+      - name: JIT comparison — QuickJitForLoops=0
+        env: { PERF_LABEL: qjl0, DOTNET_TC_QuickJitForLoops: "0", PERF_WINDOWS: "4", PERF_SUBSET: "spin-ram,countflag-poll,gpio-poll,systick-irq-wfi,example-L-lcd" }
+        run: node tools/perf/countflag-bench.mjs

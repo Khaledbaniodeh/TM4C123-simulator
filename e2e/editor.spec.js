@@ -464,3 +464,212 @@ test("N: the die temperature control reaches the ADC temperature sensor", async 
   await page.click("#stopButton");
   expect(errors).toEqual([]);
 });
+
+test("a freshly drawn wire can be rerouted by dragging any segment; undo restores it", async ({ page }) => {
+  const errors = await openWorkspace(page);
+  await page.getByRole("button", { name: /Part/ }).click();
+  await page.locator('.library-item[data-type="led"]').click();
+  await anchor(page, "board1", "J1.10").click();
+  await anchor(page, "led1", "A").click();
+  const wire = page.locator('.wire[data-from="board1:J1.10"][data-to="led1:A"]');
+  await expect(wire).toHaveCount(1);
+  expect(await page.evaluate(() => window.__tm4c.diagram.connections[0][3])).toEqual([]);
+
+  // Midpoint of the first segment (at the board pin) in screen coordinates, and its orientation.
+  const target = await page.evaluate(() => {
+    const path = document.querySelector('.wire[data-to="led1:A"] .wire-core');
+    const points = [...path.getAttribute("d").matchAll(/[ML]([-\d.]+) ([-\d.]+)/g)].map((m) => ({ x: Number(m[1]), y: Number(m[2]) }));
+    const [a, b] = points;
+    const svg = document.querySelector("#circuitCanvas");
+    const point = svg.createSVGPoint();
+    point.x = (a.x + b.x) / 2;
+    point.y = (a.y + b.y) / 2;
+    const screen = point.matrixTransform(path.getScreenCTM());
+    return { x: screen.x, y: screen.y, horizontal: a.y === b.y, count: points.length };
+  });
+  expect(target.count).toBeLessThanOrEqual(3); // straight or L-shaped: no inner segment before this change
+
+  await page.mouse.move(target.x, target.y);
+  await page.mouse.down();
+  const dx = target.horizontal ? 0 : 48;
+  const dy = target.horizontal ? 48 : 0;
+  await page.mouse.move(target.x + dx, target.y + dy, { steps: 6 });
+  await page.mouse.up();
+
+  const routing = await page.evaluate(() => window.__tm4c.diagram.connections[0][3]);
+  expect(routing.length).toBeGreaterThan(0);
+  // Ends still on their pins, and every segment axis-aligned.
+  const check = await page.evaluate(() => {
+    const { workspace } = window.__tm4c;
+    const ends = [...document.querySelectorAll('.wire[data-to="led1:A"] .wire-end')].map((c) => ({ x: Number(c.getAttribute("cx")), y: Number(c.getAttribute("cy")) }));
+    const close = (p, q) => Math.abs(p.x - q.x) < 1e-6 && Math.abs(p.y - q.y) < 1e-6;
+    const d = document.querySelector('.wire[data-to="led1:A"] .wire-core').getAttribute("d");
+    const points = [...d.matchAll(/[ML]([-\d.]+) ([-\d.]+)/g)].map((m) => [Number(m[1]), Number(m[2])]);
+    const aligned = points.every((p, i) => i === 0 || p[0] === points[i - 1][0] || p[1] === points[i - 1][1]);
+    return { attached: close(ends[0], workspace.pinPosition("board1:J1.10")) && close(ends[1], workspace.pinPosition("led1:A")), aligned, count: points.length };
+  });
+  expect(check).toEqual({ attached: true, aligned: true, count: expect.any(Number) });
+  expect(check.count).toBeGreaterThan(3);
+  await page.screenshot({ path: "test-results/workspace-wire-reroute.png" });
+
+  await page.locator("#circuitCanvas").press("Control+z");
+  expect(await page.evaluate(() => window.__tm4c.diagram.connections[0][3])).toEqual([]);
+  await page.locator("#circuitCanvas").press("Control+y");
+  expect(await page.evaluate(() => window.__tm4c.diagram.connections[0][3])).toEqual(routing);
+  expect(errors).toEqual([]);
+});
+
+test("selection-panel inputs keep their element, value, and focus while events stream", async ({ page }) => {
+  const errors = await openWorkspace(page);
+  await page.selectOption("#exampleSelect", "lcd1602-hello"); // emits pin events continuously
+  await page.click("#runButton");
+  await expect(page.locator("#simulationStatus")).toHaveText("Running");
+  await expect(page.locator('.part[data-part="lcd1"] .part-lcd')).toHaveAttribute("data-row0", "Hello, TM4C123! ", { timeout: 60_000 });
+
+  await page.evaluate(() => window.__tm4c.workspace.select({ kind: "component", id: "U1" }));
+  const input = page.locator("#dieTemperature");
+  await input.evaluate((node) => { node.dataset.probe = "same-element"; });
+  await input.focus();
+  await input.fill("33");
+  const eventsBefore = Number(await page.locator("#eventCount").textContent());
+  await page.waitForTimeout(1500); // many animation frames with simulator events
+  expect(Number(await page.locator("#eventCount").textContent())).toBeGreaterThan(eventsBefore);
+  await expect(input).toHaveAttribute("data-probe", "same-element");
+  await expect(input).toHaveValue("33");
+  await expect(input).toBeFocused();
+  await page.click("#stopButton");
+  expect(errors).toEqual([]);
+});
+
+test("multi-selection: Shift+click, group drag, nudge, copy/paste, delete, box select, select all — all undoable", async ({ page }) => {
+  const errors = await openWorkspace(page);
+  await page.selectOption("#exampleSelect", "external-led-button");
+  await expect(page.locator('.part[data-part="btn1"]')).toHaveCount(1);
+  const original = await page.evaluate(() => window.__tm4c.serialize());
+  const parts = () => page.evaluate(() => Object.fromEntries(window.__tm4c.diagram.parts.map((p) => [p.id, { left: p.left, top: p.top }])));
+  // A screen point that really hits the given part (not a wire or pin on top of it),
+  // or, with id = null, empty canvas near (x, y).
+  const pointOn = (id, near = null) => page.evaluate(({ id, near }) => {
+    const canvas = document.querySelector("#circuitCanvas").getBoundingClientRect();
+    const box = id ? document.querySelector(`.part[data-part="${id}"] .part-hitbox`).getBoundingClientRect() : null;
+    const origin = near ?? { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    for (let radius = 0; radius < 80; radius += 3) {
+      for (let step = 0; step < 16; step++) {
+        const angle = (step / 16) * 2 * Math.PI;
+        const x = origin.x + radius * Math.cos(angle);
+        const y = origin.y + radius * Math.sin(angle);
+        if (x < canvas.left + 2 || x > canvas.right - 2 || y < canvas.top + 2 || y > canvas.bottom - 2) {
+          continue;
+        }
+        const hit = document.elementFromPoint(x, y);
+        const onWireOrPin = hit?.closest(".wire, .pin-anchor");
+        const part = hit?.closest(".part")?.dataset.part ?? null;
+        if (!onWireOrPin && part === id) {
+          return { x, y };
+        }
+      }
+    }
+    return null;
+  }, { id, near });
+  const centerOf = async (id) => pointOn(id);
+  const wiresAttached = () => page.evaluate(() => {
+    const { workspace, diagram } = window.__tm4c;
+    const close = (p, q) => Math.abs(p.x - q.x) < 1e-6 && Math.abs(p.y - q.y) < 1e-6;
+    return diagram.connections.every(([from, to], index) => {
+      const ends = [...document.querySelectorAll(`.wire[data-wire="${index}"] .wire-end`)].map((c) => ({ x: Number(c.getAttribute("cx")), y: Number(c.getAttribute("cy")) }));
+      return ends.length === 2 && close(ends[0], workspace.pinPosition(from)) && close(ends[1], workspace.pinPosition(to));
+    });
+  });
+
+  // Shift+drag on empty canvas (here: below btn1 in the example layout) draws a box;
+  // it selects the part it touches, never the board.
+  const btn = await page.locator('.part[data-part="btn1"] .part-hitbox').boundingBox();
+  const corner = await pointOn(null, { x: btn.x + btn.width * 0.25, y: btn.y + btn.height + 10 });
+  expect(corner).not.toBeNull();
+  await page.keyboard.down("Shift");
+  await page.mouse.move(corner.x, corner.y);
+  await page.mouse.down();
+  await page.mouse.move(btn.x + btn.width * 0.6, btn.y + btn.height * 0.6, { steps: 6 });
+  await expect(page.locator(".selection-box")).toHaveCount(1);
+  await page.mouse.up();
+  await page.keyboard.up("Shift");
+  await expect(page.locator(".selection-box")).toHaveCount(0);
+  expect(await page.evaluate(() => window.__tm4c.workspace.selection)).toEqual({ kind: "part", id: "btn1" });
+  await page.locator("#circuitCanvas").press("Escape");
+
+  // Shift+click builds a group.
+  const ledPoint = await pointOn("led1");
+  await page.mouse.click(ledPoint.x, ledPoint.y);
+  const resistorPoint = await pointOn("r1");
+  await page.keyboard.down("Shift");
+  await page.mouse.click(resistorPoint.x, resistorPoint.y);
+  await page.keyboard.up("Shift");
+  await expect(page.locator("#selectionPanel")).toContainText("2 parts selected");
+  await expect(page.locator(".part.is-selected")).toHaveCount(2);
+
+  // Dragging one member moves both by the same snapped amount; wires stay on their pins.
+  const before = await parts();
+  const start = await centerOf("led1");
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(start.x + 60, start.y + 30, { steps: 8 });
+  await page.mouse.up();
+  const moved = await parts();
+  const dx = moved.led1.left - before.led1.left;
+  const dy = moved.led1.top - before.led1.top;
+  expect(Math.abs(dx)).toBeGreaterThan(0);
+  expect(moved.r1.left - before.r1.left).toBeCloseTo(dx, 6);
+  expect(moved.r1.top - before.r1.top).toBeCloseTo(dy, 6);
+  expect(moved.btn1).toEqual(before.btn1);
+  expect(Math.abs(Math.round(dx / 9.6) * 9.6 - dx)).toBeLessThan(1e-6); // snapped to the 0.1 in grid
+  expect(await wiresAttached()).toBe(true);
+
+  // One undo step restores both; redo re-applies.
+  await page.locator("#circuitCanvas").press("Control+z");
+  expect(await parts()).toEqual(before);
+  await page.locator("#circuitCanvas").press("Control+y");
+  expect(await parts()).toEqual(moved);
+
+  // Arrow keys nudge the group: 0.1 in, and 1 in with Shift.
+  await page.evaluate(() => window.__tm4c.workspace.select({ kind: "group", parts: ["led1", "r1"], wires: [] }));
+  await page.locator("#circuitCanvas").press("ArrowRight");
+  await page.locator("#circuitCanvas").press("Shift+ArrowDown");
+  const nudged = await parts();
+  expect(nudged.led1.left - moved.led1.left).toBeCloseTo(9.6, 6);
+  expect(nudged.r1.top - moved.r1.top).toBeCloseTo(96, 6);
+  expect(nudged.btn1).toEqual(before.btn1);
+
+  // Copy/paste: fresh ids, the wire between the copied parts comes along, the selection is the copy.
+  await page.locator("#circuitCanvas").press("Control+c");
+  await expect(page.locator("#workspaceMessage")).toContainText("Copied 2 parts and 1 wire between them");
+  await page.locator("#circuitCanvas").press("Control+v");
+  await expect(page.locator('.part[data-part="led2"]')).toHaveCount(1);
+  await expect(page.locator('.part[data-part="r2"]')).toHaveCount(1);
+  await expect(page.locator('.wire[data-from="r2:1"][data-to="led2:A"]')).toHaveCount(1);
+  await expect(page.locator("#selectionPanel")).toContainText("2 parts and 1 wire selected");
+  expect(await wiresAttached()).toBe(true);
+  await page.screenshot({ path: "test-results/workspace-multi-selection.png" });
+
+  // Delete removes the pasted group; undo brings it back.
+  await page.locator("#circuitCanvas").press("Delete");
+  await expect(page.locator('.part[data-part="led2"]')).toHaveCount(0);
+  await expect(page.locator('.wire[data-to="led2:A"]')).toHaveCount(0);
+  await page.locator("#circuitCanvas").press("Control+z");
+  await expect(page.locator('.part[data-part="led2"]')).toHaveCount(1);
+  await expect(page.locator('.wire[data-from="r2:1"][data-to="led2:A"]')).toHaveCount(1);
+
+  // Select all: every part except the board, and every wire.
+  await page.locator("#circuitCanvas").press("Control+a");
+  const all = await page.evaluate(() => window.__tm4c.workspace.selection);
+  expect(all.kind).toBe("group");
+  expect(all.parts).not.toContain("board1");
+  expect(all.parts.sort()).toEqual(["btn1", "led1", "led2", "r1", "r2"]);
+  expect(all.wires.length).toBe(await page.evaluate(() => window.__tm4c.diagram.connections.length));
+
+  // Undo everything: the diagram is exactly the example again.
+  for (let i = 0; i < 6; i++) {
+    await page.locator("#circuitCanvas").press("Control+z");
+  }
+  expect(await page.evaluate(() => window.__tm4c.serialize())).toBe(original);
+  expect(errors).toEqual([]);
+});

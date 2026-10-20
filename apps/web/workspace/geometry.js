@@ -165,6 +165,144 @@ export function pointsToRouting(points) {
   return routing;
 }
 
+/**
+ * Makes any segment of a routed wire draggable without moving its pins.
+ * Dragging moves both ends of the chosen segment perpendicular to it, which
+ * is only possible for inner segments; for a segment that touches a pin, a
+ * zero-length stub is inserted at that pin first, so the drag grows a short
+ * perpendicular jog there instead. Returns { points, segment } (a new list;
+ * the dragged segment is points[segment] → points[segment + 1]), or null for
+ * an invalid segment index.
+ */
+export function editableSegment(points, segment) {
+  if (!Number.isInteger(segment) || segment < 0 || segment >= points.length - 1) {
+    return null;
+  }
+  let expanded = points.map((point) => ({ ...point }));
+  let index = segment;
+  if (index === 0) {
+    expanded = [expanded[0], { ...expanded[0] }, ...expanded.slice(1)];
+    index = 1;
+  }
+  if (index === expanded.length - 2) {
+    expanded = [...expanded, { ...expanded.at(-1) }];
+  }
+  return { points: expanded, segment: index };
+}
+
+/**
+ * Where to put pasted or duplicated items so they are visible, preferably
+ * on free canvas, without changing the view or moving existing parts
+ * (smart, collision-aware placement).
+ *
+ * `bounds` is the world bounding box of the items at their source position,
+ * `view` the visible world rectangle, `preferred` the offset the editor would
+ * use by default (e.g. a 0.3 in cascade). Options:
+ *   margin     keep this far inside the view edges
+ *   grid       every offset is a multiple of it (grid alignment and relative
+ *              positions are preserved)
+ *   step       spacing of the search rings around the middle of the view
+ *   avoid      placementKey()s already used, so placements never stack exactly
+ *   obstacles  [{ x, y, width, height, family? }] occupied regions (existing
+ *              parts, the board); `family` marks the source and earlier copies,
+ *              which the familiar cascade may overlap
+ *   clearance  minimum gap to an obstacle
+ *   inPlace    keep `preferred` whenever it is visible (paste after cut)
+ *
+ * Order of preference:
+ *   1. `preferred`, if visible, unused, and clear of non-family obstacles;
+ *   2. the first visible, unused, collision-free spot in rings around the
+ *      middle of the view (down-right first);
+ *   3. crowded view: the visible, unused spot with the least overlap (the
+ *      earliest in the same ring order on ties);
+ *   4. nothing fits (items larger than the view): centered, or aligned to
+ *      the view's top-left margin.
+ * With no obstacles this is exactly the visibility-only placement.
+ *
+ * Returns { dx, dy, relocated, crowded }.
+ */
+export function placeInView(bounds, view, preferred, {
+  margin = GRID * 2,
+  grid = GRID,
+  step = GRID * 3,
+  avoid = new Set(),
+  obstacles = [],
+  clearance = GRID,
+  inPlace = false,
+} = {}) {
+  const inner = {
+    x: view.x + margin,
+    y: view.y + margin,
+    width: Math.max(0, view.width - 2 * margin),
+    height: Math.max(0, view.height - 2 * margin),
+  };
+  const fits = (dx, dy) =>
+    bounds.x + dx >= inner.x - 1e-6 && bounds.y + dy >= inner.y - 1e-6
+    && bounds.x + dx + bounds.width <= inner.x + inner.width + 1e-6
+    && bounds.y + dy + bounds.height <= inner.y + inner.height + 1e-6;
+  const unused = (dx, dy) => !avoid.has(placementKey(bounds, dx, dy));
+  const overlap = (dx, dy, includeFamily) => {
+    let area = 0;
+    for (const o of obstacles) {
+      if (o.family && !includeFamily) {
+        continue;
+      }
+      const w = Math.min(bounds.x + dx + bounds.width, o.x + o.width + clearance) - Math.max(bounds.x + dx, o.x - clearance);
+      const h = Math.min(bounds.y + dy + bounds.height, o.y + o.height + clearance) - Math.max(bounds.y + dy, o.y - clearance);
+      if (w > 1e-6 && h > 1e-6) {
+        area += w * h;
+      }
+    }
+    return area;
+  };
+
+  if (fits(preferred.dx, preferred.dy) && unused(preferred.dx, preferred.dy)
+    && (inPlace || overlap(preferred.dx, preferred.dy, false) === 0)) {
+    return { dx: preferred.dx, dy: preferred.dy, relocated: false, crowded: false };
+  }
+
+  const x = bounds.width <= inner.width ? view.x + (view.width - bounds.width) / 2 : inner.x;
+  const y = bounds.height <= inner.height ? view.y + (view.height - bounds.height) / 2 : inner.y;
+  const center = { dx: snap(x - bounds.x, grid), dy: snap(y - bounds.y, grid) };
+  const rings = Math.ceil(Math.max(view.width, view.height) / step);
+  let best = null;
+  for (let ring = 0; ring <= rings; ring++) {
+    const offsets = [];
+    for (let ix = -ring; ix <= ring; ix++) {
+      for (let iy = -ring; iy <= ring; iy++) {
+        if (Math.max(Math.abs(ix), Math.abs(iy)) === ring) {
+          offsets.push([ix, iy]);
+        }
+      }
+    }
+    // Down-right diagonal first (the familiar cascade direction), then the rest in a fixed order.
+    offsets.sort((a, b) => Number(!(a[0] === a[1] && a[0] > 0)) - Number(!(b[0] === b[1] && b[0] > 0)) || a[1] - b[1] || a[0] - b[0]);
+    for (const [ix, iy] of offsets) {
+      const dx = center.dx + ix * step;
+      const dy = center.dy + iy * step;
+      if (!fits(dx, dy) || !unused(dx, dy)) {
+        continue;
+      }
+      const area = overlap(dx, dy, true);
+      if (area === 0) {
+        return { dx, dy, relocated: true, crowded: false };
+      }
+      if (!best || area < best.area - 1e-6) {
+        best = { dx, dy, area };
+      }
+    }
+  }
+  if (best) {
+    return { dx: best.dx, dy: best.dy, relocated: true, crowded: true };
+  }
+  return { ...center, relocated: true, crowded: true };
+}
+
+/** Key of the position of `bounds` moved by (dx, dy), for placeInView's `avoid`. */
+export function placementKey(bounds, dx, dy) {
+  return `${(bounds.x + dx).toFixed(3)},${(bounds.y + dy).toFixed(3)}`;
+}
+
 // ---------------------------------------------------------------------------
 // Viewport (SVG viewBox) math
 // ---------------------------------------------------------------------------
