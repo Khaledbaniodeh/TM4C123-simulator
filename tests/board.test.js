@@ -146,7 +146,7 @@ describe("board part behavior", () => {
         assert.ok(Math.abs(pin.y / GRID - Math.round(pin.y / GRID)) < 1e-9, `${type}:${pin.name} y on grid`);
       }
     }
-    assert.equal(CATALOG.potentiometer.status, "editor");
+    assert.equal(CATALOG.potentiometer.status, "simulated"); // ideal divider feeding the ADC model
     assert.equal(CATALOG.lcd1602.status, "simulated"); // HD44780 model fed by GPIO events
     assert.equal(CATALOG["logic-analyzer"].status, "editor");
   });

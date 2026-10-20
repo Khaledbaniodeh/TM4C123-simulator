@@ -22,7 +22,7 @@ async function openWorkspace(page) {
     }
   });
   await page.goto("/");
-  await expect(page.locator("#exampleSelect option")).toHaveCount(12);
+  await expect(page.locator("#exampleSelect option")).toHaveCount(14);
   await expect(page.locator('.part[data-type="tm4c123gxl-launchpad"]')).toBeVisible();
   return errors;
 }
@@ -416,5 +416,51 @@ test("L: the LCD1602 shows text written by real firmware over Port B", async ({ 
   await expect(page.locator("#pinTooltip")).toContainText("Interface: 4-bit");
   await page.click("#stopButton");
   await expect(lcd).toHaveAttribute("data-row0", "");
+  expect(errors).toEqual([]);
+});
+
+test("M: the potentiometer knob drives AIN0 through the real ADC model", async ({ page }) => {
+  const errors = await openWorkspace(page);
+  await page.selectOption("#exampleSelect", "adc-potentiometer");
+  await expect(page.locator('.part[data-part="pot1"]')).toHaveCount(1);
+  await page.click("#runButton");
+  await expect(page.locator("#simulationStatus")).toHaveText("Running");
+  // 50 % of 3.3 V -> code 2048 -> blue (PF2).
+  await expect(page.locator('#pinTable tr[data-pin="PF2"]')).toContainText("HIGH", { timeout: 30_000 });
+
+  await page.evaluate(() => window.__tm4c.workspace.select({ kind: "part", id: "pot1" }));
+  const slider = page.locator("#potPosition");
+  await expect(slider).toHaveValue("50");
+  await expect(page.locator("#potReadout")).toContainText("1.650 V at 50% → PE3");
+  await slider.fill("95");
+  await expect(page.locator('#pinTable tr[data-pin="PF1"]')).toContainText("HIGH", { timeout: 30_000 });
+  await expect(page.locator('.part[data-part="pot1"] .part-pot')).toHaveAttribute("data-position", "95");
+  await page.screenshot({ path: "test-results/workspace-adc-potentiometer.png" });
+  await slider.fill("5");
+  await expect(page.locator('#pinTable tr[data-pin="PF3"]')).toContainText("HIGH", { timeout: 30_000 });
+  await expect(page.locator('#pinTable tr[data-pin="PF1"]')).toContainText("LOW");
+
+  await anchor(page, "pot1", "SIG").hover();
+  await expect(page.locator("#pinTooltip")).toContainText("Drives ADC input PE3");
+  await page.click("#stopButton");
+  expect(errors).toEqual([]);
+});
+
+test("N: the die temperature control reaches the ADC temperature sensor", async ({ page }) => {
+  const errors = await openWorkspace(page);
+  await page.selectOption("#exampleSelect", "adc-temperature");
+  await page.click("#runButton");
+  await expect(page.locator("#simulationStatus")).toHaveText("Running");
+  await expect(page.locator('#pinTable tr[data-pin="PF3"]')).toContainText("HIGH", { timeout: 30_000 }); // 25 C -> green
+
+  await page.evaluate(() => window.__tm4c.workspace.select({ kind: "component", id: "U1" }));
+  const temperature = page.locator("#dieTemperature");
+  await expect(temperature).toHaveValue("25");
+  await temperature.fill("45");
+  await temperature.press("Enter");
+  await temperature.blur();
+  await expect(page.locator('#pinTable tr[data-pin="PF1"]')).toContainText("HIGH", { timeout: 30_000 }); // red
+  await expect(page.locator("#consoleOutput")).toContainText("Die temperature set to 45 °C");
+  await page.click("#stopButton");
   expect(errors).toEqual([]);
 });

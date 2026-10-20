@@ -1,0 +1,8 @@
+{
+  "id": "adc-potentiometer",
+  "title": "M — Exp 9: potentiometer on AIN0 (ADC0 SS3)",
+  "summary": "ADC0 sample sequencer 3 reads a potentiometer wired to PE3 (AIN0) every 10 ms (PSSI trigger, RIS polling). Turn the knob: green below 1/3 of full scale, blue in the middle, red above 2/3.",
+  "experiment": 9,
+  "expected": "Select pot1 and move its Position slider: the LED colour follows the 12-bit ADC result",
+  "inputs": []
+}

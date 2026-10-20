@@ -1,0 +1,8 @@
+{
+  "id": "adc-temperature",
+  "title": "N — Exp 9: internal temperature sensor (ADC1 SS3 IRQ)",
+  "summary": "ADC1 sample sequencer 3 samples the internal temperature sensor every 100 ms; ADC1SS3_Handler converts the code with the data-sheet formula. Green below 30 °C, blue 30–40 °C, red above.",
+  "experiment": 9,
+  "expected": "Select U1 (the MCU) and change the die temperature: the LED follows the converted reading",
+  "inputs": []
+}
