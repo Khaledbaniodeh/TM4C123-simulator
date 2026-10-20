@@ -39,6 +39,10 @@ for (const size of SIZES) {
         }
       }
       const canvas = document.querySelector("#circuitCanvas").getBoundingClientRect();
+      const consolePanel = document.querySelector(".console-panel").getBoundingClientRect();
+      const consoleOutput = document.querySelector("#consoleOutput");
+      const consoleLineHeight = parseFloat(getComputedStyle(consoleOutput).lineHeight);
+      const consoleLines = Math.floor((consoleOutput.clientHeight - 20) / consoleLineHeight);
       // Before any scrolling: the circuit canvas lies fully inside its visible panel area,
       // so Fit shows the whole circuit.
       const area = document.querySelector(".simulation-canvas").getBoundingClientRect();
@@ -59,6 +63,8 @@ for (const size of SIZES) {
         panels,
         inspectorReachable,
         canvasVisible,
+        consoleHeight: Math.round(consolePanel.height),
+        consoleLines,
       };
     });
     console.log(`::notice title=layout ${size.width}x${size.height}::${JSON.stringify(metrics)}`);
@@ -69,6 +75,16 @@ for (const size of SIZES) {
     expect(metrics.scroll.width).toBeLessThanOrEqual(size.width);
     expect(metrics.inspectorReachable).toBe(true);
     expect(metrics.canvasVisible).toBe(true);
+    // Short screens give the circuit more height; the console stays usable everywhere.
+    expect(metrics.consoleLines).toBeGreaterThanOrEqual(3);
+    if (size.height <= 820) {
+      expect(metrics.consoleHeight).toBeLessThanOrEqual(122);
+    } else {
+      expect(metrics.consoleHeight).toBeGreaterThanOrEqual(148);
+    }
+    if (size.width === 1280 && size.height === 720) {
+      expect(metrics.canvas.height, "canvas height at 1280x720 (was 323 px)").toBeGreaterThanOrEqual(350);
+    }
     await page.click("#stopButton");
     expect(errors).toEqual([]);
   });
