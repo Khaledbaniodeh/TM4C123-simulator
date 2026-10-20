@@ -593,6 +593,26 @@ function renderToolbar() {
   elements.deleteButton.disabled = !(editable || selection?.kind === "wire");
 }
 
+function componentLiveText(id) {
+  const livePins = COMPONENT_PINS[id] ?? [];
+  return simulationLive()
+    ? livePins.map((gpio) => `${gpio}: ${describePin(state.board, gpio).label}`).join(" · ")
+    : `Pins ${livePins.join(", ")} — run the simulation to see live values`;
+}
+
+/**
+ * Updates only the live pin values of a selected board component. The panel
+ * is not rebuilt, so its inputs (e.g. the die temperature) keep their value
+ * and focus while simulator events stream in.
+ */
+function refreshSelectionLive() {
+  const selection = workspace.selection;
+  const live = elements.selectionPanel.querySelector(".component-live");
+  if (selection?.kind === "component" && live) {
+    live.textContent = componentLiveText(selection.id);
+  }
+}
+
 function renderSelectionPanel() {
   const panel = elements.selectionPanel;
   panel.replaceChildren();
@@ -622,13 +642,10 @@ function renderSelectionPanel() {
     if (selection.id === "U1") {
       panel.append(temperatureControl());
     }
-    const livePins = COMPONENT_PINS[selection.id] ?? [];
-    if (livePins.length) {
+    if ((COMPONENT_PINS[selection.id] ?? []).length) {
       const live = document.createElement("p");
       live.className = "component-live";
-      live.textContent = simulationLive()
-        ? livePins.map((gpio) => `${gpio}: ${describePin(state.board, gpio).label}`).join(" · ")
-        : `Pins ${livePins.join(", ")} — run the simulation to see live values`;
+      live.textContent = componentLiveText(selection.id);
       panel.append(live);
     }
     return;
@@ -1075,9 +1092,7 @@ function scheduleRefresh() {
     refreshScheduled = false;
     reevaluateCircuit();
     render();
-    if (workspace.selection?.kind === "component") {
-      renderSelectionPanel(); // live pin values for the selected component
-    }
+    refreshSelectionLive();
   });
 }
 

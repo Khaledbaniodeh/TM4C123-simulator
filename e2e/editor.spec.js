@@ -518,3 +518,25 @@ test("a freshly drawn wire can be rerouted by dragging any segment; undo restore
   expect(await page.evaluate(() => window.__tm4c.diagram.connections[0][3])).toEqual(routing);
   expect(errors).toEqual([]);
 });
+
+test("selection-panel inputs keep their element, value, and focus while events stream", async ({ page }) => {
+  const errors = await openWorkspace(page);
+  await page.selectOption("#exampleSelect", "lcd1602-hello"); // emits pin events continuously
+  await page.click("#runButton");
+  await expect(page.locator("#simulationStatus")).toHaveText("Running");
+  await expect(page.locator('.part[data-part="lcd1"] .part-lcd')).toHaveAttribute("data-row0", "Hello, TM4C123! ", { timeout: 60_000 });
+
+  await page.evaluate(() => window.__tm4c.workspace.select({ kind: "component", id: "U1" }));
+  const input = page.locator("#dieTemperature");
+  await input.evaluate((node) => { node.dataset.probe = "same-element"; });
+  await input.focus();
+  await input.fill("33");
+  const before = await page.locator("#eventCount, #consoleOutput").count();
+  await page.waitForTimeout(1500); // many animation frames with simulator events
+  expect(before).toBeGreaterThan(0);
+  await expect(input).toHaveAttribute("data-probe", "same-element");
+  await expect(input).toHaveValue("33");
+  await expect(input).toBeFocused();
+  await page.click("#stopButton");
+  expect(errors).toEqual([]);
+});
