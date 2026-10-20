@@ -4,6 +4,12 @@
  * Compiles one C translation unit plus the project startup code into a
  * Cortex-M4 ELF with the locked RISK-001 compiler profile.
  *
+ * Device support: firmware may include the project's original CMSIS-style
+ * device header (`#include "TM4C123.h"` or "TM4C123GH6PM.h", from
+ * simulator/firmware/include). When it does, the build also links
+ * simulator/firmware/system_TM4C123.c, so SystemInit() runs before main()
+ * and SystemCoreClock is defined, as in a vendor-tool project.
+ *
  * Safety controls (trusted local development mode — see SECURITY.md):
  *   - fixed argument vector, no shell, user content never reaches argv
  *   - source-size limit, wall-clock timeout, output-size limit
@@ -27,6 +33,15 @@ export const LIMITS = Object.freeze({
 });
 
 export const FIRMWARE_DIR = path.join(repoRoot, "simulator", "firmware");
+export const DEVICE_INCLUDE_DIR = path.join(FIRMWARE_DIR, "include");
+export const SYSTEM_SOURCE = path.join(FIRMWARE_DIR, "system_TM4C123.c");
+
+const DEVICE_HEADER_INCLUDE = /^[ \t]*#[ \t]*include[ \t]*[<"](?:TM4C123|TM4C123GH6PM)\.h[>"]/m;
+
+/** True when the source includes the device header (and therefore needs system_TM4C123.c). */
+export function usesDeviceHeader(source) {
+  return DEVICE_HEADER_INCLUDE.test(source);
+}
 
 /** The locked compiler profile from RISK-001 R1C, plus warnings and debug info. */
 export const COMPILER_FLAGS = Object.freeze([
@@ -133,10 +148,12 @@ export async function compileFirmware(source) {
 
   const args = [
     ...COMPILER_FLAGS,
+    "-I", DEVICE_INCLUDE_DIR,
     "-T", path.join(FIRMWARE_DIR, "linker.ld"),
     `-Wl,-Map=${mapPath}`,
     path.join(FIRMWARE_DIR, "startup.s"),
     sourcePath,
+    ...(usesDeviceHeader(source) ? [SYSTEM_SOURCE] : []),
     "-lgcc",
     "-o", elfPath,
   ];
@@ -180,10 +197,11 @@ export async function inspectElf(elfPath) {
   const symbols = await run(armTool("nm"), [elfPath], { timeoutMs: 10_000 });
 
   const field = (name) => new RegExp(`^\\s*${name}:\\s*(.+)$`, "m").exec(header.stdout)?.[1]?.trim();
-  const symbol = (name) => {
-    const match = new RegExp(`^([0-9a-fA-F]{8}) \\w ${name}$`, "m").exec(symbols.stdout);
-    return match ? Number.parseInt(match[1], 16) : null;
-  };
+  const symbolTable = {};
+  for (const match of symbols.stdout.matchAll(/^([0-9a-fA-F]{8}) [TtDdBbRrWwVv] (\S+)$/gm)) {
+    symbolTable[match[2]] = Number.parseInt(match[1], 16);
+  }
+  const symbol = (name) => symbolTable[name] ?? null;
   const sectionList = [];
   for (const line of sections.stdout.split(/\r?\n/)) {
     const match = /\]\s+(\S+)\s+(\S+)\s+([0-9a-f]{8})\s+[0-9a-f]+\s+([0-9a-f]+)/.exec(line);
@@ -204,7 +222,11 @@ export async function inspectElf(elfPath) {
       Reset_Handler: symbol("Reset_Handler"),
       main: symbol("main"),
       _estack: symbol("_estack"),
+      SystemInit: symbol("SystemInit"),
+      SystemCoreClock: symbol("SystemCoreClock"),
     },
+    /** Every defined symbol (name -> address), for tests and tooling. */
+    symbolTable,
     bytes: (await readFile(elfPath)).length,
   };
 }

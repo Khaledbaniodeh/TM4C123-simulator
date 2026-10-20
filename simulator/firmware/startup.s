@@ -3,12 +3,13 @@
  *
  * Original project code. Provides:
  *   - The Cortex-M4 vector table at 0x00000000 (.isr_vector, see linker.ld)
- *   - Reset_Handler: copies .data from Flash to SRAM, zeroes .bss, calls main
+ *   - Reset_Handler: copies .data from Flash to SRAM, zeroes .bss, calls
+ *     SystemInit() if linked, then main
  *   - Weak default handlers that firmware can override by name
  *
  * Interrupt numbering follows the TM4C123GH6PM datasheet (SPMS376E),
- * Table 2-9 "Interrupts". Only IRQ 0-30 are named; the remaining vectors
- * up to the 139 implemented IRQ slots use Default_Handler.
+ * Table 2-9 "Interrupts". Every implemented IRQ (0-138) has a named weak
+ * handler; reserved slots use Default_Handler.
  */
 
     .syntax unified
@@ -73,14 +74,79 @@ g_vector_table:
     .word SYSCTL_Handler            /* IRQ 28: system control           */
     .word FLASH_Handler             /* IRQ 29: flash memory control     */
     .word GPIOF_Handler             /* IRQ 30: GPIO Port F              */
-    .rept 139 - 31                  /* IRQ 31-138: not yet named        */
+    .rept 2                       /* IRQ 31-32: reserved */
     .word Default_Handler
     .endr
+    .word UART2_Handler           /* IRQ  33 */
+    .word SSI1_Handler            /* IRQ  34 */
+    .word TIMER3A_Handler         /* IRQ  35 */
+    .word TIMER3B_Handler         /* IRQ  36 */
+    .word I2C1_Handler            /* IRQ  37 */
+    .word QEI1_Handler            /* IRQ  38 */
+    .word CAN0_Handler            /* IRQ  39 */
+    .word CAN1_Handler            /* IRQ  40 */
+    .rept 2                       /* IRQ 41-42: reserved */
+    .word Default_Handler
+    .endr
+    .word HIB_Handler             /* IRQ  43 */
+    .word USB0_Handler            /* IRQ  44 */
+    .word PWM0_Gen3_Handler       /* IRQ  45 */
+    .word UDMA_Handler            /* IRQ  46 */
+    .word UDMAERR_Handler         /* IRQ  47 */
+    .word ADC1SS0_Handler         /* IRQ  48 */
+    .word ADC1SS1_Handler         /* IRQ  49 */
+    .word ADC1SS2_Handler         /* IRQ  50 */
+    .word ADC1SS3_Handler         /* IRQ  51 */
+    .rept 5                       /* IRQ 52-56: reserved */
+    .word Default_Handler
+    .endr
+    .word SSI2_Handler            /* IRQ  57 */
+    .word SSI3_Handler            /* IRQ  58 */
+    .word UART3_Handler           /* IRQ  59 */
+    .word UART4_Handler           /* IRQ  60 */
+    .word UART5_Handler           /* IRQ  61 */
+    .word UART6_Handler           /* IRQ  62 */
+    .word UART7_Handler           /* IRQ  63 */
+    .rept 4                       /* IRQ 64-67: reserved */
+    .word Default_Handler
+    .endr
+    .word I2C2_Handler            /* IRQ  68 */
+    .word I2C3_Handler            /* IRQ  69 */
+    .word TIMER4A_Handler         /* IRQ  70 */
+    .word TIMER4B_Handler         /* IRQ  71 */
+    .rept 20                      /* IRQ 72-91: reserved */
+    .word Default_Handler
+    .endr
+    .word TIMER5A_Handler         /* IRQ  92 */
+    .word TIMER5B_Handler         /* IRQ  93 */
+    .word WTIMER0A_Handler        /* IRQ  94 */
+    .word WTIMER0B_Handler        /* IRQ  95 */
+    .word WTIMER1A_Handler        /* IRQ  96 */
+    .word WTIMER1B_Handler        /* IRQ  97 */
+    .word WTIMER2A_Handler        /* IRQ  98 */
+    .word WTIMER2B_Handler        /* IRQ  99 */
+    .word WTIMER3A_Handler        /* IRQ 100 */
+    .word WTIMER3B_Handler        /* IRQ 101 */
+    .word WTIMER4A_Handler        /* IRQ 102 */
+    .word WTIMER4B_Handler        /* IRQ 103 */
+    .word WTIMER5A_Handler        /* IRQ 104 */
+    .word WTIMER5B_Handler        /* IRQ 105 */
+    .word SYSEXC_Handler          /* IRQ 106 */
+    .rept 27                      /* IRQ 107-133: reserved */
+    .word Default_Handler
+    .endr
+    .word PWM1_Gen0_Handler       /* IRQ 134 */
+    .word PWM1_Gen1_Handler       /* IRQ 135 */
+    .word PWM1_Gen2_Handler       /* IRQ 136 */
+    .word PWM1_Gen3_Handler       /* IRQ 137 */
+    .word PWM1_Fault_Handler      /* IRQ 138 */
     .size g_vector_table, . - g_vector_table
 
 /* ------------------------------------------------------------------ */
 /* Reset handler                                                       */
 /* ------------------------------------------------------------------ */
+
+    .weak SystemInit
 
     .section .text.Reset_Handler, "ax", %progbits
     .align 2
@@ -109,6 +175,13 @@ Reset_Handler:
     str     r3, [r1], #4
     b       3b
 4:
+    /* CMSIS-style SystemInit() when the firmware links one (TM4C123.h
+       builds link simulator/firmware/system_TM4C123.c); weak reference, so
+       firmware without it starts at the reset clock. */
+    ldr     r0, =SystemInit
+    cbz     r0, 6f
+    blx     r0
+6:
     bl      main
     /* main() must not return; park the core safely if it does. */
 5:
@@ -173,3 +246,51 @@ Default_Handler:
     weak_handler SYSCTL_Handler
     weak_handler FLASH_Handler
     weak_handler GPIOF_Handler
+    weak_handler UART2_Handler
+    weak_handler SSI1_Handler
+    weak_handler TIMER3A_Handler
+    weak_handler TIMER3B_Handler
+    weak_handler I2C1_Handler
+    weak_handler QEI1_Handler
+    weak_handler CAN0_Handler
+    weak_handler CAN1_Handler
+    weak_handler HIB_Handler
+    weak_handler USB0_Handler
+    weak_handler PWM0_Gen3_Handler
+    weak_handler UDMA_Handler
+    weak_handler UDMAERR_Handler
+    weak_handler ADC1SS0_Handler
+    weak_handler ADC1SS1_Handler
+    weak_handler ADC1SS2_Handler
+    weak_handler ADC1SS3_Handler
+    weak_handler SSI2_Handler
+    weak_handler SSI3_Handler
+    weak_handler UART3_Handler
+    weak_handler UART4_Handler
+    weak_handler UART5_Handler
+    weak_handler UART6_Handler
+    weak_handler UART7_Handler
+    weak_handler I2C2_Handler
+    weak_handler I2C3_Handler
+    weak_handler TIMER4A_Handler
+    weak_handler TIMER4B_Handler
+    weak_handler TIMER5A_Handler
+    weak_handler TIMER5B_Handler
+    weak_handler WTIMER0A_Handler
+    weak_handler WTIMER0B_Handler
+    weak_handler WTIMER1A_Handler
+    weak_handler WTIMER1B_Handler
+    weak_handler WTIMER2A_Handler
+    weak_handler WTIMER2B_Handler
+    weak_handler WTIMER3A_Handler
+    weak_handler WTIMER3B_Handler
+    weak_handler WTIMER4A_Handler
+    weak_handler WTIMER4B_Handler
+    weak_handler WTIMER5A_Handler
+    weak_handler WTIMER5B_Handler
+    weak_handler SYSEXC_Handler
+    weak_handler PWM1_Gen0_Handler
+    weak_handler PWM1_Gen1_Handler
+    weak_handler PWM1_Gen2_Handler
+    weak_handler PWM1_Gen3_Handler
+    weak_handler PWM1_Fault_Handler
