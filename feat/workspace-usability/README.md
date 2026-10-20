@@ -1,1 +1,1 @@
-Screenshots from feat/workspace-usability @ f71d1b4bd4b7c9afb5b09a047c6dd281f7c31d26 (run 39431147536, test result: failure)
+Screenshots from feat/workspace-usability @ 4f4d4254b3e9152be7b7af10c5f08f717a0047cc (run 39432508432, test result: success)
