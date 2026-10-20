@@ -914,14 +914,6 @@ button {
   }
 }
 
-/* Stacked inspector: the canvas row is exactly the visible height, so Fit
-   shows the whole circuit; the inspector scrolls into view below it. */
-@media (min-width: 781px) and (max-width: 1050px) {
-  .simulation-canvas {
-    grid-template-rows: 100% auto;
-  }
-}
-
 @media (max-width: 780px) {
   body {
     overflow: auto;

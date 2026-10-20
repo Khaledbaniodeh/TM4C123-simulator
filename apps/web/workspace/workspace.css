@@ -417,3 +417,12 @@
     grid-template-rows: minmax(420px, 1fr) auto;
   }
 }
+
+/* Stacked inspector on desktop widths: the canvas row is exactly the
+   visible height (not at least 420 px), so Fit shows the whole circuit;
+   the inspector scrolls into view below it. */
+@media (min-width: 781px) and (max-width: 1050px) {
+  .simulation-canvas {
+    grid-template-rows: 100% auto;
+  }
+}
