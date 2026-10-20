@@ -668,7 +668,8 @@ function renderSelectionPanel() {
   title.innerHTML = `<strong></strong> <span class="status-chip"></span>`;
   title.querySelector("strong").textContent = `${part.id} · ${definition.title}`;
   const chip = title.querySelector(".status-chip");
-  chip.textContent = definition.kind === "board" ? "simulated (Renode)" : definition.status === "simulated" ? "simulated (logic level)" : "editor only";
+  const MODEL_LABELS = { board: "simulated (Renode)", potentiometer: "simulated (analog)", lcd1602: "simulated (HD44780)" };
+  chip.textContent = MODEL_LABELS[definition.kind] ?? (definition.status === "simulated" ? "simulated (logic level)" : "editor only");
   chip.dataset.status = definition.kind === "board" ? "simulated" : definition.status;
   const description = document.createElement("p");
   description.className = "muted";
