@@ -86,7 +86,7 @@ for (const size of SIZES) {
       await page.locator("#circuitCanvas").press("Control+v");
       const state = await checkNewest(`paste ${i}`);
       positions.add(`${state.led.left},${state.led.top}`);
-      relocated ||= /in the middle of the view/.test(await page.locator("#workspaceMessage").textContent());
+      relocated ||= /into free space in view|into view; no free space/.test(await page.locator("#workspaceMessage").textContent());
     }
     expect(relocated, "the cascade left the view at least once and smart paste placed items in view").toBe(true);
     expect(positions.size, "pastes do not stack exactly on top of each other").toBe(10);

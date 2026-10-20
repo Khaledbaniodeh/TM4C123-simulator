@@ -68,6 +68,7 @@ export class Workspace extends EventTarget {
   #lastPaste = null; // { dx, dy } offset of the last paste of this clipboard
   #pasteInPlace = false; // the first paste after a cut goes back to the cut position
   #placedPositions = new Set(); // placementKey()s used by pastes and duplicates (no exact stacking)
+  #pastedIds = new Set(); // ids created by pastes of this clipboard (the cascade may overlap them)
   #gesture = null;
   #wireDraft = null; // { from, fromPoint, pointer }
   #tooltip;
@@ -227,7 +228,10 @@ export class Workspace extends EventTarget {
       if (ids.length) {
         const content = copyItems(this.diagram, ids);
         const bounds = this.#boundsOf(content.parts);
-        const place = placeInView(bounds, this.#viewBox, { dx: GRID * 3, dy: GRID * 3 }, { avoid: this.#placedPositions });
+        const place = placeInView(bounds, this.#viewBox, { dx: GRID * 3, dy: GRID * 3 }, {
+          avoid: this.#placedPositions,
+          obstacles: this.#obstacles(new Set(ids)),
+        });
         this.#placedPositions.add(placementKey(bounds, place.dx, place.dy));
         this.#pasteContent(content, `Duplicate ${ids.length} parts`, place);
       }
@@ -238,7 +242,10 @@ export class Workspace extends EventTarget {
       return;
     }
     const bounds = this.#boundsOf([part]);
-    const place = placeInView(bounds, this.#viewBox, { dx: GRID * 3, dy: GRID * 3 }, { avoid: this.#placedPositions });
+    const place = placeInView(bounds, this.#viewBox, { dx: GRID * 3, dy: GRID * 3 }, {
+      avoid: this.#placedPositions,
+      obstacles: this.#obstacles(new Set([part.id])),
+    });
     this.#placedPositions.add(placementKey(bounds, place.dx, place.dy));
     const copy = {
       ...structuredClone(part),
@@ -290,6 +297,7 @@ export class Workspace extends EventTarget {
     this.#lastPaste = null;
     this.#pasteInPlace = false;
     this.#placedPositions.clear();
+    this.#pastedIds.clear();
     this.#emit("clipboard", { action: "copy", parts: this.#clipboard.parts.length, wires: this.#clipboard.connections.length });
     return true;
   }
@@ -322,11 +330,21 @@ export class Workspace extends EventTarget {
       : this.#lastPaste
         ? { dx: this.#lastPaste.dx + step, dy: this.#lastPaste.dy + step }
         : { dx: step, dy: step };
+    const inPlace = this.#pasteInPlace;
     this.#pasteInPlace = false;
-    const place = placeInView(bounds, this.#viewBox, preferred, { avoid: this.#placedPositions });
+    // The cascade may overlap the copied parts and earlier pastes of this clipboard, nothing else.
+    const family = new Set([...this.#clipboard.parts.map((part) => part.id), ...this.#pastedIds]);
+    const place = placeInView(bounds, this.#viewBox, preferred, {
+      avoid: this.#placedPositions,
+      obstacles: this.#obstacles(family),
+      inPlace,
+    });
     this.#lastPaste = { dx: place.dx, dy: place.dy };
     this.#placedPositions.add(placementKey(bounds, place.dx, place.dy));
-    this.#pasteContent(this.#clipboard, `Paste ${describeCount(this.#clipboard.parts.length, 0)}`, place);
+    const newIds = this.#pasteContent(this.#clipboard, `Paste ${describeCount(this.#clipboard.parts.length, 0)}`, place);
+    for (const id of newIds) {
+      this.#pastedIds.add(id);
+    }
   }
 
   /** Moves the selected part(s) by (dx, dy) world units as one undo step. */
@@ -556,6 +574,19 @@ export class Workspace extends EventTarget {
     this.execute(commands.setContent(label, this.diagram, result));
     this.select(selectionOf(result.newIds, result.newWires));
     this.#reportPlacement(label.startsWith("Duplicate") ? "duplicate" : "paste", place, result.newIds.length, result.newWires.length);
+    return result.newIds;
+  }
+
+  /**
+   * Occupied canvas regions for placement: every existing part (the board
+   * included). Parts in `family` (the source of a paste/duplicate and its
+   * earlier copies) may be overlapped by the familiar cascade.
+   */
+  #obstacles(family) {
+    return this.diagram.parts.map((part) => ({
+      ...partBounds(part, this.#catalog[part.type].size),
+      family: family.has(part.id),
+    }));
   }
 
   /** World bounding box of parts (at their stored positions). */
@@ -566,7 +597,7 @@ export class Workspace extends EventTarget {
   /** Tells the app when smart paste placed items in the view instead of at the cascade position. */
   #reportPlacement(action, place, parts, wires) {
     if (place.relocated) {
-      this.#emit("clipboard", { action, parts, wires, relocated: true });
+      this.#emit("clipboard", { action, parts, wires, relocated: true, crowded: place.crowded });
     }
   }
 
