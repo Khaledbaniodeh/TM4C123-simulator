@@ -119,22 +119,25 @@ const pushbutton = {
 const potentiometer = {
   title: "Potentiometer",
   kind: "potentiometer",
-  status: "editor",
+  status: "simulated",
   idPrefix: "pot",
-  description: "Placeable and wireable. ADC is not modeled yet, so its voltage does not reach firmware.",
+  description: "Ideal voltage divider: wire VCC to 3.3V, GND to GND, and SIG to an ADC pin (PE0–PE5, PD0–PD3, PB4–PB5). Set the knob position below; the ADC model samples the wiper voltage.",
   size: { width: 6 * G, height: 5 * G },
-  defaultAttrs: { value: "10k" },
+  defaultAttrs: { value: "10k", position: 50 },
   pins: [
-    { name: "GND", x: 1 * G, y: 5 * G },
-    { name: "SIG", x: 3 * G, y: 5 * G },
-    { name: "VCC", x: 5 * G, y: 5 * G },
+    { name: "GND", x: 1 * G, y: 5 * G, label: "GND end" },
+    { name: "SIG", x: 3 * G, y: 5 * G, label: "Wiper (SIG)" },
+    { name: "VCC", x: 5 * G, y: 5 * G, label: "VCC end" },
   ],
-  render() {
+  render(part) {
+    const position = Math.min(100, Math.max(0, Number(part.attrs?.position ?? 50)));
+    const angle = -135 + 2.7 * (Number.isFinite(position) ? position : 50);
     return `
-      <g class="part-pot">
+      <g class="part-pot" data-position="${Number.isFinite(position) ? position : 50}">
         <rect x="${0.2 * G}" y="${0.2 * G}" width="${5.6 * G}" height="${4 * G}" rx="3" fill="#1f5fa8" stroke="#123a66" stroke-width="0.8" />
         <circle cx="${3 * G}" cy="${2.2 * G}" r="${1.6 * G}" fill="#e0e3e8" stroke="#9aa1ab" stroke-width="0.8" />
-        <rect x="${2.85 * G}" y="${0.75 * G}" width="${0.3 * G}" height="${1.4 * G}" rx="1" fill="#4a5160" />
+        <rect x="${2.85 * G}" y="${0.75 * G}" width="${0.3 * G}" height="${1.4 * G}" rx="1" fill="#4a5160"
+              transform="rotate(${angle.toFixed(1)} ${3 * G} ${2.2 * G})" class="pot-pointer" />
         <line x1="${1 * G}" y1="${4.2 * G}" x2="${1 * G}" y2="${5 * G}" class="lead" />
         <line x1="${3 * G}" y1="${4.2 * G}" x2="${3 * G}" y2="${5 * G}" class="lead" />
         <line x1="${5 * G}" y1="${4.2 * G}" x2="${5 * G}" y2="${5 * G}" class="lead" />

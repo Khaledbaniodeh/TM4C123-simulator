@@ -19,6 +19,7 @@ import { Workspace } from "./workspace/canvas.js";
 import { History, WIRE_COLORS, commands, createDiagram, findPart, parseDiagram, serializeDiagram, splitEndpoint } from "./workspace/diagram.js";
 import { evaluateCircuit } from "./workspace/netlist.js";
 import { LcdSimulation, bindLcd } from "./workspace/lcd.js";
+import { evaluateAnalog } from "./workspace/analog.js";
 
 const CAPABILITIES = [
   { name: "ARM GCC build → Cortex-M4 ELF", status: "verified" },
@@ -126,6 +127,11 @@ const state = {
   appliedDrives: new Map(),
   /** HD44780 simulations for the LCD1602 parts, by part id (live sessions only). */
   lcds: new Map(),
+  /** Last analog evaluation (potentiometers) and the voltages applied to the simulator. */
+  analog: { pots: {}, inputs: {}, errors: [], notes: [] },
+  appliedAnalog: new Map(),
+  /** Die temperature for the ADC's internal sensor (°C). */
+  dieCelsius: 25,
 };
 
 const history = new History(loadDraft() ?? createDiagram({ author: "" }));
@@ -294,6 +300,12 @@ const workspace = new Workspace(elements.canvas, elements.tooltip, {
     }
     const pin = definition.pins.find((p) => p.name === pinName);
     const lines = [definition.status === "simulated" ? "Logic-level model" : "Editor only — no electrical model yet"];
+    if (definition.kind === "potentiometer") {
+      const pot = state.analog.pots[part.id];
+      lines[0] = "Ideal voltage divider (analog)";
+      lines.push(pot ? `Wiper: ${pot.reason}` : "Wiper: not evaluated");
+      lines.push(pot?.pins.length ? `Drives ADC input ${pot.pins.join(", ")}` : "SIG is not wired to an ADC pin");
+    }
     if (definition.kind === "led" && simulationLive()) {
       const led = state.circuit.leds[part.id];
       lines.push(led ? `LED ${led.on ? "ON" : "off"}: ${led.reason}` : "LED off");
@@ -376,10 +388,43 @@ workspace.addEventListener("wire", (event) => {
  */
 function reevaluateCircuit() {
   state.circuit = evaluateCircuit(history.diagram, CATALOG, livePinStates(), { pressed: state.pressed });
-  if (state.circuit.errors.length) {
-    workspaceMessage(state.circuit.errors[0], "error");
+  state.analog = evaluateAnalog(history.diagram, CATALOG);
+  const errors = [...state.circuit.errors, ...state.analog.errors];
+  if (errors.length) {
+    workspaceMessage(errors[0], "error");
   }
   syncExternalDrives();
+  syncAnalogInputs();
+}
+
+/** Pushes potentiometer wiper voltages to the ADC model (only changes). */
+function syncAnalogInputs() {
+  if (!simulationLive() || !state.session.id) {
+    return;
+  }
+  for (const [gpio, volts] of Object.entries(state.analog.inputs)) {
+    if (state.appliedAnalog.get(gpio) !== volts) {
+      state.appliedAnalog.set(gpio, volts);
+      sendAnalog({ analog: gpio, volts });
+    }
+  }
+  for (const gpio of [...state.appliedAnalog.keys()]) {
+    if (state.analog.inputs[gpio] === undefined) {
+      state.appliedAnalog.delete(gpio);
+      sendAnalog({ analog: gpio, volts: null });
+    }
+  }
+}
+
+async function sendAnalog(body) {
+  if (!state.session.id) {
+    return;
+  }
+  try {
+    await api(`/api/sessions/${state.session.id}/input`, { body });
+  } catch (error) {
+    log(`Analog input ${JSON.stringify(body)} failed: ${error.message}`, "error");
+  }
 }
 
 /**
@@ -574,6 +619,9 @@ function renderSelectionPanel() {
       row.textContent = line;
       panel.append(row);
     }
+    if (selection.id === "U1") {
+      panel.append(temperatureControl());
+    }
     const livePins = COMPONENT_PINS[selection.id] ?? [];
     if (livePins.length) {
       const live = document.createElement("p");
@@ -638,7 +686,66 @@ function renderSelectionPanel() {
     }
   } else if (definition.kind === "resistor") {
     panel.append(attrSelect(part, "value", ["220", "330", "470", "1k", "4.7k", "10k"]));
+  } else if (definition.kind === "potentiometer") {
+    panel.append(potentiometerControl(part));
   }
+}
+
+/** Knob position slider; each released change is one undoable edit. */
+function potentiometerControl(part) {
+  const wrapper = document.createElement("div");
+  const label = document.createElement("label");
+  label.textContent = "Position ";
+  const slider = document.createElement("input");
+  slider.type = "range";
+  slider.id = "potPosition";
+  slider.min = "0";
+  slider.max = "100";
+  slider.step = "1";
+  slider.value = String(part.attrs.position ?? 50);
+  slider.setAttribute("aria-label", `${part.id} knob position (percent)`);
+  const readout = document.createElement("p");
+  readout.className = "component-live";
+  readout.id = "potReadout";
+  const show = () => {
+    const pot = state.analog.pots[part.id];
+    readout.textContent = pot ? `Wiper: ${pot.reason}${pot.pins.length ? ` → ${pot.pins.join(", ")}` : ""}` : "";
+  };
+  slider.addEventListener("change", () => {
+    const current = findPart(history.diagram, part.id);
+    workspace.execute(commands.setAttr(part.id, "position", current.attrs.position ?? 50, Number(slider.value)));
+    show();
+  });
+  label.append(slider);
+  wrapper.append(label, readout);
+  show();
+  return wrapper;
+}
+
+/** Die temperature seen by the ADC's internal temperature sensor. */
+function temperatureControl() {
+  const label = document.createElement("label");
+  label.textContent = "Die temperature (°C) ";
+  const input = document.createElement("input");
+  input.type = "number";
+  input.id = "dieTemperature";
+  input.min = "-40";
+  input.max = "150";
+  input.step = "0.5";
+  input.value = String(state.dieCelsius);
+  input.addEventListener("change", () => {
+    const celsius = Number(input.value);
+    if (!Number.isFinite(celsius) || celsius < -40 || celsius > 150) {
+      input.value = String(state.dieCelsius);
+      return;
+    }
+    state.dieCelsius = celsius;
+    if (simulationLive()) {
+      sendAnalog({ temperature: celsius });
+    }
+  });
+  label.append(input);
+  return label;
 }
 
 function attrSelect(part, key, values) {
@@ -820,13 +927,28 @@ async function startSession() {
   closeStream();
   state.board = createBoardState();
   state.appliedDrives.clear();
+  state.appliedAnalog.clear();
   syncLcds({ restart: true });
   state.busy = "starting";
   state.session = { id: null, state: "starting", stream: null };
   render();
   log("Starting Renode and loading the ELF…", "info");
   try {
-    const { sessionId } = await api("/api/sessions", { body: { buildId: state.build.id, autoRun: true } });
+    // Apply the circuit's inputs before the CPU runs (wired drives, potentiometers, die temperature).
+    reevaluateCircuit();
+    const drives = {};
+    for (const [gpio, input] of Object.entries(state.circuit.boardInputs)) {
+      if (input.level !== null) {
+        drives[gpio] = input.level ? "high" : "low";
+        state.appliedDrives.set(gpio, drives[gpio]);
+      }
+    }
+    const analog = { ...state.analog.inputs };
+    for (const [gpio, volts] of Object.entries(analog)) {
+      state.appliedAnalog.set(gpio, volts);
+    }
+    const inputs = { drives, analog, temperature: state.dieCelsius };
+    const { sessionId } = await api("/api/sessions", { body: { buildId: state.build.id, autoRun: true, inputs } });
     state.session.id = sessionId;
     const stream = new EventSource(`/api/sessions/${sessionId}/events`);
     state.session.stream = stream;
@@ -933,6 +1055,8 @@ function describeEvent(event) {
     return [`${event.peripheral} ${event.register} write ignored: GPIOLOCK is locked`, "warning"];
   case "floating-input-read":
     return [`${event.peripheral}: read of floating input bits ${event.bits} (${event.reason})`, "warning"];
+  case "adc-input-warning":
+    return [`${event.peripheral}: ${event.detail}`, "warning"];
   case "interrupt-line-changed":
     return [`${event.peripheral} interrupt ${event.asserted ? "asserted" : "cleared"}${event.asserted ? ` (MIS ${event.mis})` : ""}`, "info"];
   default:
@@ -998,6 +1122,12 @@ function handleMessage(sessionId, message) {
     break;
   case "board-input":
     log(`${message.input} ${message.pressed ? "pressed" : "released"}`, "info", message.virtualTimeNs);
+    break;
+  case "analog-input":
+    log(`External circuit applies ${message.volts === null ? "nothing (disconnected)" : `${message.volts.toFixed(3)} V`} to ${message.pin}`, "info", message.virtualTimeNs);
+    break;
+  case "die-temperature":
+    log(`Die temperature set to ${message.celsius} °C`, "info", message.virtualTimeNs);
     break;
   case "external-drive":
     log(`External circuit drives ${message.pin} ${message.level === "release" ? "released" : message.level.toUpperCase()}`, "info", message.virtualTimeNs);

@@ -369,7 +369,7 @@ const headerInfo = (header) => ({
 });
 
 export const COMPONENTS = Object.freeze({
-  U1: { title: "U1 · TM4C123GH6PM target MCU", status: "simulated", lines: ["Cortex-M4F executed by Renode 1.17.0 at 16 MIPS (≈ 16 MHz PIOSC)", "Modeled: SYSCTL GPIO clock gating, GPIO A–F, GPIO interrupts → NVIC, bus faults", "Other peripherals report accesses instead of simulating them"] },
+  U1: { title: "U1 · TM4C123GH6PM target MCU", status: "simulated", lines: ["Cortex-M4F executed by Renode 1.17.0; the instruction rate follows the system clock (16 MHz PIOSC at reset)", "Modeled: SYSCTL clocks and PLL, GPIO A–F + interrupts, SysTick, GPTM timers, ADC0/ADC1 with the temperature sensor, bus faults", "UART and other peripherals report accesses instead of simulating them"] },
   U2: { title: "U2 · In-Circuit Debug Interface (ICDI)", status: "visual", lines: ["On the real board, a second TM4C123G runs TI's debug firmware", "Not simulated: firmware is loaded into the target directly"] },
   J11: { title: "J11 · DEBUG USB (micro-B)", status: "visual", lines: ["Connects the ICDI to a PC on the real board", "Not simulated"] },
   J9: { title: "J9 · DEVICE USB (micro-AB)", status: "visual", lines: ["Target MCU USB 2.0 device/OTG port", "USB is not modeled"] },

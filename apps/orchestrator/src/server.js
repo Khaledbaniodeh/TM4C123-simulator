@@ -23,7 +23,7 @@ import { pathToFileURL } from "node:url";
 import { compileFirmware, removeBuild, run } from "./compiler.js";
 import { RenodeSession } from "./renode-session.js";
 import { armTool, lock, renodeBinary, repoRoot } from "../../../scripts/lib/tools.mjs";
-import { BOARD_INPUTS } from "../../web/board-state.js";
+import { ANALOG_INPUTS, ANALOG_LIMITS, BOARD_INPUTS } from "../../web/board-state.js";
 
 const HOST = "127.0.0.1";
 const WEB_DIR = path.join(repoRoot, "apps", "web");
@@ -281,6 +281,49 @@ class ActiveSimulation {
     this.broadcast({ type: "external-drive", pin: pinId, level, virtualTimeNs: this.session.virtualTimeNs.toString() });
   }
 
+  /**
+   * Applies the workspace circuit's inputs before the CPU first runs, so the
+   * firmware never observes an unconnected input that the circuit drives.
+   * `drives`: { PB1: "low" }, `analog`: { PE3: 1.65 }, `temperature`: 25.
+   */
+  async applyInitialInputs({ drives, analog, temperature } = {}) {
+    for (const [pin, level] of Object.entries(drives ?? {})) {
+      await this.drivePin(pin, String(level));
+    }
+    for (const [pin, volts] of Object.entries(analog ?? {})) {
+      await this.analog(pin, volts === null ? null : Number(volts));
+    }
+    if (temperature !== undefined && temperature !== null) {
+      await this.temperature(Number(temperature));
+    }
+  }
+
+  /** Applies an external analog voltage (potentiometer wiper) to an AIN pin; null disconnects it. */
+  async analog(pinId, volts) {
+    const valid = ANALOG_INPUTS[pinId] !== undefined
+      && (volts === null || (Number.isFinite(volts) && volts >= ANALOG_LIMITS.minVolts && volts <= ANALOG_LIMITS.maxVolts));
+    if (!valid) {
+      throw Object.assign(new Error(`Invalid analog input: ${pinId}=${volts}`), { status: 400 });
+    }
+    if (!this.session || this.state === "stopped" || this.state === "error") {
+      throw Object.assign(new Error("No running simulation"), { status: 409 });
+    }
+    await this.session.setAnalogInput(pinId, volts);
+    this.broadcast({ type: "analog-input", pin: pinId, volts, virtualTimeNs: this.session.virtualTimeNs.toString() });
+  }
+
+  /** Sets the die temperature seen by the ADC temperature sensor. */
+  async temperature(celsius) {
+    if (!(Number.isFinite(celsius) && celsius >= ANALOG_LIMITS.minCelsius && celsius <= ANALOG_LIMITS.maxCelsius)) {
+      throw Object.assign(new Error(`Invalid temperature: ${celsius}`), { status: 400 });
+    }
+    if (!this.session || this.state === "stopped" || this.state === "error") {
+      throw Object.assign(new Error("No running simulation"), { status: 409 });
+    }
+    await this.session.setDieTemperature(celsius);
+    this.broadcast({ type: "die-temperature", celsius, virtualTimeNs: this.session.virtualTimeNs.toString() });
+  }
+
   async stop() {
     const previous = this.state;
     this.state = "stopped";
@@ -349,7 +392,16 @@ async function handleApi(request, response, url) {
     }
     active = new ActiveSimulation(body.buildId);
     const simulation = active;
-    simulation.start(build.elfPath).then(() => {
+    const inputs = body.inputs && typeof body.inputs === "object" ? body.inputs : {};
+    simulation.start(build.elfPath).then(async () => {
+      if (simulation.state !== "paused") {
+        return;
+      }
+      try {
+        await simulation.applyInitialInputs(inputs);
+      } catch (error) {
+        simulation.status({ message: `Circuit inputs not applied: ${error.message}` });
+      }
       if (body.autoRun && simulation.state === "paused") {
         simulation.run();
       }
@@ -397,7 +449,11 @@ async function handleApi(request, response, url) {
 
     if (request.method === "POST" && parts[3] === "input") {
       const body = await readJson(request);
-      if (body.pin !== undefined) {
+      if (body.analog !== undefined) {
+        await simulation.analog(String(body.analog), body.volts === null ? null : Number(body.volts));
+      } else if (body.temperature !== undefined) {
+        await simulation.temperature(Number(body.temperature));
+      } else if (body.pin !== undefined) {
         await simulation.drivePin(String(body.pin), String(body.level));
       } else {
         await simulation.input(String(body.input), Boolean(body.pressed));
