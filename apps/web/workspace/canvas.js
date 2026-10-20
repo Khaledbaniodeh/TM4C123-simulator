@@ -17,6 +17,8 @@ import {
   partToWorld,
   partTransform,
   pathData,
+  placeInView,
+  placementKey,
   pointsToRouting,
   routeWire,
   snap,
@@ -63,7 +65,9 @@ export class Workspace extends EventTarget {
   #viewBox = { x: -60, y: -60, width: 800, height: 600 };
   #selection = null; // see selection.js (single part/wire/component, or a group)
   #clipboard = null; // { parts, connections } from copyItems()
-  #pasteCount = 0;
+  #lastPaste = null; // { dx, dy } offset of the last paste of this clipboard
+  #pasteInPlace = false; // the first paste after a cut goes back to the cut position
+  #placedPositions = new Set(); // placementKey()s used by pastes and duplicates (no exact stacking)
   #gesture = null;
   #wireDraft = null; // { from, fromPoint, pointer }
   #tooltip;
@@ -221,7 +225,11 @@ export class Workspace extends EventTarget {
     if (this.#selection?.kind === "group") {
       const ids = this.#editableParts();
       if (ids.length) {
-        this.#pasteContent(copyItems(this.diagram, ids), `Duplicate ${ids.length} parts`, GRID * 3);
+        const content = copyItems(this.diagram, ids);
+        const bounds = this.#boundsOf(content.parts);
+        const place = placeInView(bounds, this.#viewBox, { dx: GRID * 3, dy: GRID * 3 }, { avoid: this.#placedPositions });
+        this.#placedPositions.add(placementKey(bounds, place.dx, place.dy));
+        this.#pasteContent(content, `Duplicate ${ids.length} parts`, place);
       }
       return;
     }
@@ -229,14 +237,18 @@ export class Workspace extends EventTarget {
     if (!part || this.#catalog[part.type].kind === "board") {
       return;
     }
+    const bounds = this.#boundsOf([part]);
+    const place = placeInView(bounds, this.#viewBox, { dx: GRID * 3, dy: GRID * 3 }, { avoid: this.#placedPositions });
+    this.#placedPositions.add(placementKey(bounds, place.dx, place.dy));
     const copy = {
       ...structuredClone(part),
       id: nextPartId(this.diagram, this.#catalog[part.type].idPrefix),
-      left: part.left + GRID * 3,
-      top: part.top + GRID * 3,
+      left: part.left + place.dx,
+      top: part.top + place.dy,
     };
     this.execute(commands.addPart(copy));
     this.select({ kind: "part", id: copy.id });
+    this.#reportPlacement("duplicate", place, 1, 0);
   }
 
   deleteSelection() {
@@ -275,7 +287,9 @@ export class Workspace extends EventTarget {
       return false;
     }
     this.#clipboard = copyItems(this.diagram, ids);
-    this.#pasteCount = 0;
+    this.#lastPaste = null;
+    this.#pasteInPlace = false;
+    this.#placedPositions.clear();
     this.#emit("clipboard", { action: "copy", parts: this.#clipboard.parts.length, wires: this.#clipboard.connections.length });
     return true;
   }
@@ -285,19 +299,34 @@ export class Workspace extends EventTarget {
     if (!this.copySelection()) {
       return;
     }
-    this.#pasteCount = -1; // the first paste after a cut lands where the parts were
+    this.#pasteInPlace = true; // the first paste after a cut lands where the parts were
     this.execute(commands.setContent(`Cut ${describeCount(ids.length, 0)}`, this.diagram, removeItems(this.diagram, ids, [])));
     this.select(null);
     this.#emit("clipboard", { action: "cut", parts: this.#clipboard.parts.length, wires: this.#clipboard.connections.length });
   }
 
-  /** Pastes the clipboard with fresh ids; successive pastes cascade by 0.3 in. */
+  /**
+   * Pastes the clipboard with fresh ids. Successive pastes cascade by 0.3 in;
+   * when that position is not fully visible, the items are placed in the
+   * middle of the current view instead (smart paste). The view itself never
+   * pans or zooms, and the pasted items stay selected.
+   */
   paste() {
     if (!this.#clipboard?.parts.length) {
       return;
     }
-    this.#pasteCount += 1;
-    this.#pasteContent(this.#clipboard, `Paste ${describeCount(this.#clipboard.parts.length, 0)}`, GRID * 3 * this.#pasteCount);
+    const bounds = this.#boundsOf(this.#clipboard.parts);
+    const step = GRID * 3;
+    const preferred = this.#pasteInPlace
+      ? { dx: 0, dy: 0 }
+      : this.#lastPaste
+        ? { dx: this.#lastPaste.dx + step, dy: this.#lastPaste.dy + step }
+        : { dx: step, dy: step };
+    this.#pasteInPlace = false;
+    const place = placeInView(bounds, this.#viewBox, preferred, { avoid: this.#placedPositions });
+    this.#lastPaste = { dx: place.dx, dy: place.dy };
+    this.#placedPositions.add(placementKey(bounds, place.dx, place.dy));
+    this.#pasteContent(this.#clipboard, `Paste ${describeCount(this.#clipboard.parts.length, 0)}`, place);
   }
 
   /** Moves the selected part(s) by (dx, dy) world units as one undo step. */
@@ -522,10 +551,23 @@ export class Workspace extends EventTarget {
     return selectedParts(this.#selection).filter((id) => !this.#isBoard(id));
   }
 
-  #pasteContent(clipboard, label, offset) {
-    const result = pasteItems(this.diagram, clipboard, offset, offset, (part) => this.#catalog[part.type].idPrefix);
+  #pasteContent(clipboard, label, place) {
+    const result = pasteItems(this.diagram, clipboard, place.dx, place.dy, (part) => this.#catalog[part.type].idPrefix);
     this.execute(commands.setContent(label, this.diagram, result));
     this.select(selectionOf(result.newIds, result.newWires));
+    this.#reportPlacement(label.startsWith("Duplicate") ? "duplicate" : "paste", place, result.newIds.length, result.newWires.length);
+  }
+
+  /** World bounding box of parts (at their stored positions). */
+  #boundsOf(parts) {
+    return unionBounds(parts.map((part) => partBounds(part, this.#catalog[part.type].size)));
+  }
+
+  /** Tells the app when smart paste placed items in the view instead of at the cascade position. */
+  #reportPlacement(action, place, parts, wires) {
+    if (place.relocated) {
+      this.#emit("clipboard", { action, parts, wires, relocated: true });
+    }
   }
 
   #moveGroupLive(ids, origins, dx, dy) {

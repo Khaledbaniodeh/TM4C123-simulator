@@ -361,8 +361,12 @@ workspace.addEventListener("change", (event) => {
   workspaceMessage(event.detail.label);
 });
 workspace.addEventListener("clipboard", (event) => {
-  const { action, parts, wires } = event.detail;
+  const { action, parts, wires, relocated } = event.detail;
   const what = `${parts} part${parts === 1 ? "" : "s"}${wires ? ` and ${wires} wire${wires === 1 ? "" : "s"} between them` : ""}`;
+  if (relocated) {
+    workspaceMessage(`${action === "duplicate" ? "Duplicated" : "Pasted"} ${what} in the middle of the view (the usual offset position was not fully visible).`);
+    return;
+  }
   workspaceMessage(`${action === "cut" ? "Cut" : "Copied"} ${what}. Ctrl+V pastes.`);
 });
 workspace.addEventListener("select", () => {
