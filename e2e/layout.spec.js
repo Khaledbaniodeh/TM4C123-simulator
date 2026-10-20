@@ -39,6 +39,10 @@ for (const size of SIZES) {
         }
       }
       const canvas = document.querySelector("#circuitCanvas").getBoundingClientRect();
+      // Before any scrolling: the circuit canvas lies fully inside its visible panel area,
+      // so Fit shows the whole circuit.
+      const area = document.querySelector(".simulation-canvas").getBoundingClientRect();
+      const canvasVisible = canvas.top >= area.top - 1 && canvas.bottom <= area.bottom + 1 && canvas.height > 150;
       // The inspector (selection, pins) may stack below the canvas in a scroll area; it must be reachable.
       const inspector = document.querySelector(".inspector");
       inspector?.scrollIntoView({ block: "nearest" });
@@ -54,13 +58,17 @@ for (const size of SIZES) {
         clipped,
         panels,
         inspectorReachable,
+        canvasVisible,
       };
     });
     console.log(`::notice title=layout ${size.width}x${size.height}::${JSON.stringify(metrics)}`);
+    // Screenshot what the user sees first (undo the inspector scroll used for the check).
+    await page.evaluate(() => document.querySelector(".simulation-canvas").scrollTo(0, 0));
     await page.screenshot({ path: `test-results/layout-${size.width}x${size.height}.png` });
     expect(metrics.clipped).toEqual([]);
     expect(metrics.scroll.width).toBeLessThanOrEqual(size.width);
     expect(metrics.inspectorReachable).toBe(true);
+    expect(metrics.canvasVisible).toBe(true);
     await page.click("#stopButton");
     expect(errors).toEqual([]);
   });
