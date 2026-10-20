@@ -1,8 +1,8 @@
 /*
- * Layout evidence at common viewport sizes (measurement, not a gate):
- * screenshots with the LCD example running, plus metrics printed as
- * GitHub notices — page overflow, clipped toolbar controls, and the size of
- * the circuit canvas. Hard assertions only cover page errors.
+ * Layout at common viewport sizes, with the LCD example running: no control
+ * may be clipped off-screen and the page must not overflow horizontally (at
+ * 1024x768 the top bar used to push Stop and Save out of reach). Metrics
+ * are also printed as GitHub notices, with a screenshot per size.
  */
 import { expect, test } from "@playwright/test";
 
@@ -39,6 +39,11 @@ for (const size of SIZES) {
         }
       }
       const canvas = document.querySelector("#circuitCanvas").getBoundingClientRect();
+      // The inspector (selection, pins) may stack below the canvas in a scroll area; it must be reachable.
+      const inspector = document.querySelector(".inspector");
+      inspector?.scrollIntoView({ block: "nearest" });
+      const inspectorRect = inspector?.getBoundingClientRect();
+      const inspectorReachable = Boolean(inspectorRect && inspectorRect.width > 0 && inspectorRect.right <= viewport.width + 1 && inspectorRect.top < viewport.height);
       const panels = [...document.querySelectorAll("main > *, .layout > *, body > div > *")]
         .slice(0, 8)
         .map((node) => `${node.id || node.className || node.tagName}:${Math.round(node.getBoundingClientRect().width)}`);
@@ -48,10 +53,14 @@ for (const size of SIZES) {
         canvas: { width: Math.round(canvas.width), height: Math.round(canvas.height) },
         clipped,
         panels,
+        inspectorReachable,
       };
     });
     console.log(`::notice title=layout ${size.width}x${size.height}::${JSON.stringify(metrics)}`);
     await page.screenshot({ path: `test-results/layout-${size.width}x${size.height}.png` });
+    expect(metrics.clipped).toEqual([]);
+    expect(metrics.scroll.width).toBeLessThanOrEqual(size.width);
+    expect(metrics.inspectorReachable).toBe(true);
     await page.click("#stopButton");
     expect(errors).toEqual([]);
   });
