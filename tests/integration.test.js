@@ -222,10 +222,10 @@ describe("execution: GPIOF PF1 vertical slice", { timeout: 600_000 }, () => {
       assert.equal(unsupported.peripheral, "SYSCTL");
       assert.equal(unsupported.address, "0x400FE618");
       assert.equal(unsupported.access, "write");
-      const adc = session.events.find((e) => e.type === "unimplemented-peripheral-access");
-      assert.ok(adc, "ADC0 access must be reported as an unimplemented peripheral");
-      assert.equal(adc.peripheral, "ADC0");
-      assert.equal(adc.address, "0x40038000");
+      const uart = session.events.find((e) => e.type === "unimplemented-peripheral-access");
+      assert.ok(uart, "UART0 access must be reported as an unimplemented peripheral");
+      assert.equal(uart.peripheral, "UART0");
+      assert.equal(uart.address, "0x4000C000");
       assert.equal(await session.pinState("F", 1), "high", "PF1 was lit before the faulting access");
 
       const fault = session.events.find((e) => e.type === "cpu-fault");

@@ -23,6 +23,7 @@ import { mkdtemp, open, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { renodeBinary, repoRoot } from "../../../scripts/lib/tools.mjs";
+import { ANALOG_INPUTS, ANALOG_LIMITS } from "../../web/board-state.js";
 
 export const RENODE_DIR = path.join(repoRoot, "simulator", "renode");
 
@@ -31,6 +32,7 @@ export const PERIPHERAL_SOURCES = Object.freeze([
   path.join(RENODE_DIR, "peripherals", "TM4C123SystemControl.cs"),
   path.join(RENODE_DIR, "peripherals", "TM4C123GPIO.cs"),
   path.join(RENODE_DIR, "peripherals", "TM4C123GeneralPurposeTimer.cs"),
+  path.join(RENODE_DIR, "peripherals", "TM4C123ADC.cs"),
   path.join(RENODE_DIR, "peripherals", "TM4C123UnimplementedPeripheral.cs"),
 ]);
 
@@ -367,6 +369,37 @@ export class RenodeSession extends EventEmitter {
       await this.command(`${target} ReleaseInput ${pinNumber}`);
     } else {
       await this.command(`${target} DriveInput ${pinNumber} ${level ? "true" : "false"}`);
+    }
+    await this.poll();
+  }
+
+  /**
+   * Applies a voltage to an analog-capable pin (seen by ADC0 and ADC1), or
+   * disconnects it with `volts = null`. Not reset with the MCU.
+   */
+  async setAnalogInput(pinId, volts) {
+    const channel = ANALOG_INPUTS[String(pinId)];
+    if (channel === undefined) {
+      throw new RangeError(`${pinId} is not an analog input pin`);
+    }
+    if (volts !== null && !(Number.isFinite(volts) && volts >= ANALOG_LIMITS.minVolts && volts <= ANALOG_LIMITS.maxVolts)) {
+      throw new RangeError(`Analog voltage out of range: ${volts}`);
+    }
+    const millivolts = volts === null ? -1 : Math.round(volts * 1000);
+    for (const adc of ["adc0", "adc1"]) {
+      await this.command(`sysbus.${adc} SetAnalogInputMillivolts ${channel} ${millivolts}`);
+    }
+    await this.poll();
+  }
+
+  /** Sets the die temperature seen by the ADC's internal sensor. */
+  async setDieTemperature(celsius) {
+    if (!(Number.isFinite(celsius) && celsius >= ANALOG_LIMITS.minCelsius && celsius <= ANALOG_LIMITS.maxCelsius)) {
+      throw new RangeError(`Temperature out of range: ${celsius}`);
+    }
+    const millidegrees = Math.round(celsius * 1000);
+    for (const adc of ["adc0", "adc1"]) {
+      await this.command(`sysbus.${adc} SetDieTemperatureMillidegrees ${millidegrees}`);
     }
     await this.poll();
   }

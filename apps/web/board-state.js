@@ -13,6 +13,14 @@ export const BOARD_INPUTS = Object.freeze({
   SW2: Object.freeze({ port: "F", pin: 0, pinId: "PF0" }),
 });
 
+/** ADC input channel (AINn) of each analog-capable pin (TM4C123GH6PM data sheet, Table 13-1). */
+export const ANALOG_INPUTS = Object.freeze({
+  PE3: 0, PE2: 1, PE1: 2, PE0: 3, PD3: 4, PD2: 5, PD1: 6, PD0: 7, PE5: 8, PE4: 9, PB4: 10, PB5: 11,
+});
+
+/** Accepted ranges for externally applied analog values. */
+export const ANALOG_LIMITS = Object.freeze({ minVolts: 0, maxVolts: 5.5, minCelsius: -40, maxCelsius: 150 });
+
 /** On-board RGB LED channels (driven through transistors; HIGH = on). */
 export const BOARD_LEDS = Object.freeze({
   red: "PF1",

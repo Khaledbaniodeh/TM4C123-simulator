@@ -5,6 +5,7 @@
 //   simulator/renode/peripherals/TM4C123SystemControl.cs
 //   simulator/renode/peripherals/TM4C123GPIO.cs
 //   simulator/renode/peripherals/TM4C123GeneralPurposeTimer.cs
+//   simulator/renode/peripherals/TM4C123ADC.cs
 //   simulator/renode/peripherals/TM4C123UnimplementedPeripheral.cs
 //
 // Addresses: TM4C123GH6PM datasheet (SPMS376E), Table 2-4 "Memory Map".
@@ -198,13 +199,28 @@ unimplWTIMER1: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40037000
     peripheralName: "WTIMER1"
     baseAddress: 0x40037000
 
-unimplADC0: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40038000
-    peripheralName: "ADC0"
-    baseAddress: 0x40038000
+// ADC0/ADC1: sample sequencer IRQs SS0-SS3 (Table 2-9: 14-17 and 48-51).
+adc0: Analog.TM4C123ADC @ sysbus 0x40038000
+    systemControl: sysctl
+    adcIndex: 0
+    portB: gpioPortB
+    portD: gpioPortD
+    portE: gpioPortE
+    IRQ0 -> nvic@14
+    IRQ1 -> nvic@15
+    IRQ2 -> nvic@16
+    IRQ3 -> nvic@17
 
-unimplADC1: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x40039000
-    peripheralName: "ADC1"
-    baseAddress: 0x40039000
+adc1: Analog.TM4C123ADC @ sysbus 0x40039000
+    systemControl: sysctl
+    adcIndex: 1
+    portB: gpioPortB
+    portD: gpioPortD
+    portE: gpioPortE
+    IRQ0 -> nvic@48
+    IRQ1 -> nvic@49
+    IRQ2 -> nvic@50
+    IRQ3 -> nvic@51
 
 unimplCOMP: Miscellaneous.TM4C123UnimplementedPeripheral @ sysbus 0x4003C000
     peripheralName: "COMP"

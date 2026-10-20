@@ -10,13 +10,16 @@
 //   0x058 MISC       masked status / write-1-to-clear RIS bits
 //   0x060 RCC        run-mode clock configuration
 //   0x070 RCC2       run-mode clock configuration 2 (USERCC2 overrides RCC)
+//   0x100 RCGC0      legacy gating, bits 16-17 = ADC0-1
 //   0x104 RCGC1      legacy gating, bits 16-19 = TIMER0-3
 //   0x108 RCGC2      legacy gating, bits 5:0 = GPIO ports A-F
 //   0x168 PLLSTAT    PLL lock status (bit 0)
 //   0x604 RCGCTIMER  16/32-bit timer gating, bits 5:0 = TIMER0-5
 //   0x608 RCGCGPIO   GPIO gating, bits 5:0 = ports A-F
+//   0x638 RCGCADC    ADC gating, bits 1:0 = ADC0-1
 //   0xA04 PRTIMER    timer peripheral-ready (read-only)
 //   0xA08 PRGPIO     GPIO peripheral-ready (read-only)
+//   0xA38 PRADC      ADC peripheral-ready (read-only)
 //
 // Clock model (docs/PERIPHERAL_MODELS.md):
 //   - System clock follows the datasheet's RCC/RCC2 rules: oscillator
@@ -71,6 +74,14 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
             return (EffectiveTimerClocks & (1u << timer)) != 0;
         }
 
+        public bool IsAdcClockEnabled(int adc)
+        {
+            return (EffectiveAdcClocks & (1u << adc)) != 0;
+        }
+
+        /// <summary>RCGCADC bits 1:0, OR legacy RCGC0 bits 17:16 (ADC0-1).</summary>
+        public uint EffectiveAdcClocks => (rcgcadc | ((rcgc0 >> 16) & 0x3)) & AdcMask;
+
         public uint EffectiveGpioClocks => (rcgcgpio | rcgc2) & GpioPortMask;
 
         /// <summary>RCGCTIMER bits 5:0, OR legacy RCGC1 bits 19:16 (TIMER0-3).</summary>
@@ -87,6 +98,8 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
             rcgc2 = 0;
             rcgc1 = 0;
             rcgctimer = 0;
+            rcgc0 = 0;
+            rcgcadc = 0;
             rcc = RccReset;
             rcc2 = Rcc2Reset;
             ris = 0;
@@ -106,11 +119,14 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
             case Registers.MISC: return ris & imc;
             case Registers.RCC: return rcc;
             case Registers.RCC2: return rcc2;
+            case Registers.RCGC0: return rcgc0;
             case Registers.RCGC1: return rcgc1;
             case Registers.RCGC2: return rcgc2;
             case Registers.PLLSTAT: return PllPowered ? 1u : 0u;
             case Registers.RCGCTIMER: return rcgctimer;
             case Registers.RCGCGPIO: return rcgcgpio;
+            case Registers.RCGCADC: return rcgcadc;
+            case Registers.PRADC: return EffectiveAdcClocks;
             case Registers.PRTIMER: return EffectiveTimerClocks;
             case Registers.PRGPIO: return EffectiveGpioClocks;
             default:
@@ -123,6 +139,7 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
         {
             var gpioBefore = EffectiveGpioClocks;
             var timerBefore = EffectiveTimerClocks;
+            var adcBefore = EffectiveAdcClocks;
             switch((Registers)offset)
             {
             case Registers.RCGC2:
@@ -143,6 +160,16 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
                 break;
             case Registers.RCGCGPIO:
                 rcgcgpio = value & GpioPortMask;
+                break;
+            case Registers.RCGC0:
+                rcgc0 = value;
+                if((value & ~0x00030000u) != 0)
+                {
+                    this.Log(LogLevel.Warning, "RCGC0 bits 0x{0:X} (watchdog, hibernation, CAN, PWM, ADC speed) are stored but not modeled", value & ~0x00030000u);
+                }
+                break;
+            case Registers.RCGCADC:
+                rcgcadc = value & AdcMask;
                 break;
             case Registers.RCGCTIMER:
                 rcgctimer = value & TimerMask;
@@ -175,6 +202,7 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
             case Registers.PLLSTAT:
             case Registers.PRGPIO:
             case Registers.PRTIMER:
+            case Registers.PRADC:
                 ReportUnsupported(offset, "write", value, "register is read-only");
                 return;
             default:
@@ -184,6 +212,7 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
 
             EmitGateChanges(gpioBefore, EffectiveGpioClocks, "GPIO", 6, (port) => "GPIO" + (char)('A' + port));
             EmitGateChanges(timerBefore, EffectiveTimerClocks, "TIMER", 6, (timer) => "TIMER" + timer);
+            EmitGateChanges(adcBefore, EffectiveAdcClocks, "ADC", 2, (adc) => "ADC" + adc);
             if(gpioBefore != EffectiveGpioClocks)
             {
                 GpioClocksChanged?.Invoke();
@@ -455,6 +484,8 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
         private uint rcgc2;
         private uint rcgc1;
         private uint rcgctimer;
+        private uint rcgc0;
+        private uint rcgcadc;
         private uint rcc;
         private uint rcc2;
         private uint ris;
@@ -465,6 +496,7 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
         private const long BaseAddress = 0x400FE000;
         private const uint GpioPortMask = 0x3F;
         private const uint TimerMask = 0x3F;
+        private const uint AdcMask = 0x3;
         // RCGC2 implemented bits on TM4C123GH6PM: GPIO A-F [5:0], UDMA [13], USB0 [16].
         private const uint Rcgc2WritableMask = 0x0001203F;
 
@@ -488,13 +520,16 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
             MISC = 0x058,
             RCC = 0x060,
             RCC2 = 0x070,
+            RCGC0 = 0x100,
             RCGC1 = 0x104,
             RCGC2 = 0x108,
             PLLSTAT = 0x168,
             RCGCTIMER = 0x604,
             RCGCGPIO = 0x608,
+            RCGCADC = 0x638,
             PRTIMER = 0xA04,
             PRGPIO = 0xA08,
+            PRADC = 0xA38,
         }
     }
 }

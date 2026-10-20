@@ -16,12 +16,15 @@
 //     driving the port's NVIC line.
 //   - Logical pin resolution: HIGH / LOW / FLOATING / CONFLICT from GPIO
 //     output drivers, internal pulls, and external drivers (board switches).
+//   - Analog mode on the 12 ADC input pins (AIN0-AIN11: PE0-PE5, PD0-PD3,
+//     PB4-PB5): AMSEL, with AFSEL and PCTL = 0 as the data sheet's ADC pin
+//     setup. The ADC model asks AnalogInputProblem() before sampling.
 //
 // Not modeled (reported as `unsupported-feature` or
 // `unsupported-register-access` events, never silently accepted):
-//   - Alternate functions selected through AFSEL/PCTL, analog mode (AMSEL),
-//     ADC/uDMA triggers, AHB aperture, drive-strength and slew effects,
-//     peripheral/PrimeCell ID registers.
+//   - Digital alternate functions selected through AFSEL/PCTL, AMSEL on
+//     pins without an analog function, ADC/uDMA triggers, AHB aperture,
+//     drive-strength and slew effects, peripheral/PrimeCell ID registers.
 //
 using System;
 using System.Text;
@@ -65,6 +68,14 @@ namespace Antmicro.Renode.Peripherals.GPIOPort
             case 'F':
                 protectedPins = 0x01; // PF0 (NMI)
                 break;
+            }
+
+            // Pins with an ADC input (SPMS376E Table 13-1).
+            switch(PortNames[portIndex])
+            {
+            case 'B': analogPins = 0x30; break; // PB4 AIN10, PB5 AIN11
+            case 'D': analogPins = 0x0F; break; // PD0-PD3 AIN7-AIN4
+            case 'E': analogPins = 0x3F; break; // PE0-PE3 AIN3-AIN0, PE4 AIN9, PE5 AIN8
             }
 
             IRQ = new GPIO();
@@ -170,10 +181,7 @@ namespace Antmicro.Renode.Peripherals.GPIOPort
                 break;
             case Registers.AlternateFunctionSelect:
                 afsel = Committed("GPIOAFSEL", afsel, value);
-                if(afsel != 0)
-                {
-                    ReportUnsupportedFeature("alternate-function", "AFSEL=0x" + afsel.ToString("X2") + ": alternate pin functions are not modeled; affected pins are not driven by GPIO");
-                }
+                ReportDigitalAlternateFunctions();
                 break;
             case Registers.Drive2mA:
                 // Selecting one drive strength clears the others (datasheet 10.5).
@@ -219,13 +227,14 @@ namespace Antmicro.Renode.Peripherals.GPIOPort
                 return;
             case Registers.AnalogModeSelect:
                 amsel = value;
-                if(amsel != 0)
+                if((amsel & ~analogPins) != 0)
                 {
-                    ReportUnsupportedFeature("analog-mode", "AMSEL=0x" + amsel.ToString("X2") + ": analog pin functions are not modeled");
+                    ReportUnsupportedFeature("analog-mode", "AMSEL=0x" + amsel.ToString("X2") + ": pins 0x" + (amsel & ~analogPins).ToString("X2") + " have no analog function");
                 }
                 break;
             case Registers.PortControl:
                 pctl = raw; // 4 bits per pin, all 32 bits are significant
+                ReportDigitalAlternateFunctions();
                 break;
             case Registers.AdcControl:
                 adcctl = value;
@@ -310,11 +319,61 @@ namespace Antmicro.Renode.Peripherals.GPIOPort
             commit = 0xFFu & ~protectedPins;
             amsel = 0;
             pctl = resetPctl;
+            reportedAlternateFunctions = 0;
             adcctl = 0;
             dmactl = 0;
         }
 
         private bool ClockEnabled => systemControl.IsGpioClockEnabled(portIndex);
+
+        /// <summary>
+        /// Null when the pin is set up as an analog input (clock on, AMSEL = 1,
+        /// DEN = 0); otherwise the reason the ADC would not see the pin voltage.
+        /// </summary>
+        public string AnalogInputProblem(int pin)
+        {
+            var bit = 1u << pin;
+            if((analogPins & bit) == 0)
+            {
+                return pinPrefix + pin + " has no analog function";
+            }
+            if(!ClockEnabled)
+            {
+                return portName + " clock is disabled";
+            }
+            if((amsel & bit) == 0)
+            {
+                return "GPIOAMSEL bit " + pin + " is 0 (analog isolation enabled)";
+            }
+            if((den & bit) != 0)
+            {
+                return "GPIODEN bit " + pin + " is 1 (digital buffer enabled on an analog input)";
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// AFSEL with PCTL = 0 on an ADC input pin is the data sheet's analog
+        /// setup; any other AFSEL bit selects a digital alternate function,
+        /// which is not modeled and is reported once per new pin set.
+        /// </summary>
+        private void ReportDigitalAlternateFunctions()
+        {
+            uint analogSetup = 0;
+            for(var pin = 0; pin < PinCount; pin++)
+            {
+                if(((pctl >> (4 * pin)) & 0xF) == 0)
+                {
+                    analogSetup |= 1u << pin;
+                }
+            }
+            var digital = afsel & ~(analogPins & analogSetup);
+            if(digital != 0 && (digital & ~reportedAlternateFunctions) != 0)
+            {
+                ReportUnsupportedFeature("alternate-function", "AFSEL=0x" + afsel.ToString("X2") + ": digital alternate functions on pins 0x" + digital.ToString("X2") + " are not modeled; those pins are not driven by GPIO");
+            }
+            reportedAlternateFunctions = digital;
+        }
 
         private void RequireClock(long offset, string access, uint value)
         {
@@ -600,6 +659,8 @@ namespace Antmicro.Renode.Peripherals.GPIOPort
         private uint externalDriven, externalLevel;
         private uint inputValue;
         private ulong updateCount; // not reset with the MCU, so numbers stay unique per session
+        private readonly uint analogPins;
+        private uint reportedAlternateFunctions;
         private uint floatingReadReported;
         private bool irqAsserted;
 
