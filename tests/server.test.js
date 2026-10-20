@@ -86,7 +86,7 @@ describe("orchestrator API", { timeout: 300_000 }, () => {
     assert.match(await page.text(), /<title>TM4C123 Simulator<\/title>/);
     const { examples } = await (await fetch(`${base}/api/examples`)).json();
     const ids = examples.map((example) => example.id);
-    for (const id of ["gpiof-red-led", "gpiof-led-off", "gpiof-blink", "sw1-red-led", "switch-interrupts", "systick-blink", "timer1a-prescaled", "three-timers"]) {
+    for (const id of ["gpiof-red-led", "gpiof-led-off", "gpiof-blink", "sw1-red-led", "switch-interrupts", "systick-blink", "timer1a-prescaled", "three-timers", "lab-gpio-interrupts", "lab-systick-timer"]) {
       assert.ok(ids.includes(id), `missing example ${id}`);
     }
     assert.ok(examples.every((example) => example.source.includes("int main(void)")));

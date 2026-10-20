@@ -1,0 +1,8 @@
+{
+  "id": "lab-gpio-interrupts",
+  "title": "J — Exp 6 style: switch interrupts with TM4C123.h",
+  "summary": "Lab-style code using the CMSIS-style device header: GPIOF->…, NVIC->IP, NVIC_EnableIRQ(GPIOF_IRQn). SW1 toggles red, SW2 toggles green from GPIOF_Handler.",
+  "experiment": 6,
+  "expected": "SW1 presses toggle the red LED; SW2 presses toggle the green LED",
+  "inputs": ["SW1", "SW2"]
+}

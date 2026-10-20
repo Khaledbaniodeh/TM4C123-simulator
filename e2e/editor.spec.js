@@ -22,7 +22,7 @@ async function openWorkspace(page) {
     }
   });
   await page.goto("/");
-  await expect(page.locator("#exampleSelect option")).toHaveCount(9);
+  await expect(page.locator("#exampleSelect option")).toHaveCount(11);
   await expect(page.locator('.part[data-type="tm4c123gxl-launchpad"]')).toBeVisible();
   return errors;
 }
