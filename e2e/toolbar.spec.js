@@ -3,7 +3,7 @@
  * button's position and size is recorded (GitHub notice) and must match the
  * layout measured before the toolbar icons changed (no button may shift or
  * wrap); the toolbar is captured in disabled, hover, and focus states.
- * Undo, Duplicate, and Delete use monochrome SVG icons in the button's text color,
+ * Undo, Redo, Duplicate, and Delete use monochrome SVG icons in the button's text color,
  * drawn with the same size and stroke so they read as one icon set.
  */
 import { expect, test } from "@playwright/test";
@@ -63,6 +63,7 @@ for (const size of SIZES) {
     }, id);
     const expected = {
       undoButton: { label: "Undo", title: "Undo (Ctrl+Z)" },
+      redoButton: { label: "Redo", title: "Redo (Ctrl+Y)" },
       deleteButton: { label: "Delete selection", title: "Delete (Del)" },
       duplicateButton: { label: "Duplicate selected part", title: "Duplicate (Ctrl+D)" },
     };
@@ -84,7 +85,7 @@ for (const size of SIZES) {
       });
     }
     // One visual language: same size, stroke weight, caps, joins, and color source.
-    for (const id of ["undoButton", "duplicateButton"]) {
+    for (const id of ["undoButton", "redoButton", "duplicateButton"]) {
       expect(icons[id].strokeStyle, id).toBe(icons.deleteButton.strokeStyle);
       expect(icons[id].size, id).toBe(icons.deleteButton.size);
       expect(icons[id].color, id).toBe(icons.deleteButton.color);
@@ -146,6 +147,38 @@ for (const size of SIZES) {
     await page.locator("#circuitCanvas").press("Control+z");
     await expect(page.locator('.part[data-part^="led"]')).toHaveCount(1);
     expect(await geometry(), "undoing does not move toolbar buttons").toBe(disabled);
+
+    // Redo restores each undone duplicate: button click, keyboard focus (Tab from Undo) + Enter,
+    // Ctrl+Y, and Ctrl+Shift+Z after one more undo.
+    const redo = page.getByRole("button", { name: "Redo", exact: true });
+    await expect(redo).toBeEnabled();
+    await redo.hover();
+    expect(await page.evaluate(() => getComputedStyle(document.querySelector("#redoButton svg")).stroke))
+      .toBe(await page.evaluate(() => getComputedStyle(document.querySelector("#redoButton")).color));
+    await page.locator(".simulator-toolbar").screenshot({ path: `test-results/toolbar-${size.width}x${size.height}-redo-hover.png` });
+    await redo.click();
+    await expect(page.locator('.part[data-part="led2"]')).toHaveCount(1);
+    await page.mouse.move(0, 0);
+    await page.locator("#undoButton").focus();
+    await page.keyboard.press("Tab");
+    expect(await page.evaluate(() => document.activeElement.id)).toBe("redoButton");
+    expect(await page.evaluate(() => document.activeElement.matches(":focus-visible"))).toBe(true);
+    await page.locator(".simulator-toolbar").screenshot({ path: `test-results/toolbar-${size.width}x${size.height}-redo-focus.png` });
+    await page.keyboard.press("Enter");
+    await expect(page.locator('.part[data-part="led3"]')).toHaveCount(1);
+    await page.locator("#circuitCanvas").press("Control+y");
+    await expect(page.locator('.part[data-part="led4"]')).toHaveCount(1);
+    await expect(redo).toBeDisabled();
+    await page.locator("#circuitCanvas").press("Control+z");
+    await expect(page.locator('.part[data-part="led4"]')).toHaveCount(0);
+    await page.locator("#circuitCanvas").press("Control+Shift+z");
+    await expect(page.locator('.part[data-part="led4"]')).toHaveCount(1);
+    await expect(redo).toBeDisabled();
+    expect(await geometry(), "redoing does not move toolbar buttons").toBe(disabled);
+    for (let i = 0; i < 3; i++) {
+      await page.locator("#circuitCanvas").press("Control+z");
+    }
+    await expect(page.locator('.part[data-part^="led"]')).toHaveCount(1);
     await page.evaluate(() => window.__tm4c.workspace.select({ kind: "part", id: "led1" }));
     await expect(page.getByRole("button", { name: "Delete selection" })).toBeEnabled();
     await page.getByRole("button", { name: "Delete selection" }).hover();
@@ -176,6 +209,16 @@ for (const size of SIZES) {
     await expect(page.locator('.part[data-part^="led"]')).toHaveCount(0);
     await expect(undo).toBeDisabled();
     expect(await geometry(), "Undo disabled again: no toolbar button moved").toBe(disabled);
+
+    // Redo replays the add and then the delete; with nothing left to redo it is disabled.
+    await expect(redo).toBeEnabled();
+    await redo.click();
+    await expect(page.locator('.part[data-part="led1"]')).toHaveCount(1);
+    await redo.click();
+    await expect(page.locator('.part[data-part="led1"]')).toHaveCount(0);
+    await expect(redo).toBeDisabled();
+    await expect(undo).toBeEnabled();
+    expect(await geometry(), "Redo disabled again: no toolbar button moved").toBe(disabled);
     expect(errors).toEqual([]);
   });
 }
