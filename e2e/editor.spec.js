@@ -327,9 +327,10 @@ test("pin hit targets, tooltips, and wire endpoints stay correct across zoom and
 
 test("dragging moves a part by the screen distance divided by the zoom", async ({ page }) => {
   await openWorkspace(page);
+  // Zoom first: the new part is then placed inside the zoomed view (it goes beside the board, not under the zoom center).
+  await page.getByRole("button", { name: "Zoom in", exact: true }).click();
   await page.getByRole("button", { name: /Part/ }).click();
   await page.locator('.library-item[data-type="resistor"]').click();
-  await page.getByRole("button", { name: "Zoom in", exact: true }).click();
   const part = page.locator('.part[data-part="r1"]');
   const before = (await part.getAttribute("transform")).match(/translate\(([-\d.]+) ([-\d.]+)\)/).slice(1).map(Number);
   const zoom = await page.evaluate(() => window.__tm4c.workspace.zoomLevel);
