@@ -231,6 +231,44 @@ describe("geometry", () => {
     assert.ok(performance.now() - start < 250, "placement search is fast");
   });
 
+  it("add-part placement: the middle of the view when free, else the nearest free spot; repeats never stack", () => {
+    const view = { x: 0, y: 0, width: 960, height: 576 };
+    const led = { width: 28.8, height: 57.6 };
+    // As canvas.addPart builds it: centered in the view, snapped to the grid, preferred offset (0, 0).
+    const centered = { x: snap(480 - led.width / 2), y: snap(288 - led.height / 2), ...led };
+    const moved = (place) => ({ x: centered.x + place.dx, y: centered.y + place.dy, ...led });
+    const hits = (a, o) => Math.min(a.x + a.width, o.x + o.width + GRID) - Math.max(a.x, o.x - GRID) > 1e-6
+      && Math.min(a.y + a.height, o.y + o.height + GRID) - Math.max(a.y, o.y - GRID) > 1e-6;
+    const inside = (a) => a.x >= GRID * 2 - 1e-6 && a.y >= GRID * 2 - 1e-6
+      && a.x + a.width <= view.width - GRID * 2 + 1e-6 && a.y + a.height <= view.height - GRID * 2 + 1e-6;
+    const onGrid = (v) => Math.abs(v / GRID - Math.round(v / GRID)) < 1e-9;
+
+    // Empty canvas: exactly the middle, as before.
+    assert.deepEqual(placeInView(centered, view, { dx: 0, dy: 0 }, { obstacles: [] }), { dx: 0, dy: 0, relocated: false, crowded: false });
+
+    // The LaunchPad fills the middle (as after Fit): parts go beside it, each one an obstacle for the next.
+    const board = { x: 336, y: 48, width: 288, height: 480 };
+    const obstacles = [board];
+    for (let i = 0; i < 6; i++) {
+      const place = placeInView(centered, view, { dx: 0, dy: 0 }, { obstacles });
+      assert.deepEqual(placeInView(centered, view, { dx: 0, dy: 0 }, { obstacles }), place, "deterministic");
+      const box = moved(place);
+      assert.equal(place.crowded, false, `add ${i} found free space`);
+      assert.ok(inside(box), `add ${i} visible`);
+      assert.ok(obstacles.every((o) => !hits(box, o)), `add ${i} clear of the board and earlier parts`);
+      assert.ok(onGrid(place.dx) && onGrid(place.dy), `add ${i} on the grid`);
+      obstacles.push(box);
+    }
+
+    // Zoomed in on the board (it covers the whole view): visible, least overlap, flagged as crowded.
+    const zoomed = { x: 400, y: 200, width: 160, height: 120 };
+    const crowdedCenter = { x: snap(480 - led.width / 2), y: snap(260 - led.height / 2), ...led };
+    const crowded = placeInView(crowdedCenter, zoomed, { dx: 0, dy: 0 }, { obstacles: [board] });
+    assert.equal(crowded.crowded, true);
+    const box = { x: crowdedCenter.x + crowded.dx, y: crowdedCenter.y + crowded.dy, ...led };
+    assert.ok(box.x >= zoomed.x && box.y >= zoomed.y && box.x + box.width <= zoomed.x + zoomed.width && box.y + box.height <= zoomed.y + zoomed.height, "still in view");
+  });
+
   it("zooms about an anchor and converts client coordinates", () => {
     const view = { x: 0, y: 0, width: 400, height: 200 };
     const zoomed = zoomViewBox(view, 2, { x: 100, y: 50 });

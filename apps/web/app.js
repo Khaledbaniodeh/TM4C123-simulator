@@ -373,7 +373,7 @@ workspace.addEventListener("clipboard", (event) => {
   const what = `${parts} part${parts === 1 ? "" : "s"}${wires ? ` and ${wires} wire${wires === 1 ? "" : "s"} between them` : ""}`;
   if (relocated) {
     // Short enough for one line at 1024 px.
-    const verb = action === "duplicate" ? "Duplicated" : "Pasted";
+    const verb = { add: "Added", duplicate: "Duplicated" }[action] ?? "Pasted";
     workspaceMessage(crowded ? `${verb} into view; no free space, so it overlaps.` : `${verb} into free space in view.`);
     return;
   }

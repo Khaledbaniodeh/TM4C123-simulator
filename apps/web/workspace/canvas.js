@@ -198,7 +198,11 @@ export class Workspace extends EventTarget {
     this.#emit("select", { selection });
   }
 
-  /** Adds a part from the library at the center of the view. */
+  /**
+   * Adds a part from the library: in the middle of the view when that is
+   * free, otherwise on the nearest free visible canvas (the same
+   * collision-aware placement as paste and duplicate; the view never moves).
+   */
   addPart(type) {
     const definition = this.#catalog[type];
     const center = { x: this.#viewBox.x + this.#viewBox.width / 2, y: this.#viewBox.y + this.#viewBox.height / 2 };
@@ -210,8 +214,12 @@ export class Workspace extends EventTarget {
       rotate: 0,
       attrs: structuredClone(definition.defaultAttrs ?? {}),
     };
+    const place = placeInView(this.#boundsOf([part]), this.#viewBox, { dx: 0, dy: 0 }, { obstacles: this.#obstacles(new Set()) });
+    part.left += place.dx;
+    part.top += place.dy;
     this.execute(commands.addPart(part));
     this.select({ kind: "part", id: part.id });
+    this.#reportPlacement("add", place, 1, 0);
     return part;
   }
 
@@ -594,7 +602,7 @@ export class Workspace extends EventTarget {
     return unionBounds(parts.map((part) => partBounds(part, this.#catalog[part.type].size)));
   }
 
-  /** Tells the app when smart paste placed items in the view instead of at the cascade position. */
+  /** Tells the app when placement moved items off their preferred spot (cascade, or the view's middle for add). */
   #reportPlacement(action, place, parts, wires) {
     if (place.relocated) {
       this.#emit("clipboard", { action, parts, wires, relocated: true, crowded: place.crowded });
