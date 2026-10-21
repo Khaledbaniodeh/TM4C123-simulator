@@ -3,7 +3,7 @@
  * button's position and size is recorded (GitHub notice) and must match the
  * layout measured before the toolbar icons changed (no button may shift or
  * wrap); the toolbar is captured in disabled, hover, and focus states.
- * Undo, Redo, Duplicate, and Delete use monochrome SVG icons in the button's text color,
+ * Undo, Redo, Rotate, Duplicate, and Delete use monochrome SVG icons in the button's text color,
  * drawn with the same size and stroke so they read as one icon set.
  */
 import { expect, test } from "@playwright/test";
@@ -64,6 +64,7 @@ for (const size of SIZES) {
     const expected = {
       undoButton: { label: "Undo", title: "Undo (Ctrl+Z)" },
       redoButton: { label: "Redo", title: "Redo (Ctrl+Y)" },
+      rotateButton: { label: "Rotate selected part", title: "Rotate (R)" },
       deleteButton: { label: "Delete selection", title: "Delete (Del)" },
       duplicateButton: { label: "Duplicate selected part", title: "Duplicate (Ctrl+D)" },
     };
@@ -85,7 +86,7 @@ for (const size of SIZES) {
       });
     }
     // One visual language: same size, stroke weight, caps, joins, and color source.
-    for (const id of ["undoButton", "redoButton", "duplicateButton"]) {
+    for (const id of ["undoButton", "redoButton", "rotateButton", "duplicateButton"]) {
       expect(icons[id].strokeStyle, id).toBe(icons.deleteButton.strokeStyle);
       expect(icons[id].size, id).toBe(icons.deleteButton.size);
       expect(icons[id].color, id).toBe(icons.deleteButton.color);
@@ -108,6 +109,48 @@ for (const size of SIZES) {
     });
     await page.screenshot({ path: `test-results/toolbar-${size.width}x${size.height}-icons-actual-size.png`, clip: group });
 
+    // Rotate turns the selected LED 90 degrees each: button click, R on the canvas, and keyboard
+    // focus (Tab from Undo, skipping the disabled Redo) + Enter; undo and redo step through them.
+    const led = page.locator('.part[data-part="led1"]');
+    const undo = page.getByRole("button", { name: "Undo", exact: true });
+    const redo = page.getByRole("button", { name: "Redo", exact: true });
+    const rotate = page.getByRole("button", { name: "Rotate selected part" });
+    await expect(rotate).toBeEnabled();
+    await expect(led).not.toHaveAttribute("transform", /rotate/);
+    await rotate.hover();
+    expect(await page.evaluate(() => getComputedStyle(document.querySelector("#rotateButton svg")).stroke))
+      .toBe(await page.evaluate(() => getComputedStyle(document.querySelector("#rotateButton")).color));
+    await page.locator(".simulator-toolbar").screenshot({ path: `test-results/toolbar-${size.width}x${size.height}-rotate-hover.png` });
+    await rotate.click();
+    await expect(led).toHaveAttribute("transform", /rotate\(90/);
+    await page.mouse.move(0, 0);
+    await page.locator("#circuitCanvas").press("r");
+    await expect(led).toHaveAttribute("transform", /rotate\(180/);
+    await expect(redo).toBeDisabled();
+    await page.locator("#undoButton").focus();
+    await page.keyboard.press("Tab");
+    expect(await page.evaluate(() => document.activeElement.id)).toBe("rotateButton");
+    expect(await page.evaluate(() => document.activeElement.matches(":focus-visible"))).toBe(true);
+    await page.locator(".simulator-toolbar").screenshot({ path: `test-results/toolbar-${size.width}x${size.height}-rotate-focus.png` });
+    await page.keyboard.press("Enter");
+    await expect(led).toHaveAttribute("transform", /rotate\(270/);
+    expect(await geometry(), "rotating does not move toolbar buttons").toBe(disabled);
+    await undo.click();
+    await expect(led).toHaveAttribute("transform", /rotate\(180/);
+    await page.locator("#circuitCanvas").press("Control+z");
+    await expect(led).toHaveAttribute("transform", /rotate\(90/);
+    await redo.click();
+    await expect(led).toHaveAttribute("transform", /rotate\(180/);
+    await page.locator("#circuitCanvas").press("Control+y");
+    await expect(led).toHaveAttribute("transform", /rotate\(270/);
+    for (let i = 0; i < 3; i++) {
+      await page.locator("#circuitCanvas").press("Control+z");
+    }
+    await expect(led).not.toHaveAttribute("transform", /rotate/);
+    await expect(rotate).toBeDisabled(); // undo clears the selection: nothing to rotate
+    await page.evaluate(() => window.__tm4c.workspace.select({ kind: "part", id: "led1" }));
+    await expect(rotate).toBeEnabled();
+
     // Duplicate: hover color, keyboard focus (Tab from Rotate), button click, Ctrl+D, and undo.
     await page.getByRole("button", { name: "Duplicate selected part" }).hover();
     expect(await page.evaluate(() => getComputedStyle(document.querySelector("#duplicateButton svg")).stroke))
@@ -128,7 +171,6 @@ for (const size of SIZES) {
     expect(await geometry(), "duplicating does not move toolbar buttons").toBe(disabled);
 
     // Undo reverts one duplicate each: button click, keyboard focus (Tab from Part) + Enter, and Ctrl+Z.
-    const undo = page.getByRole("button", { name: "Undo", exact: true });
     await expect(undo).toBeEnabled();
     await undo.hover();
     expect(await page.evaluate(() => getComputedStyle(document.querySelector("#undoButton svg")).stroke))
@@ -150,7 +192,6 @@ for (const size of SIZES) {
 
     // Redo restores each undone duplicate: button click, keyboard focus (Tab from Undo) + Enter,
     // Ctrl+Y, and Ctrl+Shift+Z after one more undo.
-    const redo = page.getByRole("button", { name: "Redo", exact: true });
     await expect(redo).toBeEnabled();
     await redo.hover();
     expect(await page.evaluate(() => getComputedStyle(document.querySelector("#redoButton svg")).stroke))
