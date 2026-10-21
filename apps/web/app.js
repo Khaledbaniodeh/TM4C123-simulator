@@ -20,6 +20,7 @@ import { History, WIRE_COLORS, commands, createDiagram, findPart, parseDiagram, 
 import { evaluateCircuit } from "./workspace/netlist.js";
 import { LcdSimulation, bindLcd } from "./workspace/lcd.js";
 import { evaluateAnalog } from "./workspace/analog.js";
+import { DraftStore, browserStorage, compareWork } from "./draft-store.js";
 
 const CAPABILITIES = [
   { name: "ARM GCC build → Cortex-M4 ELF", status: "verified" },
@@ -48,8 +49,6 @@ const STATUS_LABELS = {
   missing: "Not modeled — accesses are reported",
 };
 
-const DRAFT_KEY = "tm4c123-simulator:diagram-draft";
-
 /** GPIOs whose live state is shown when a board component is selected. */
 const COMPONENT_PINS = {
   D1: ["PF1", "PF2", "PF3"],
@@ -73,6 +72,7 @@ const elements = {
   lineNumbers: $("#lineNumbers"),
   cursorPosition: $("#cursorPosition"),
   editorStatus: $("#editorStatus"),
+  draftStatus: $("#draftStatus"),
   simulationStatus: $("#simulationStatus"),
   stateIndicator: $("#stateIndicator"),
   virtualTime: $("#virtualTime"),
@@ -132,9 +132,17 @@ const state = {
   appliedAnalog: new Map(),
   /** Die temperature for the ADC's internal sensor (°C). */
   dieCelsius: 25,
+  /**
+   * The example the work started from: its id, unedited source, and circuit
+   * (serialized). Student edits are whatever differs from it.
+   */
+  baseline: { exampleId: null, source: "", diagramText: serializeDiagram(createDiagram({ author: "" })) },
 };
 
-const history = new History(loadDraft() ?? createDiagram({ author: "" }));
+// Drafts of the student's work in this browser (see draft-store.js).
+const drafts = new DraftStore(browserStorage());
+const restored = drafts.read((text) => parseDiagram(text, CATALOG));
+const history = new History(restored.diagram ?? createDiagram({ author: "" }));
 
 // ---------------------------------------------------------------------------
 // Console
@@ -353,7 +361,7 @@ const workspace = new Workspace(elements.canvas, elements.tooltip, {
 });
 
 workspace.addEventListener("change", (event) => {
-  saveDraft();
+  saveCircuitDraft();
   syncLcds();
   reevaluateCircuit();
   renderToolbar();
@@ -504,24 +512,59 @@ function syncExternalDrives() {
   }
 }
 
-function saveDraft() {
-  try {
-    localStorage.setItem(DRAFT_KEY, serializeDiagram(history.diagram));
-  } catch {
-    // Storage may be unavailable (private mode); the diagram stays in memory.
-  }
+// ---------------------------------------------------------------------------
+// Drafts of the student's work
+// ---------------------------------------------------------------------------
+
+const DRAFT_STATUS = {
+  saved: {
+    text: "Saved in this browser",
+    title: "Your main.c and circuit are kept in this browser's local storage and restored when the page reloads. " +
+      "This is not a backup: clearing site data or using another browser loses them. Save downloads the circuit as diagram.json.",
+  },
+  failed: {
+    text: "Not saved: browser storage full or blocked",
+    title: "Your latest changes are not stored and will be lost on reload. Keep a copy: Save downloads the circuit " +
+      "(diagram.json); copy main.c into a file.",
+  },
+  unavailable: {
+    text: "Not saved: browser storage unavailable",
+    title: "This browser does not allow local storage here, so your work will be lost on reload. Keep a copy: Save " +
+      "downloads the circuit (diagram.json); copy main.c into a file.",
+  },
+  idle: { text: "", title: "" },
+};
+
+function currentWork() {
+  return { source: elements.editor.value, diagramText: serializeDiagram(history.diagram) };
 }
 
-function loadDraft() {
-  try {
-    const text = localStorage.getItem(DRAFT_KEY);
-    if (!text) {
-      return null;
-    }
-    const { diagram } = parseDiagram(text, CATALOG);
-    return diagram;
-  } catch {
-    return null;
+function saveCircuitDraft() {
+  drafts.saveDiagram(serializeDiagram(history.diagram));
+  renderDraftStatus();
+}
+
+function saveSourceDraft() {
+  const edited = elements.editor.value !== state.baseline.source;
+  // Before the examples arrive, keep the restored draft's example.
+  const exampleId = state.baseline.exampleId ?? restored.source?.exampleId ?? null;
+  drafts.saveSource({ exampleId, source: edited ? elements.editor.value : null });
+  renderDraftStatus();
+}
+
+let draftWarningShown = false;
+function renderDraftStatus() {
+  const status = drafts.status;
+  const { text, title } = DRAFT_STATUS[status];
+  elements.draftStatus.textContent = text;
+  elements.draftStatus.title = title;
+  elements.draftStatus.dataset.status = status;
+  if ((status === "failed" || status === "unavailable") && !draftWarningShown) {
+    draftWarningShown = true;
+    const reason = status === "failed" ? `Browser storage refused the draft (${drafts.lastError?.name ?? "error"})` : "Browser storage is unavailable";
+    log(`${reason}: your code and circuit are not saved and will be lost on reload. Save downloads the circuit; copy main.c into a file.`, "warning");
+  } else if (status === "saved") {
+    draftWarningShown = false;
   }
 }
 
@@ -536,7 +579,7 @@ function loadDiagramText(text, origin) {
   workspace.select(null);
   workspace.render();
   workspace.fit();
-  saveDraft();
+  saveCircuitDraft();
   reevaluateCircuit();
   renderToolbar();
   renderPinTable();
@@ -1190,20 +1233,85 @@ function handleMessage(sessionId, message) {
 // Examples and initialization
 // ---------------------------------------------------------------------------
 
+/** The circuit an example starts from: its diagram.json, or the bare LaunchPad. */
+function exampleCircuitText(example) {
+  const diagram = example.diagram ? parseDiagram(example.diagram, CATALOG).diagram : null;
+  return serializeDiagram(diagram ?? createDiagram({ author: "" }));
+}
+
+function showExample(example) {
+  elements.exampleSelect.value = example.id;
+  elements.exampleSummary.textContent = `${example.summary} Expected: ${example.expected}.`;
+}
+
+function setSource(text) {
+  elements.editor.value = text;
+  updateLineNumbers();
+  updateCursorPosition();
+}
+
+/** Replaces the code and circuit with the example's own (callers confirm first). */
 function loadExample(id) {
   const example = state.examples.find((e) => e.id === id);
   if (!example) {
     return;
   }
-  elements.editor.value = example.source;
-  elements.exampleSummary.textContent = `${example.summary} Expected: ${example.expected}.`;
-  updateLineNumbers();
-  updateCursorPosition();
+  showExample(example);
+  setSource(example.source);
   showProblems([], null);
-  if (example.diagram) {
-    loadDiagramText(example.diagram, `the "${example.title}" circuit`);
+  loadDiagramText(exampleCircuitText(example), `the "${example.title}" circuit`);
+  state.baseline = { exampleId: example.id, source: example.source, diagramText: serializeDiagram(history.diagram) };
+  saveSourceDraft();
+  render();
+}
+
+/**
+ * First example load: work restored from this browser (or typed while the
+ * examples were loading) is kept, and the example it started from becomes
+ * the baseline again, so edits stay recognizable as edits.
+ */
+function restoreWork() {
+  const draft = restored.source;
+  const example = state.examples.find((e) => e.id === draft?.exampleId) ?? state.examples[0];
+  if (!example) {
+    return;
+  }
+  const keepSource = draft?.source != null || elements.editor.value !== "";
+  const keepCircuit = restored.diagram !== null;
+  if (!keepSource && !keepCircuit) {
+    loadExample(example.id);
+    return;
+  }
+  showExample(example);
+  if (!keepSource) {
+    setSource(example.source);
+  }
+  if (!keepCircuit) {
+    loadDiagramText(exampleCircuitText(example), `the "${example.title}" circuit`);
+  }
+  state.baseline = { exampleId: example.id, source: example.source, diagramText: exampleCircuitText(example) };
+  saveSourceDraft();
+  const changes = compareWork(currentWork(), state.baseline);
+  const what = [changes.source && "main.c", changes.circuit && "circuit"].filter(Boolean).join(" and ");
+  if (what) {
+    workspaceMessage(`Restored your ${what} from this browser (example "${example.title}").`);
+    log(`Restored your edited ${what} from this browser's local storage (started from example "${example.title}").`, "success");
   }
   render();
+}
+
+/** Asks before an example switch would replace edited code or circuit; true = go ahead. */
+function confirmExampleSwitch(id) {
+  const changes = compareWork(currentWork(), state.baseline);
+  if (!changes.source && !changes.circuit) {
+    return true;
+  }
+  const what = changes.source && changes.circuit ? "your edited main.c and circuit" : changes.source ? "your edited main.c" : "your circuit changes";
+  const title = state.examples.find((e) => e.id === id)?.title ?? id;
+  return window.confirm(
+    `Load example "${title}"?\n\nThis replaces ${what} with the example's code and circuit, and cannot be undone.` +
+      `\n\nChoose Cancel to keep working${changes.circuit ? " (Save downloads your circuit as diagram.json first)" : ""}.`,
+  );
 }
 
 async function initialize() {
@@ -1229,7 +1337,7 @@ async function initialize() {
         return option;
       }),
     );
-    loadExample(examples[0]?.id);
+    restoreWork();
     log("Workspace ready. Choose an example, then Run (compiles automatically).", "success");
   } catch (error) {
     log(`Cannot reach the local orchestrator: ${error.message}. Start it with \`npm start\`.`, "error");
@@ -1242,11 +1350,19 @@ async function initialize() {
 // Wiring of controls
 // ---------------------------------------------------------------------------
 
-elements.exampleSelect.addEventListener("change", () => loadExample(elements.exampleSelect.value));
+elements.exampleSelect.addEventListener("change", () => {
+  const id = elements.exampleSelect.value;
+  if (confirmExampleSwitch(id)) {
+    loadExample(id);
+  } else {
+    elements.exampleSelect.value = state.baseline.exampleId; // Cancel: nothing changes
+  }
+});
 elements.editor.addEventListener("input", () => {
   updateLineNumbers();
   updateCursorPosition();
   updateEditorStatus();
+  saveSourceDraft();
 });
 elements.editor.addEventListener("click", updateCursorPosition);
 elements.editor.addEventListener("keyup", updateCursorPosition);
@@ -1318,5 +1434,14 @@ window.__tm4c = Object.freeze({
   load: (text) => loadDiagramText(text, "test input"),
 });
 
+// Restore the student's source before anything else runs, so the asynchronous
+// example load can tell it apart from an empty editor and keep it.
+if (restored.source?.source != null) {
+  elements.editor.value = restored.source.source;
+}
+if (restored.unreadable.length) {
+  log(`A saved ${restored.unreadable.join(" and ")} draft could not be read; it was set aside and the example is shown instead.`, "warning");
+}
+renderDraftStatus();
 updateLineNumbers();
 initialize();

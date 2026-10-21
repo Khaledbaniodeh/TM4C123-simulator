@@ -260,6 +260,25 @@ button {
   border-radius: 999px;
 }
 
+.editor-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* Whether the student's work is kept in this browser (draft-store.js). */
+.draft-status {
+  color: var(--text-muted);
+  font-size: 11px;
+  text-align: right;
+}
+
+.draft-status[data-status="failed"],
+.draft-status[data-status="unavailable"] {
+  color: #f2cc60;
+}
+
 /* File Tabs */
 
 .file-tabs {
