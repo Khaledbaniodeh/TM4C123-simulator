@@ -3,7 +3,8 @@
  * button's position and size is recorded (GitHub notice) and must match the
  * layout measured before the toolbar icons changed (no button may shift or
  * wrap); the toolbar is captured in disabled, hover, and focus states.
- * The Delete button uses a monochrome SVG icon in the button's text color.
+ * Delete and Duplicate use monochrome SVG icons in the button's text color,
+ * drawn with the same size and stroke so they read as one icon set.
  */
 import { expect, test } from "@playwright/test";
 
@@ -39,36 +40,52 @@ for (const size of SIZES) {
     console.log(`::notice title=toolbar ${size.width}x${size.height} (nothing selected)::${disabled}`);
     expect(disabled, "no toolbar button shifted, resized, or wrapped").toBe(BASELINE[`${size.width}x${size.height}`]);
 
-    // Delete: monochrome SVG in the button's text color; same label, tooltip, and state.
-    const icon = await page.evaluate(() => {
-      const button = document.querySelector("#deleteButton");
+    // SVG icons: no text glyph, decorative, 11 px, stroked in the button's text color.
+    const iconOf = (id) => page.evaluate((buttonId) => {
+      const button = document.querySelector(`#${buttonId}`);
       const svg = button.querySelector("svg.toolbar-icon");
       const box = svg?.getBoundingClientRect();
+      const style = svg ? getComputedStyle(svg) : null;
       return {
         text: button.textContent.trim(),
         svg: Boolean(svg),
         hidden: svg?.getAttribute("aria-hidden"),
         focusable: svg?.getAttribute("focusable"),
         size: box ? `${Math.round(box.width)}x${Math.round(box.height)}` : null,
-        stroke: svg ? getComputedStyle(svg).stroke : null,
-        fill: svg ? getComputedStyle(svg).fill : null,
+        stroke: style?.stroke ?? null,
+        strokeStyle: style ? `${style.strokeWidth} ${style.strokeLinecap} ${style.strokeLinejoin}` : null,
+        fill: style?.fill ?? null,
         color: getComputedStyle(button).color,
+        label: button.getAttribute("aria-label"),
         title: button.title,
         disabled: button.disabled,
       };
-    });
-    expect(icon).toEqual({
-      text: "",
-      svg: true,
-      hidden: "true",
-      focusable: "false",
-      size: "11x11",
-      stroke: icon.color,
-      fill: "none",
-      color: icon.color,
-      title: "Delete (Del)",
-      disabled: true,
-    });
+    }, id);
+    const expected = {
+      deleteButton: { label: "Delete selection", title: "Delete (Del)" },
+      duplicateButton: { label: "Duplicate selected part", title: "Duplicate (Ctrl+D)" },
+    };
+    const icons = {};
+    for (const [id, names] of Object.entries(expected)) {
+      icons[id] = await iconOf(id);
+      expect(icons[id], id).toEqual({
+        text: "",
+        svg: true,
+        hidden: "true",
+        focusable: "false",
+        size: "11x11",
+        stroke: icons[id].color,
+        strokeStyle: icons[id].strokeStyle,
+        fill: "none",
+        color: icons[id].color,
+        ...names,
+        disabled: true,
+      });
+    }
+    // One visual language: same size, stroke weight, caps, joins, and color source.
+    expect(icons.duplicateButton.strokeStyle).toBe(icons.deleteButton.strokeStyle);
+    expect(icons.duplicateButton.size).toBe(icons.deleteButton.size);
+    expect(icons.duplicateButton.color).toBe(icons.deleteButton.color);
     await page.locator(".simulator-toolbar").screenshot({ path: `test-results/toolbar-${size.width}x${size.height}-disabled.png` });
 
     // Select a part so Delete is enabled.
@@ -77,6 +94,40 @@ for (const size of SIZES) {
     await expect(page.getByRole("button", { name: "Delete selection" })).toBeEnabled();
     const enabled = await geometry();
     expect(enabled, "enabling buttons does not move them").toBe(disabled);
+    await expect(page.getByRole("button", { name: "Duplicate selected part" })).toBeEnabled();
+
+    // The icon group (Undo ... Delete) at the browser's actual rendered pixel size.
+    const group = await page.evaluate(() => {
+      const first = document.querySelector("#undoButton").getBoundingClientRect();
+      const last = document.querySelector("#deleteButton").getBoundingClientRect();
+      return { x: first.left - 4, y: first.top - 4, width: last.right - first.left + 8, height: first.height + 8 };
+    });
+    await page.screenshot({ path: `test-results/toolbar-${size.width}x${size.height}-icons-actual-size.png`, clip: group });
+
+    // Duplicate: hover color, keyboard focus (Tab from Rotate), button click, Ctrl+D, and undo.
+    await page.getByRole("button", { name: "Duplicate selected part" }).hover();
+    expect(await page.evaluate(() => getComputedStyle(document.querySelector("#duplicateButton svg")).stroke))
+      .toBe(await page.evaluate(() => getComputedStyle(document.querySelector("#duplicateButton")).color));
+    await page.locator(".simulator-toolbar").screenshot({ path: `test-results/toolbar-${size.width}x${size.height}-duplicate-hover.png` });
+    await page.mouse.move(0, 0);
+    await page.locator("#rotateButton").focus();
+    await page.keyboard.press("Tab");
+    expect(await page.evaluate(() => document.activeElement.id)).toBe("duplicateButton");
+    expect(await page.evaluate(() => document.activeElement.matches(":focus-visible"))).toBe(true);
+    await page.locator(".simulator-toolbar").screenshot({ path: `test-results/toolbar-${size.width}x${size.height}-duplicate-focus.png` });
+    await page.keyboard.press("Enter"); // keyboard activation duplicates like a click
+    await expect(page.locator('.part[data-part="led2"]')).toHaveCount(1);
+    await page.getByRole("button", { name: "Duplicate selected part" }).click();
+    await expect(page.locator('.part[data-part="led3"]')).toHaveCount(1);
+    await page.locator("#circuitCanvas").press("Control+d");
+    await expect(page.locator('.part[data-part="led4"]')).toHaveCount(1);
+    expect(await geometry(), "duplicating does not move toolbar buttons").toBe(disabled);
+    for (let i = 0; i < 3; i++) {
+      await page.locator("#circuitCanvas").press("Control+z");
+    }
+    await expect(page.locator('.part[data-part^="led"]')).toHaveCount(1);
+    await page.evaluate(() => window.__tm4c.workspace.select({ kind: "part", id: "led1" }));
+    await expect(page.getByRole("button", { name: "Delete selection" })).toBeEnabled();
     await page.getByRole("button", { name: "Delete selection" }).hover();
     // The icon follows the hover text color.
     expect(await page.evaluate(() => getComputedStyle(document.querySelector("#deleteButton svg")).stroke))
