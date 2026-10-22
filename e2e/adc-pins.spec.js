@@ -105,7 +105,8 @@ for (const size of SIZES) {
     await expect(page.locator("#simulationStatus")).toHaveText("Running", { timeout: 60_000 });
     await expect(row(page, "PE3")).toContainText("pot1 → AIN0");
     await expect(row(page, "PF2")).toContainText("HIGH", { timeout: 30_000 });
-    await row(page, "PE3").scrollIntoViewIfNeeded();
+    // The table element is stable; its rows are rebuilt on every refresh while the firmware runs.
+    await page.locator(".pin-table").scrollIntoViewIfNeeded();
     const fit = await page.evaluate(() => {
       const table = document.querySelector(".pin-table").getBoundingClientRect();
       const cellsInRow = [...document.querySelectorAll('#pinTable tr[data-pin="PE3"] td')].map((td) => td.getBoundingClientRect());
