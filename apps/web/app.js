@@ -138,6 +138,8 @@ const state = {
    * (serialized). Student edits are whatever differs from it.
    */
   baseline: { exampleId: null, source: "", diagramText: serializeDiagram(createDiagram({ author: "" })) },
+  /** The circuit as last loaded from a diagram file (serialized), so loading another file over it does not ask. */
+  importedCircuit: null,
 };
 
 // Drafts of the student's work in this browser (see draft-store.js).
@@ -586,6 +588,49 @@ function loadDiagramText(text, origin) {
   renderPinTable();
   workspaceMessage(`Loaded ${origin}.`);
   return true;
+}
+
+/**
+ * Whether replacing the circuit would lose the student's work: it differs
+ * from the example it started from and from the last diagram file loaded.
+ * A bare LaunchPad with nothing to undo has nothing to lose.
+ */
+function circuitAtRisk() {
+  const current = serializeDiagram(history.diagram);
+  if (current === state.baseline.diagramText || current === state.importedCircuit) {
+    return false;
+  }
+  const bare = history.diagram.connections.length === 0
+    && history.diagram.parts.every((part) => CATALOG[part.type].kind === "board");
+  return !bare || history.canUndo;
+}
+
+/**
+ * A diagram file chosen with Load. Invalid files are rejected without
+ * touching anything; a valid file that would replace circuit work is
+ * confirmed first, before the circuit, its undo history, or its draft
+ * change. The firmware source is never affected.
+ */
+function importDiagramFile(text, name) {
+  const { diagram } = parseDiagram(text, CATALOG);
+  if (!diagram) {
+    loadDiagramText(text, name); // reports the error; the circuit stays
+    return;
+  }
+  if (serializeDiagram(diagram) === serializeDiagram(history.diagram)) {
+    workspaceMessage(`${name} matches the current circuit; nothing changed.`);
+    return;
+  }
+  if (circuitAtRisk() && !window.confirm(
+    `Load "${name}"?\n\nThis replaces your current circuit and clears its undo history. Your main.c is not changed.` +
+      "\n\nChoose Cancel to keep your circuit (Save downloads it as diagram.json first).",
+  )) {
+    workspaceMessage(`Kept your circuit; ${name} was not loaded.`);
+    return;
+  }
+  if (loadDiagramText(text, name)) {
+    state.importedCircuit = serializeDiagram(history.diagram);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1413,7 +1458,7 @@ elements.loadDiagramButton.addEventListener("click", () => elements.loadDiagramI
 elements.loadDiagramInput.addEventListener("change", async () => {
   const file = elements.loadDiagramInput.files?.[0];
   if (file) {
-    loadDiagramText(await file.text(), file.name);
+    importDiagramFile(await file.text(), file.name);
   }
   elements.loadDiagramInput.value = "";
 });

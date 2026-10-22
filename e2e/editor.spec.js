@@ -268,15 +268,21 @@ test("Load opens the file chooser from the keyboard once; valid, repeated, inval
   await choosers[1].setFiles(json("diagram.json", saved));
   await expect.poll(serialized).toBe(saved);
 
-  // The input is reset, so the same file can be chosen again (after an edit).
+  // The input is reset, so the same file can be chosen again (after an edit, which Load asks to replace).
   await page.evaluate(() => window.__tm4c.workspace.select({ kind: "part", id: "led1" }));
   await page.locator("#circuitCanvas").press("Delete");
   await expect(page.locator('.part[data-part="led1"]')).toHaveCount(0);
+  const prompts = [];
+  page.once("dialog", (dialog) => {
+    prompts.push(dialog.message());
+    dialog.accept();
+  });
   await load.focus();
   await page.keyboard.press("Enter");
   await expect.poll(() => choosers.length).toBe(3);
   await choosers[2].setFiles(json("diagram.json", saved));
   await expect.poll(serialized).toBe(saved);
+  expect(prompts).toHaveLength(1);
 
   // An invalid file is rejected with a message; the circuit is unchanged.
   await load.focus();
