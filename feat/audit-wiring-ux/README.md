@@ -1,1 +1,1 @@
-Screenshots from feat/audit-wiring-ux @ 3a0df53488e36aab46f2ec37ea315f302a22aa95 (run 39811129915, test result: failure)
+Screenshots from feat/audit-wiring-ux @ 3e1f32b16711db4fdc08773aa3cbef8e43b8ccd5 (run 39814338018, test result: success)
