@@ -92,7 +92,7 @@ flowchart LR
   UI[Browser workspace] -- build / run / input --> ORCH[Node.js orchestrator<br/>loopback only]
   ORCH -- fixed argv --> GCC[arm-none-eabi-gcc 15.2.1] --> ELF[(ELF)]
   ORCH -- Monitor: LoadELF · RunFor · Reset --> R[Renode 1.17.0<br/>Cortex-M4F + NVIC]
-  R -- MMIO --> M[C# TM4C123 models<br/>SYSCTL · GPIO A–F · placeholders]
+  R -- MMIO --> M[C# TM4C123 models<br/>SYSCTL · GPIO · GPTM · ADC<br/>placeholders for the rest]
   M -- JSON-lines events<br/>virtual time + sequence --> ORCH
   ORCH -- Server-Sent Events --> UI
 ```
@@ -186,10 +186,13 @@ highlights it documents:
 ## Limitations
 
 - No container isolation yet. Local trusted use only.
-- Only the 16 MHz PIOSC reset clock. PLL/RCC are not modeled, and timing is
-  approximate (one instruction per cycle at 16 MIPS).
-- Interactive runs are slower than real time on Windows (0.1–0.8× measured).
-- Peripherals beyond SYSCTL/GPIO are placeholders.
+- Timing is approximate: one instruction per clock at the configured system
+  clock (16 MHz PIOSC at reset, 50 MHz with the lab PLL setup); not
+  cycle-accurate.
+- Interactive runs are slower than real time (0.1–0.8× measured on Windows;
+  firmware that polls SysTick `COUNTFLAG` ran at ~0.05× in CI).
+- UART, SSI, I2C, PWM, and other peripherals are placeholders that report
+  accesses.
 - **No comparison with physical hardware has been performed.**
 
 ## Roadmap

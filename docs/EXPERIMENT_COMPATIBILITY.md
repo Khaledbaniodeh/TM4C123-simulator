@@ -100,7 +100,7 @@ Native ARMASM input is **not implemented and not claimed**.
 | Execution-time violations (37 µs / 1.52 ms, 15 ms power-on) | ✅ Reported as LCD timing warnings (tested) |
 | Busy-flag / RAM reads (RW = 1) | ⛔ Not modeled — RW is tied to GND in the supported wiring; an RW = 1 strobe is reported |
 | Text rendered only from firmware-driven LCD transactions | ✅ Every character comes from E falling edges in the GPIO event stream |
-| Speed of `COUNTFLAG`-polling delays | 🟡 Correct in virtual time, but slow: each poll is an MMIO read, and CI observed ~0.05× real time at 50 MHz |
+| Speed of `COUNTFLAG`-polling delays | 🟡 Correct in virtual time; ~0.13× real time steady (first 200 ms ~0.06×) because every poll is an emulated register read ([PERFORMANCE.md](PERFORMANCE.md), D-034) |
 
 ## Experiment 9 — ADC
 
@@ -144,4 +144,5 @@ today) compile but are reported at run time as unimplemented.
 1. UART0 with a virtual serial terminal for Experiment 10.
 2. Dedicated tests for SysTick `CLKSOURCE`=0, GPTM one-shot/up-count, ADC
    SS0–SS2, continuous trigger, and hardware averaging.
-3. Wall-clock speed of `COUNTFLAG`-polling firmware.
+3. Wall-clock speed of `COUNTFLAG`-polling firmware: measured, root cause in
+   Renode MMIO cost, no safe fix available ([PERFORMANCE.md](PERFORMANCE.md)).
