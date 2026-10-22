@@ -19,7 +19,7 @@ import { Workspace } from "./workspace/canvas.js";
 import { History, WIRE_COLORS, commands, createDiagram, findPart, parseDiagram, serializeDiagram, splitEndpoint } from "./workspace/diagram.js";
 import { evaluateCircuit } from "./workspace/netlist.js";
 import { LcdSimulation, bindLcd } from "./workspace/lcd.js";
-import { evaluateAnalog } from "./workspace/analog.js";
+import { describeAnalogInput, evaluateAnalog } from "./workspace/analog.js";
 import { DraftStore, browserStorage, compareWork } from "./draft-store.js";
 
 const CAPABILITIES = [
@@ -149,6 +149,8 @@ const state = {
 const drafts = new DraftStore(browserStorage());
 const restored = drafts.read((text) => parseDiagram(text, CATALOG));
 const history = new History(restored.diagram ?? createDiagram({ author: "" }));
+// Analog sources of the restored circuit, for the pin table before anything runs (nothing is sent).
+state.analog = evaluateAnalog(history.diagram, CATALOG);
 
 // ---------------------------------------------------------------------------
 // Console
@@ -308,7 +310,12 @@ const workspace = new Workspace(elements.canvas, elements.tooltip, {
       const info = BOARD_PART.pinInfo(pinName);
       if (info.gpio) {
         const live = simulationLive() ? describePin(state.board, info.gpio) : null;
-        info.lines.push(live ? `Simulation: ${live.label} (${live.detail})` : "Simulation: not running");
+        const analog = analogInputOf(info.gpio);
+        if (analog) {
+          info.lines.push(analog.tooltip);
+        }
+        const digital = analog ? "Digital (GPIO model)" : "Simulation";
+        info.lines.push(live ? `${digital}: ${live.label} (${live.detail})` : "Simulation: not running");
       }
       return info;
     }
@@ -910,6 +917,13 @@ function attrSelect(part, key, values) {
 }
 
 /** Pin table: on-board pins plus every board GPIO that is wired in the diagram. */
+/** The analog source of an ADC-capable pin (see describeAnalogInput), or null. */
+function analogInputOf(gpio) {
+  const volts = state.analog.inputs[gpio];
+  const applied = simulationLive() && volts !== undefined && state.appliedAnalog.get(gpio) === volts;
+  return describeAnalogInput(gpio, state.analog, { applied });
+}
+
 function renderPinTable() {
   const live = simulationLive();
   const gpios = new Map([["PF0", "SW2"], ["PF1", "Red LED"], ["PF2", "Blue LED"], ["PF3", "Green LED"], ["PF4", "SW1"]]);
@@ -926,10 +940,14 @@ function renderPinTable() {
     }
   }
   const rows = [...gpios].map(([gpio, role]) => {
-    const { label, detail } = live ? describePin(state.board, gpio) : { label: "—", detail: "" };
+    // An ADC input wired to a potentiometer shows its analog source, not the digital buffer state.
+    const analog = analogInputOf(gpio);
+    const { label, detail } = analog
+      ? { label: analog.level, detail: analog.detail }
+      : live ? describePin(state.board, gpio) : { label: "—", detail: "" };
     const row = document.createElement("tr");
     row.dataset.pin = gpio;
-    row.className = `pin-${label.toLowerCase()}`;
+    row.className = analog ? (analog.level === "CONFLICT" ? "pin-conflict" : "pin-analog") : `pin-${label.toLowerCase()}`;
     for (const text of [gpio, role, label, detail]) {
       const cell = document.createElement("td");
       cell.textContent = text;

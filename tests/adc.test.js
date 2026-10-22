@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, it } from "node:test";
-import { evaluateAnalog, potPosition } from "../apps/web/workspace/analog.js";
+import { describeAnalogInput, evaluateAnalog, potPosition } from "../apps/web/workspace/analog.js";
 import { parseDiagram } from "../apps/web/workspace/diagram.js";
 import { CATALOG } from "../apps/web/workspace/parts.js";
 import { repoRoot } from "../scripts/lib/tools.mjs";
@@ -71,6 +71,65 @@ describe("analog evaluation (potentiometer)", () => {
     assert.equal(five.inputs.PE3, 2.5);
     const full = { ...fiveVolt, parts: fiveVolt.parts.map((p) => (p.id === "pot1" ? { ...p, attrs: { ...p.attrs, position: 100 } } : p)) };
     assert.ok(evaluateAnalog(full, CATALOG).notes.some((note) => /above the 3\.3 V ADC range/.test(note)));
+  });
+});
+
+describe("analog pin presentation", () => {
+  it("shows the wiper voltage and AIN channel on the ADC pin, applied or not yet", async () => {
+    const diagram = await exampleDiagram("adc-potentiometer");
+    const analog = evaluateAnalog(diagram, CATALOG);
+    assert.deepEqual(describeAnalogInput("PE3", analog), {
+      level: "1.650 V",
+      detail: "pot1 → AIN0 (on Run)",
+      tooltip: "Analog: 1.650 V from pot1 on AIN0 (circuit model, ideal divider), applied when the simulation runs",
+    });
+    const applied = describeAnalogInput("PE3", analog, { applied: true });
+    assert.equal(applied.detail, "pot1 → AIN0");
+    assert.match(applied.tooltip, /applied to the simulated ADC$/);
+    assert.doesNotMatch(applied.tooltip, /measured|FLOATING|not driven/);
+  });
+
+  it("follows the knob and flags voltages above the 3.3 V range", async () => {
+    const diagram = await exampleDiagram("adc-potentiometer");
+    const at = (position, connections = diagram.connections) => evaluateAnalog({
+      ...diagram,
+      connections,
+      parts: diagram.parts.map((p) => (p.id === "pot1" ? { ...p, attrs: { ...p.attrs, position } } : p)),
+    }, CATALOG);
+    assert.equal(describeAnalogInput("PE3", at(95)).level, "3.135 V");
+    assert.equal(describeAnalogInput("PE3", at(0)).level, "0.000 V");
+    const fiveVolt = diagram.connections.map((c) => (c.includes("pot1:VCC") ? ["board1:J3.1", "pot1:VCC", "red", []] : c));
+    const over = describeAnalogInput("PE3", at(100, fiveVolt), { applied: true });
+    assert.equal(over.level, "5.000 V");
+    assert.equal(over.detail, "pot1 → AIN0, over 3.3 V");
+    assert.match(over.tooltip, /above the 3\.3 V ADC range \(reads full scale; can damage hardware\)$/);
+  });
+
+  it("says when there is no source, a conflict, or no analog input at all", async () => {
+    const diagram = await exampleDiagram("adc-potentiometer");
+    // VCC/GND open: the wiper drives AIN0 but there is no voltage.
+    const open = evaluateAnalog({ ...diagram, connections: diagram.connections.filter((c) => !c.includes("pot1:GND")) }, CATALOG);
+    assert.deepEqual(describeAnalogInput("PE3", open), {
+      level: "NO SOURCE",
+      detail: "pot1 → AIN0, VCC/GND open",
+      tooltip: "Analog: pot1 drives AIN0, but its VCC/GND are not wired to supply pins, so no voltage is applied",
+    });
+    // Two wipers on one input: a conflict, nothing applied.
+    const pot2 = { ...diagram.parts.find((p) => p.id === "pot1"), id: "pot2", left: 0 };
+    const twoPots = evaluateAnalog({
+      ...diagram,
+      parts: [...diagram.parts, pot2],
+      connections: [...diagram.connections, ...diagram.connections.filter((c) => c.some((end) => end.startsWith("pot1:"))).map((c) => c.map((end) => (typeof end === "string" ? end.replace("pot1:", "pot2:") : end)))],
+    }, CATALOG);
+    assert.equal(twoPots.inputs.PE3, undefined);
+    assert.equal(describeAnalogInput("PE3", twoPots).level, "CONFLICT");
+    assert.equal(describeAnalogInput("PE3", twoPots).detail, "pot1, pot2 → AIN0");
+    // Disconnected wiper, a pin without an ADC channel, and an ADC pin with nothing wired: digital reporting applies.
+    const unwired = evaluateAnalog({ ...diagram, connections: diagram.connections.filter((c) => !c.includes("pot1:SIG")) }, CATALOG);
+    assert.equal(describeAnalogInput("PE3", unwired), null);
+    const toPA2 = evaluateAnalog({ ...diagram, connections: diagram.connections.map((c) => (c.includes("pot1:SIG") ? ["board1:J2.10", "pot1:SIG", "green", []] : c)) }, CATALOG);
+    assert.equal(describeAnalogInput("PA2", toPA2), null);
+    assert.equal(describeAnalogInput("PE2", evaluateAnalog(diagram, CATALOG)), null);
   });
 });
 

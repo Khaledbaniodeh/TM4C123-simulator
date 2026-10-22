@@ -121,3 +121,47 @@ export function evaluateAnalog(diagram, catalog) {
   }
   return result;
 }
+
+/**
+ * How the analog source of an ADC-capable pin is presented (pin table row and
+ * board pin tooltip share this, so they cannot disagree). `analog` is an
+ * evaluateAnalog() result; `applied` is true only when this voltage has been
+ * sent to the running simulator. The voltage is the circuit model's ideal
+ * divider value, not a measurement. Returns null when the pin has no ADC
+ * input or no potentiometer wiper is wired to it (digital reporting applies).
+ */
+export function describeAnalogInput(gpio, analog, { applied = false } = {}) {
+  const channel = ANALOG_INPUTS[gpio];
+  if (channel === undefined) {
+    return null;
+  }
+  const pots = Object.keys(analog.pots).filter((id) => analog.pots[id].pins.includes(gpio));
+  if (!pots.length) {
+    return null;
+  }
+  const ain = `AIN${channel}`;
+  if (pots.length > 1) {
+    return {
+      level: "CONFLICT",
+      detail: `${pots.join(", ")} → ${ain}`,
+      tooltip: `Analog: ${ain} is wired to several potentiometer wipers (${pots.join(", ")}); no voltage is applied`,
+    };
+  }
+  const [id] = pots;
+  const volts = analog.inputs[gpio];
+  if (volts === undefined) {
+    return {
+      level: "NO SOURCE",
+      detail: `${id} → ${ain}, VCC/GND open`,
+      tooltip: `Analog: ${id} drives ${ain}, but its VCC/GND are not wired to supply pins, so no voltage is applied`,
+    };
+  }
+  const over = volts > ADC_FULL_SCALE_VOLTS;
+  return {
+    level: `${volts.toFixed(3)} V`,
+    detail: `${id} → ${ain}${applied ? "" : " (on Run)"}${over ? ", over 3.3 V" : ""}`,
+    tooltip: `Analog: ${volts.toFixed(3)} V from ${id} on ${ain} (circuit model, ideal divider), ` +
+      `${applied ? "applied to the simulated ADC" : "applied when the simulation runs"}` +
+      `${over ? "; above the 3.3 V ADC range (reads full scale; can damage hardware)" : ""}`,
+  };
+}
