@@ -109,7 +109,7 @@ describe("board part behavior", () => {
     assert.match(info.title, /J3 pin 10 · PF1/);
     assert.ok(info.lines.some((line) => /On-board red LED/.test(line)));
     const analog = BOARD_PART.pinInfo("J3.9");
-    assert.ok(analog.lines.some((line) => /AIN0/.test(line) && /not modeled/.test(line)));
+    assert.ok(analog.lines.some((line) => /AIN0/.test(line) && /sampled by ADC0\/ADC1/.test(line)));
   });
 
   it("joins all GND pins and the R9/R10 shorts electrically", () => {

@@ -167,7 +167,7 @@ function pinInfo(pinName) {
     info.lines.push(`GPIO port ${pin.gpio[1]}, bit ${pin.gpio[2]} — digital I/O (modeled)`);
     const analog = pin.alt.filter((fn) => ANALOG.test(fn));
     if (analog.length) {
-      info.lines.push(`Analog input: ${analog.join(", ")} (ADC not modeled yet)`);
+      info.lines.push(`Analog input: ${analog.join(", ")} — sampled by ADC0/ADC1 when GPIOAMSEL is set`);
     }
     const alternates = pin.alt.filter((fn) => !ANALOG.test(fn));
     if (alternates.length) {
