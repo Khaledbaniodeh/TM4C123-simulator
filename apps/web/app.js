@@ -99,6 +99,7 @@ const elements = {
   addPartButton: $("#addPartButton"),
   partLibrary: $("#partLibrary"),
   saveDiagramButton: $("#saveDiagramButton"),
+  loadDiagramButton: $("#loadDiagramButton"),
   loadDiagramInput: $("#loadDiagramInput"),
   workspaceMessage: $("#workspaceMessage"),
   consoleTabs: document.querySelectorAll(".console-tab"),
@@ -1407,6 +1408,8 @@ elements.saveDiagramButton.addEventListener("click", () => {
   setTimeout(() => URL.revokeObjectURL(link.href), 1_000);
   workspaceMessage("Saved diagram.json.");
 });
+// A real button (Tab, Enter, Space) opens the hidden file input's chooser.
+elements.loadDiagramButton.addEventListener("click", () => elements.loadDiagramInput.click());
 elements.loadDiagramInput.addEventListener("change", async () => {
   const file = elements.loadDiagramInput.files?.[0];
   if (file) {

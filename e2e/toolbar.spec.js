@@ -14,11 +14,12 @@ const SIZES = [
   { width: 1920, height: 1080 },
 ];
 
-// Measured on e57faf4 (Unicode glyph icons), CI Linux Chromium.
+// Measured on e57faf4 (Unicode glyph icons), CI Linux Chromium. Load was a <label> then;
+// it is now the loadDiagramButton <button>, at the same position and size.
 const BASELINE = {
-  "1024x768": "addPartButton:452,185,52x27 undoButton:532,185,27x27 redoButton:567,185,27x27 rotateButton:602,185,27x27 duplicateButton:637,185,27x27 deleteButton:672,185,27x27 zoomOutButton:726,185,27x27 zoomInButton:813,185,27x27 fitButton:848,185,40x27 gridToggle:896,185,40x27 snapToggle:944,185,44x27 saveDiagramButton:452,216,43x27 Load:503,216,42x27",
-  "1280x720": "addPartButton:447,186,52x27 undoButton:526,186,27x27 redoButton:561,186,27x27 rotateButton:596,186,27x27 duplicateButton:631,186,27x27 deleteButton:666,186,27x27 zoomOutButton:720,186,27x27 zoomInButton:807,186,27x27 fitButton:842,186,40x27 gridToggle:890,186,40x27 snapToggle:938,186,44x27 saveDiagramButton:1009,186,43x27 Load:1060,186,42x27",
-  "1920x1080": "addPartButton:665,168,52x27 undoButton:744,168,27x27 redoButton:779,168,27x27 rotateButton:814,168,27x27 duplicateButton:849,168,27x27 deleteButton:884,168,27x27 zoomOutButton:938,168,27x27 zoomInButton:1025,168,27x27 fitButton:1060,168,40x27 gridToggle:1108,168,40x27 snapToggle:1156,168,44x27 saveDiagramButton:1227,168,43x27 Load:1278,168,42x27",
+  "1024x768": "addPartButton:452,185,52x27 undoButton:532,185,27x27 redoButton:567,185,27x27 rotateButton:602,185,27x27 duplicateButton:637,185,27x27 deleteButton:672,185,27x27 zoomOutButton:726,185,27x27 zoomInButton:813,185,27x27 fitButton:848,185,40x27 gridToggle:896,185,40x27 snapToggle:944,185,44x27 saveDiagramButton:452,216,43x27 loadDiagramButton:503,216,42x27",
+  "1280x720": "addPartButton:447,186,52x27 undoButton:526,186,27x27 redoButton:561,186,27x27 rotateButton:596,186,27x27 duplicateButton:631,186,27x27 deleteButton:666,186,27x27 zoomOutButton:720,186,27x27 zoomInButton:807,186,27x27 fitButton:842,186,40x27 gridToggle:890,186,40x27 snapToggle:938,186,44x27 saveDiagramButton:1009,186,43x27 loadDiagramButton:1060,186,42x27",
+  "1920x1080": "addPartButton:665,168,52x27 undoButton:744,168,27x27 redoButton:779,168,27x27 rotateButton:814,168,27x27 duplicateButton:849,168,27x27 deleteButton:884,168,27x27 zoomOutButton:938,168,27x27 zoomInButton:1025,168,27x27 fitButton:1060,168,40x27 gridToggle:1108,168,40x27 snapToggle:1156,168,44x27 saveDiagramButton:1227,168,43x27 loadDiagramButton:1278,168,42x27",
 };
 
 for (const size of SIZES) {
@@ -31,7 +32,7 @@ for (const size of SIZES) {
     await expect(page.locator('.part[data-type="tm4c123gxl-launchpad"]')).toBeVisible();
 
     const geometry = () => page.evaluate(() =>
-      [...document.querySelectorAll(".simulator-toolbar > button, .simulator-toolbar > .library-anchor > button, .simulator-toolbar > label.file-button")].map((node) => {
+      [...document.querySelectorAll(".simulator-toolbar > button, .simulator-toolbar > .library-anchor > button")].map((node) => {
         const r = node.getBoundingClientRect();
         return `${node.id || node.textContent.trim()}:${Math.round(r.x)},${Math.round(r.y)},${Math.round(r.width)}x${Math.round(r.height)}`;
       }).join(" "));
@@ -260,6 +261,17 @@ for (const size of SIZES) {
     await expect(redo).toBeDisabled();
     await expect(undo).toBeEnabled();
     expect(await geometry(), "Redo disabled again: no toolbar button moved").toBe(disabled);
+
+    // Load is a Tab stop right after Save, with a visible focus ring; Tab then moves on to the canvas.
+    await page.locator("#saveDiagramButton").focus();
+    await page.keyboard.press("Tab");
+    expect(await page.evaluate(() => document.activeElement.id)).toBe("loadDiagramButton");
+    expect(await page.evaluate(() => document.activeElement.matches(":focus-visible"))).toBe(true);
+    expect(await page.evaluate(() => getComputedStyle(document.activeElement).outlineStyle)).not.toBe("none");
+    await page.locator(".simulator-toolbar").screenshot({ path: `test-results/toolbar-${size.width}x${size.height}-load-focus.png` });
+    await page.keyboard.press("Tab");
+    expect(await page.evaluate(() => document.activeElement.id)).toBe("circuitCanvas");
+    expect(await geometry(), "focus does not move toolbar buttons").toBe(disabled);
     expect(errors).toEqual([]);
   });
 }

@@ -381,12 +381,6 @@
   cursor: not-allowed;
 }
 
-.file-button {
-  display: inline-grid;
-  place-items: center;
-  cursor: pointer;
-}
-
 .selection-panel {
   display: grid;
   gap: 6px;

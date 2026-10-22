@@ -239,9 +239,69 @@ test("F: an external button and LED work through real firmware", async ({ page }
   await page.click("#stopButton");
 });
 
+test("Load opens the file chooser from the keyboard once; valid, repeated, invalid, and cancelled files", async ({ page }) => {
+  const errors = await openWorkspace(page);
+  await page.selectOption("#exampleSelect", "external-led-button");
+  await expect(page.locator(".wire")).toHaveCount(5);
+  const saved = await page.evaluate(() => window.__tm4c.serialize());
+  const serialized = () => page.evaluate(() => window.__tm4c.serialize());
+  const json = (name, text) => ({ name, mimeType: "application/json", buffer: Buffer.from(text) });
+  const choosers = [];
+  page.on("filechooser", (chooser) => choosers.push(chooser));
+  const load = page.getByRole("button", { name: "Load diagram.json", exact: true });
+
+  // Enter opens exactly one chooser for a single JSON file; the file loads.
+  await load.focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => choosers.length).toBe(1);
+  expect(choosers[0].isMultiple()).toBe(false);
+  expect(await choosers[0].element().getAttribute("accept")).toBe("application/json,.json");
+  const bare = JSON.stringify({ version: 1, parts: [{ type: "tm4c123gxl-launchpad", id: "board1", top: 0, left: 0 }], connections: [] });
+  await choosers[0].setFiles(json("bare.json", bare));
+  await expect(page.locator("#workspaceMessage")).toHaveText("Loaded bare.json.");
+  await expect(page.locator(".wire")).toHaveCount(0);
+
+  // Space opens it too; loading the saved circuit restores it exactly.
+  await load.focus();
+  await page.keyboard.press("Space");
+  await expect.poll(() => choosers.length).toBe(2);
+  await choosers[1].setFiles(json("diagram.json", saved));
+  await expect.poll(serialized).toBe(saved);
+
+  // The input is reset, so the same file can be chosen again (after an edit).
+  await page.evaluate(() => window.__tm4c.workspace.select({ kind: "part", id: "led1" }));
+  await page.locator("#circuitCanvas").press("Delete");
+  await expect(page.locator('.part[data-part="led1"]')).toHaveCount(0);
+  await load.focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => choosers.length).toBe(3);
+  await choosers[2].setFiles(json("diagram.json", saved));
+  await expect.poll(serialized).toBe(saved);
+
+  // An invalid file is rejected with a message; the circuit is unchanged.
+  await load.focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => choosers.length).toBe(4);
+  await choosers[3].setFiles(json("bad.json", '{"version":1,"parts":[],"connections":[["x:1","y:2","red",[]]]}'));
+  await expect(page.locator("#workspaceMessage")).toContainText("Could not load bad.json");
+  expect(await serialized()).toBe(saved);
+
+  // Cancelling (no file chosen) changes nothing; a mouse click still opens the chooser.
+  await load.click();
+  await expect.poll(() => choosers.length).toBe(5);
+  await choosers[4].setFiles([]);
+  await expect(page.locator("#workspaceMessage")).toContainText("Could not load bad.json");
+  expect(await serialized()).toBe(saved);
+
+  // One chooser per activation: no duplicates appeared.
+  await page.waitForTimeout(300);
+  expect(choosers).toHaveLength(5);
+  expect(errors).toEqual([]);
+});
+
 test("critical controls have accessible names", async ({ page }) => {
   await openWorkspace(page);
-  for (const name of ["Compile", "▶ Run", "Zoom in", "Zoom out", "Undo", "Redo", "Rotate selected part", "Delete selection"]) {
+  for (const name of ["Compile", "▶ Run", "Zoom in", "Zoom out", "Undo", "Redo", "Rotate selected part", "Delete selection", "Load diagram.json"]) {
     await expect(page.getByRole("button", { name, exact: true })).toHaveCount(1);
   }
   await expect(page.getByRole("application", { name: /Circuit canvas/ })).toBeVisible();
