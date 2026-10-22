@@ -701,6 +701,28 @@ VREF, and hardware triggers other than the processor and continuous modes.
 
 ---
 
+### D-034 — Polling Firmware Speed: Measured, No Engine Change
+
+**Date:** 2026-10-20
+**Status:** Accepted
+
+**Decision:**
+
+Firmware that busy-waits on a peripheral register (SysTick `COUNTFLAG`,
+GPTM `RIS`, GPIO) runs at ~0.13× real time in steady state (first 200 ms
+~0.06×). Measurements in CI ([`docs/PERFORMANCE.md`](PERFORMANCE.md)) show
+the cost is Renode's per-access MMIO path (~0.6–0.7 µs per read, the same
+for Renode's NVIC/SCB and the project's models), not events, the
+orchestrator, or the project's peripheral models. .NET JIT settings were
+compared and none is a net improvement, so the default runtime is kept.
+
+No change is made to the engine, clocks, instruction execution, or
+peripheral semantics to gain speed. Interrupt-driven waits (`WFI`) already
+run at or above real time and are the recommended pattern for responsive
+demonstrations; lab code that polls `COUNTFLAG` runs unchanged, more slowly.
+
+---
+
 ## Adding a New Decision
 
 A new decision entry should include:
@@ -756,3 +778,4 @@ Architecture-changing implementation must not begin before the relevant decision
 | D-031 | Original CMSIS-style device header and device-support linking | Accepted |
 | D-032 | LCD1602 as a workspace part driven by GPIO events | Accepted |
 | D-033 | ADC model, analog inputs, and the workspace potentiometer | Accepted |
+| D-034 | Polling firmware speed: measured, no engine change | Accepted |

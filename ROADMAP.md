@@ -18,7 +18,7 @@ when its implementation and acceptance tests pass.
 - [x] CI workflow (GitHub Actions, Linux).
 - [x] Runtime event protocol ([`RUNTIME_EVENTS.md`](docs/RUNTIME_EVENTS.md)).
 - [ ] Containerized compile/execute worker with validated isolation.
-- [ ] `diagram.json` schema, parser, and part registry.
+- [x] `diagram.json` schema, parser, and part registry.
 
 ## Phase 2 — Core TM4C123 Behavior
 
@@ -34,21 +34,23 @@ when its implementation and acceptance tests pass.
 ## Phase 3 — Interrupts and Timing (Experiments 6–7)
 
 - [x] NVIC integration and GPIO edge interrupts.
-- [ ] Clock tree: RCC/RCC2/PLL, `SystemCoreClock`.
-- [ ] SysTick verification (LOAD/VAL/CTRL, COUNTFLAG, clock source).
-- [ ] GPTM TIMER0A, TIMER1A, TIMER2A (16/32-bit periodic, prescaler).
-- [ ] CMSIS-compatible device header (original, license-compatible).
+- [x] Clock tree: RCC/RCC2/PLL, `SystemCoreClock` (D-030, D-031).
+- [x] SysTick verification: LOAD/VAL/CTRL, interrupt, COUNTFLAG polling.
+- [ ] SysTick `CLKSOURCE` = 0 (PIOSC/4) — not yet tested.
+- [x] GPTM TIMER0A, TIMER1A, TIMER2A (16/32-bit periodic, prescaler).
+- [x] CMSIS-compatible device header (original, license-compatible; D-031).
 
 ## Phase 4 — LCD1602 (Experiment 8)
 
-- [ ] HD44780 state model, 4-bit protocol, command set, DDRAM/cursor.
-- [ ] Port B connection profile with RW tied low (D-024).
-- [ ] Browser LCD rendering from firmware transactions only.
+- [x] HD44780 state model, 4-bit protocol, command set, DDRAM/cursor (D-032).
+- [x] Port B connection profile with RW tied low (D-024).
+- [x] Browser LCD rendering from firmware transactions only.
 
 ## Phase 5 — ADC (Experiment 9)
 
-- [ ] ADC0 SS3, PE3/AIN0, polling and interrupt paths.
-- [ ] Virtual potentiometer with deterministic input timestamps.
+- [x] ADC0 SS3, PE3/AIN0, polling path; SS3 interrupt path (verified on ADC1) (D-033).
+- [x] Virtual potentiometer driving AIN pins; inputs applied between run steps and logged with virtual time.
+- [ ] ADC SS0–SS2, continuous trigger, hardware averaging — implemented, not yet tested.
 
 ## Phase 6 — UART (Experiment 10)
 
@@ -59,7 +61,7 @@ when its implementation and acceptance tests pass.
 
 - [x] Editor, compile/run/pause/reset/stop, diagnostics, pin inspector.
 - [ ] Logic analyzer (virtual-time waveforms).
-- [ ] Component wiring editor (external LED, pushbutton, potentiometer).
+- [x] Component wiring editor (external LED, pushbutton, potentiometer, LCD1602).
 - [ ] Keil ARMASM → GNU assembler conversion helper.
 
 ## MVP Completion Condition
