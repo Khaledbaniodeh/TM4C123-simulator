@@ -1,1 +1,1 @@
-Screenshots from feat/safe-file-load @ 29d355cc006f5ad45a113395bb3ae6a09d4e5fab (run 39764480187, test result: failure)
+Screenshots from feat/safe-file-load @ 4e463ca41091b1cea65d13fb95dda905395fd073 (run 39786480692, test result: success)
