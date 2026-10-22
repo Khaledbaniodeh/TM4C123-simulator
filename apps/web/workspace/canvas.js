@@ -30,6 +30,8 @@ import { copyItems, moveParts, pasteItems, removeItems } from "./editing.js";
 import { isItemSelected, sanitizeSelection, selectedParts, selectedWires, selectionOf, toggleItem } from "./selection.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
+/** Screen movement that turns a press on a pin into a drag (release on another pin connects). */
+const WIRE_DRAG_PX = 4;
 const WIRE_HEX = {
   green: "#2e9d4e", blue: "#2f6fd6", red: "#d93a3a", black: "#2a2a2a", orange: "#ea8a1d",
   yellow: "#e2c21f", purple: "#8a4fc9", gray: "#8a929c", white: "#e9edf1",
@@ -679,7 +681,11 @@ export class Workspace extends EventTarget {
     const wireNode = target.closest?.(".wire");
 
     if (event.button === 0 && pinNode) {
+      const starting = !this.#wireDraft;
       this.#onPinClick(`${pinNode.dataset.part}:${pinNode.dataset.pin}`, event);
+      if (starting && this.#wireDraft) {
+        this.#armWirePress(event);
+      }
       event.preventDefault();
       return;
     }
@@ -780,9 +786,12 @@ export class Workspace extends EventTarget {
     const world = this.#world(event);
     const gesture = this.#gesture;
 
-    if (!gesture) {
+    if (gesture?.type === "wire-press" && event.pointerId === gesture.pointerId) {
+      gesture.dragged ||= Math.hypot(event.clientX - gesture.client.x, event.clientY - gesture.client.y) > WIRE_DRAG_PX;
+    }
+    if (!gesture || gesture.type === "wire-press") {
       if (this.#wireDraft) {
-        const pinNode = event.target.closest?.(".pin-anchor");
+        const pinNode = this.#pinUnder(event);
         const target = pinNode ? `${pinNode.dataset.part}:${pinNode.dataset.pin}` : null;
         const valid = target ? this.#validateWire(this.#wireDraft.from, target) === null : null;
         const end = target ? this.pinPosition(target) : (this.#snapToGrid ? { x: snap(world.x), y: snap(world.y) } : world);
@@ -851,6 +860,13 @@ export class Workspace extends EventTarget {
 
   #onPointerUp(event) {
     const gesture = this.#gesture;
+    if (gesture?.type === "wire-press") {
+      if (event.pointerId === gesture.pointerId) {
+        this.#gesture = null;
+        this.#finishWirePress(gesture, event);
+      }
+      return;
+    }
     this.#gesture = null;
     this.#svg.classList.remove("is-panning");
     if (!gesture) {
@@ -978,6 +994,45 @@ export class Workspace extends EventTarget {
     this.execute(commands.addConnection(connection));
     this.select({ kind: "wire", index: this.diagram.connections.length - 1 });
     this.#emit("wire", { state: "created", connection });
+  }
+
+  /**
+   * Drag-to-connect: the press that started a wire is followed until its
+   * pointer is released. No pointer capture, so hover feedback keeps working;
+   * a release outside the canvas just ends the gesture (window listener).
+   */
+  #armWirePress(event) {
+    const gesture = { type: "wire-press", pointerId: event.pointerId, from: this.#wireDraft.from, client: { x: event.clientX, y: event.clientY }, dragged: false };
+    this.#gesture = gesture;
+    const end = (up) => {
+      if (up.pointerId !== gesture.pointerId) {
+        return;
+      }
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      if (this.#gesture === gesture) {
+        this.#gesture = null; // released outside the canvas, or cancelled: never connects
+      }
+    };
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+  }
+
+  #finishWirePress(gesture, event) {
+    if (event.type !== "pointerup" || !gesture.dragged || this.#wireDraft?.from !== gesture.from) {
+      return; // a click, a cancelled pointer, or the wire already ended: the draft (if any) continues as after a click
+    }
+    const pinNode = this.#pinUnder(event);
+    const target = pinNode ? `${pinNode.dataset.part}:${pinNode.dataset.pin}` : null;
+    if (target && target !== gesture.from) {
+      this.#onPinClick(target, event); // same validation, feedback, creation, and undo step as clicking the pin
+    }
+  }
+
+  /** The pin under the pointer, by position (touch and pen pointers stay targeted at the pin they pressed). */
+  #pinUnder(event) {
+    const node = document.elementFromPoint?.(event.clientX, event.clientY) ?? event.target;
+    return node?.closest?.(".pin-anchor") ?? null;
   }
 
   #cancelDraft(message) {
