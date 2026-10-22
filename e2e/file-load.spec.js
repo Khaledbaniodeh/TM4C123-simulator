@@ -178,3 +178,42 @@ test("untouched circuits, files over files, and identical files load without ask
   await expect(page.locator('.part[data-part="led8"]')).toHaveAttribute("transform", /rotate\(90/);
   expect(errors).toEqual([]);
 });
+
+test("a file loaded under an earlier example does not excuse edits to a later example", async ({ page }) => {
+  const errors = await open(page);
+  const prompts = [];
+  page.on("dialog", (dialog) => {
+    prompts.push(dialog.message());
+    dialog.accept();
+  });
+  const deleteButton = async () => {
+    await page.evaluate(() => window.__tm4c.workspace.select({ kind: "part", id: "btn1" }));
+    await page.locator("#circuitCanvas").press("Delete");
+    await expect(page.locator('.part[data-part="btn1"]')).toHaveCount(0);
+  };
+
+  // X = example F's circuit without its pushbutton, made through the UI.
+  await page.selectOption("#exampleSelect", "external-led-button");
+  await deleteButton();
+  const x = await page.evaluate(() => window.__tm4c.serialize());
+
+  // Example A, then load X as a file: X becomes "the last file loaded".
+  await page.selectOption("#exampleSelect", "gpiof-red-led");
+  await loadWithKeyboard(page, file("x.json", x));
+  await expect(page.locator("#workspaceMessage")).toHaveText("Loaded x.json.");
+
+  // Switch to example F (asks: the loaded circuit is not A's) and make the same edit:
+  // the circuit equals X again, but now it is the student's edit of F, with undo history.
+  await page.selectOption("#exampleSelect", "external-led-button");
+  await expect(page.locator('.part[data-part="btn1"]')).toHaveCount(1);
+  await deleteButton();
+  expect(await page.evaluate(() => window.__tm4c.serialize())).toBe(x);
+  await expect(page.locator("#undoButton")).toBeEnabled();
+  const before = prompts.length;
+
+  // Loading another file must ask: these edits and their undo history would be replaced.
+  await loadWithKeyboard(page, file("other.json", ledFile("led9")));
+  await expect.poll(() => prompts.length).toBe(before + 1);
+  expect(prompts.at(-1)).toContain('Load "other.json"?');
+  expect(errors).toEqual([]);
+});
