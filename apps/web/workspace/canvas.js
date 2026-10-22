@@ -808,7 +808,7 @@ export class Workspace extends EventTarget {
       gesture.dragged ||= Math.hypot(event.clientX - gesture.client.x, event.clientY - gesture.client.y) > WIRE_DRAG_PX;
     }
     if (!gesture || gesture.type === "wire-press") {
-      this.#updateDraft(event);
+      this.#updateDraft(event, world);
       this.#updateTooltip(event);
       return;
     }
@@ -1055,12 +1055,15 @@ export class Workspace extends EventTarget {
     }
   }
 
-  /** Moves the end of the wire in progress to the pin or (snapped) point under the pointer. */
-  #updateDraft(event) {
+  /**
+   * Moves the end of the wire in progress to the pin or (snapped) point under the pointer.
+   * `world` is the pointer in world units when the caller already has it for the current view.
+   */
+  #updateDraft(event, world = null) {
     if (!this.#wireDraft) {
       return;
     }
-    const world = this.#world(event);
+    world ??= this.#world(event);
     const pinNode = this.#pinUnder(event);
     const target = pinNode ? `${pinNode.dataset.part}:${pinNode.dataset.pin}` : null;
     const valid = target ? this.#validateWire(this.#wireDraft.from, target) === null : null;
