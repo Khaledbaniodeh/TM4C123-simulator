@@ -20,11 +20,15 @@ anything other than executed code teach the wrong lessons.
   bare-metal startup (155-entry vector table, `.data`/`.bss` init) and
   linker script for TM4C123GH6PM (256 KB Flash, 32 KB SRAM).
 - **Renode 1.17.0** executes the ELF on a Cortex-M4F core with its NVIC.
-- Custom **C# register models**: SYSCTL GPIO clock gating; GPIO ports A–F
-  with masked DATA, DIR, DEN, pulls, open drain, LOCK/CR commit protection,
-  edge/level interrupts to the NVIC; bus faults on unclocked GPIO access and
-  on reserved addresses; named placeholders that report accesses to
-  unmodeled peripherals.
+- Custom **C# register models**: SYSCTL clock gating and the RCC/RCC2/PLL
+  clock tree; GPIO ports A–F with masked DATA, DIR, DEN, pulls, open drain,
+  LOCK/CR commit protection, analog mode, edge/level interrupts to the NVIC;
+  GPTM TIMER0–5; ADC0/ADC1 with the temperature sensor; bus faults on
+  unclocked access and on reserved addresses; named placeholders that report
+  accesses to unmodeled peripherals (UART, SSI, I2C, PWM, …).
+- **Workspace parts** evaluated from simulator events: external LED,
+  resistor, pushbutton (logic level), LCD1602 (HD44780), potentiometer
+  (ideal divider into the ADC model).
 - **Structured events** (JSON lines with sequence numbers and virtual time)
   streamed to a browser workspace over SSE. The LEDs, pin table, and fault
   badge are projections of those events.
@@ -102,10 +106,9 @@ Key design choices (see [`DECISION_LOG.md`](DECISION_LOG.md)):
 ## 6. Current limitations
 
 - Local, trusted, single-user mode only. No container isolation yet.
-- 16 MHz PIOSC clock only. PLL/RCC, GPTM timers, ADC, UART, and LCD are not
-  modeled yet (Experiments 7–10).
-- Approximate timing: 1 instruction per cycle at 16 MIPS; event timestamps
-  at translation-block granularity.
+- UART is not modeled yet (Experiment 10).
+- Approximate timing: 1 instruction per clock at the configured system clock
+  (decision D-030); event timestamps at translation-block granularity.
 - Interactive runs reach ~0.5–0.8× real time on Windows (Monitor round-trip
   latency). The UI shows the measured factor.
 - No physical-hardware comparison yet.
