@@ -30,7 +30,11 @@ import { copyItems, moveParts, pasteItems, removeItems } from "./editing.js";
 import { isItemSelected, sanitizeSelection, selectedParts, selectedWires, selectionOf, toggleItem } from "./selection.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
-/** Screen movement that turns a press on a pin into a drag (release on another pin connects). */
+/**
+ * Screen movement that turns a press into a drag: on a pin, a release on
+ * another pin connects; on empty canvas while wiring, the drag pans instead
+ * of cancelling the wire.
+ */
 const WIRE_DRAG_PX = 4;
 const WIRE_HEX = {
   green: "#2e9d4e", blue: "#2f6fd6", red: "#d93a3a", black: "#2a2a2a", orange: "#ea8a1d",
@@ -690,7 +694,21 @@ export class Workspace extends EventTarget {
       return;
     }
     if (this.#wireDraft) {
-      // Clicking empty space while wiring cancels the draft.
+      // While wiring, a drag on empty canvas (or with the middle button anywhere) pans and keeps
+      // the wire; a click there without moving still cancels it. Presses on parts and wires cancel.
+      const empty = !partNode && !wireNode && !event.shiftKey && !event.ctrlKey && !event.metaKey;
+      if (event.button === 1 || (event.button === 0 && empty)) {
+        this.#gesture = {
+          type: "pan",
+          last: { x: event.clientX, y: event.clientY },
+          pointerId: event.pointerId,
+          wiring: { client: { x: event.clientX, y: event.clientY }, moved: false },
+        };
+        this.#svg.setPointerCapture(event.pointerId);
+        this.#svg.classList.add("is-panning");
+        event.preventDefault();
+        return;
+      }
       this.#cancelDraft("Wire cancelled.");
       return;
     }
@@ -790,23 +808,25 @@ export class Workspace extends EventTarget {
       gesture.dragged ||= Math.hypot(event.clientX - gesture.client.x, event.clientY - gesture.client.y) > WIRE_DRAG_PX;
     }
     if (!gesture || gesture.type === "wire-press") {
-      if (this.#wireDraft) {
-        const pinNode = this.#pinUnder(event);
-        const target = pinNode ? `${pinNode.dataset.part}:${pinNode.dataset.pin}` : null;
-        const valid = target ? this.#validateWire(this.#wireDraft.from, target) === null : null;
-        const end = target ? this.pinPosition(target) : (this.#snapToGrid ? { x: snap(world.x), y: snap(world.y) } : world);
-        this.#renderDraft(end, valid);
-      }
+      this.#updateDraft(event);
       this.#updateTooltip(event);
       return;
     }
 
     if (gesture.type === "pan") {
+      if (gesture.wiring && event.pointerId !== gesture.pointerId) {
+        return;
+      }
       const rect = this.#svg.getBoundingClientRect();
       const scale = Math.min(rect.width / this.#viewBox.width, rect.height / this.#viewBox.height);
       this.#viewBox = panViewBox(this.#viewBox, (event.clientX - gesture.last.x) / scale, (event.clientY - gesture.last.y) / scale);
       gesture.last = { x: event.clientX, y: event.clientY };
       this.#applyViewBox();
+      if (gesture.wiring) {
+        const { client } = gesture.wiring;
+        gesture.wiring.moved ||= Math.hypot(event.clientX - client.x, event.clientY - client.y) > WIRE_DRAG_PX;
+        this.#updateDraft(event); // the wire end stays under the pointer while the view moves
+      }
     } else if (gesture.type === "drag-part") {
       let left = gesture.origin.left + world.x - gesture.start.x;
       let top = gesture.origin.top + world.y - gesture.start.y;
@@ -866,6 +886,12 @@ export class Workspace extends EventTarget {
         this.#finishWirePress(gesture, event);
       }
       return;
+    }
+    if (gesture?.wiring && event.pointerId !== gesture.pointerId) {
+      return; // another pointer: the pan while wiring continues
+    }
+    if (gesture?.wiring && event.type === "pointerup" && !gesture.wiring.moved) {
+      this.#cancelDraft("Wire cancelled."); // a click on empty canvas, as before
     }
     this.#gesture = null;
     this.#svg.classList.remove("is-panning");
@@ -1027,6 +1053,19 @@ export class Workspace extends EventTarget {
     if (target && target !== gesture.from) {
       this.#onPinClick(target, event); // same validation, feedback, creation, and undo step as clicking the pin
     }
+  }
+
+  /** Moves the end of the wire in progress to the pin or (snapped) point under the pointer. */
+  #updateDraft(event) {
+    if (!this.#wireDraft) {
+      return;
+    }
+    const world = this.#world(event);
+    const pinNode = this.#pinUnder(event);
+    const target = pinNode ? `${pinNode.dataset.part}:${pinNode.dataset.pin}` : null;
+    const valid = target ? this.#validateWire(this.#wireDraft.from, target) === null : null;
+    const end = target ? this.pinPosition(target) : (this.#snapToGrid ? { x: snap(world.x), y: snap(world.y) } : world);
+    this.#renderDraft(end, valid);
   }
 
   /** The pin under the pointer, by position (touch and pen pointers stay targeted at the pin they pressed). */
