@@ -83,6 +83,7 @@ test("edited circuit: Load asks first, and Cancel keeps everything exactly", asy
   expect(prompts[0]).toContain("Your main.c is not changed");
   expect(await snapshot(page)).toEqual(before);
   await expect(page.locator('.part[data-part="led9"]')).toHaveCount(0);
+  await page.screenshot({ path: "test-results/file-load-cancelled-1280x720.png" });
 
   // Undo and redo still work on the kept history.
   await page.getByRole("button", { name: "Redo", exact: true }).click();
@@ -100,6 +101,7 @@ test("Confirm loads the file: draft updated, main.c unchanged, reload restores i
   await expect(page.locator("#workspaceMessage")).toHaveText("Loaded other.json.");
   await expect(page.locator('.part[data-part="led9"]')).toHaveCount(1);
   await expect(page.locator('.part[data-part="btn1"]')).toHaveCount(0);
+  await page.screenshot({ path: "test-results/file-load-confirmed-1280x720.png" });
   const after = await snapshot(page);
   expect(after.diagramDraft).toBe(after.circuit);
   expect(after.source).toBe(before.source);
