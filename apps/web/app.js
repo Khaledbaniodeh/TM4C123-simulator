@@ -138,7 +138,10 @@ const state = {
    * (serialized). Student edits are whatever differs from it.
    */
   baseline: { exampleId: null, source: "", diagramText: serializeDiagram(createDiagram({ author: "" })) },
-  /** The circuit as last loaded from a diagram file (serialized), so loading another file over it does not ask. */
+  /**
+   * The current circuit as loaded from a diagram file (serialized), so loading another file over it does not
+   * ask; null once any other load (example switch, restore) replaces the circuit.
+   */
   importedCircuit: null,
 };
 
@@ -579,6 +582,8 @@ function loadDiagramText(text, origin) {
     return false;
   }
   history.reset(diagram);
+  // A replaced circuit starts a new context: only importDiagramFile marks it as a loaded file again.
+  state.importedCircuit = null;
   workspace.select(null);
   workspace.render();
   workspace.fit();
