@@ -25,7 +25,7 @@ import { DraftStore, browserStorage, compareWork } from "./draft-store.js";
 const CAPABILITIES = [
   { name: "ARM GCC build → Cortex-M4 ELF", status: "verified" },
   { name: "Cortex-M4 execution (Renode)", status: "verified" },
-  { name: "SYSCTL GPIO / timer clock gating", status: "verified" },
+  { name: "SYSCTL clock gating (GPIO, timers, ADC)", status: "verified" },
   { name: "GPIO A–F: DIR / DEN / masked DATA", status: "verified" },
   { name: "Pull-up / pull-down, open drain", status: "verified" },
   { name: "PF0 GPIOLOCK / GPIOCR commit", status: "verified" },
@@ -34,19 +34,19 @@ const CAPABILITIES = [
   { name: "On-board RGB LED, SW1/SW2", status: "verified" },
   { name: "Wired external LED / resistor / pushbutton (logic level)", status: "verified" },
   { name: "PLL / RCC / RCC2 system clock (16–80 MHz)", status: "verified" },
-  { name: "SysTick interrupt at the core clock", status: "verified" },
+  { name: "SysTick interrupt and COUNTFLAG at the core clock", status: "verified" },
   { name: "GPTM 16/32-bit periodic timers + IRQs", status: "verified" },
   { name: "CMSIS-style TM4C123.h + SystemInit (50 MHz)", status: "verified" },
   { name: "ADC0/ADC1 SS3, temperature sensor, potentiometer", status: "verified" },
-  { name: "UART0 / serial terminal", status: "missing" },
   { name: "LCD1602 (HD44780) in the workspace", status: "verified" },
+  { name: "UART0 / serial terminal", status: "missing" },
   { name: "Logic analyzer capture", status: "missing" },
 ];
 
 const STATUS_LABELS = {
   verified: "Implemented & tested",
   unverified: "Engine-provided, not yet verified",
-  missing: "Not modeled — accesses are reported",
+  missing: "Not implemented yet",
 };
 
 /** GPIOs whose live state is shown when a board component is selected. */
