@@ -186,68 +186,76 @@ for (const size of SIZES) {
   });
 }
 
-test("drag-to-connect, panning and zooming while a wire is in progress", async ({ page }) => {
+/** Fresh page with an LED, then a wire started from J1.10 (positions measured now, not reused). */
+async function startWire(page) {
   const errors = await open(page, { width: 1280, height: 720 });
   await addLed(page);
-  const findings = {};
-  const message = () => page.locator("#workspaceMessage").textContent();
-  const draftVisible = async () => (await page.locator(".wire-draft").count()) > 0;
   const a = await centerOf(anchor(page, "board1", "J1.10"));
   const b = await centerOf(anchor(page, "led1", "A"));
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.up();
+  await expect(page.locator(".wire-draft")).toHaveCount(1, { timeout: 5_000 });
+  const canvas = await page.locator("#circuitCanvas").boundingBox();
+  return { errors, a, b, canvas };
+}
+const wiring = async (page) => ({
+  draftStillActive: (await page.locator(".wire-draft").count()) > 0,
+  wires: await page.locator(".wire").count(),
+  message: await page.locator("#workspaceMessage").textContent(),
+  view: await page.evaluate(() => ({ ...window.__tm4c.workspace.viewBox })),
+  canvasBox: await page.locator("#circuitCanvas").boundingBox(),
+});
 
-  // 1. Press on a pin, drag to another pin, release (the most common first attempt).
+test("gesture: press on a pin, drag to another pin, release", async ({ page }) => {
+  const errors = await open(page, { width: 1280, height: 720 });
+  await addLed(page);
+  const a = await centerOf(anchor(page, "board1", "J1.10"));
+  const b = await centerOf(anchor(page, "led1", "A"));
   await page.mouse.move(a.x, a.y);
   await page.mouse.down();
   await page.mouse.move(b.x, b.y, { steps: 12 });
   await page.mouse.up();
-  findings.dragRelease = { wires: await page.locator(".wire").count(), draftStillActive: await draftVisible(), message: await message() };
+  const afterRelease = await wiring(page);
   await page.screenshot({ path: "test-results/audit-drag-release-1280x720.png" });
-  // A second click on the target then completes it?
   await page.mouse.down();
   await page.mouse.up();
-  findings.dragReleaseThenClick = { wires: await page.locator(".wire").count(), message: await message() };
-  await page.locator("#circuitCanvas").press("Control+z");
+  await save("gesture-drag-release", { afterRelease, afterExtraClick: await wiring(page) });
+  expect(errors).toEqual([]);
+});
 
-  // 2. Start a wire, then left-drag on empty canvas to pan towards a far pin.
-  const canvas = await page.locator("#circuitCanvas").boundingBox();
+test("gesture: left-drag on empty canvas while wiring", async ({ page }) => {
+  const { errors, canvas } = await startWire(page);
+  const before = await wiring(page);
   const empty = { x: canvas.x + 30, y: canvas.y + canvas.height - 30 };
-  await page.mouse.move(a.x, a.y);
-  await page.mouse.down();
-  await page.mouse.up();
-  const viewBefore = await page.evaluate(() => ({ ...window.__tm4c.workspace.viewBox }));
   await page.mouse.move(empty.x, empty.y, { steps: 5 });
   await page.mouse.down();
   await page.mouse.move(empty.x + 80, empty.y - 40, { steps: 8 });
   await page.mouse.up();
-  findings.leftDragPanWhileWiring = {
-    draftStillActive: await draftVisible(),
-    viewPanned: JSON.stringify(viewBefore) !== JSON.stringify(await page.evaluate(() => ({ ...window.__tm4c.workspace.viewBox }))),
-    message: await message(),
-  };
+  const after = await wiring(page);
+  await save("gesture-left-pan", { before, after, viewPanned: JSON.stringify(before.view) !== JSON.stringify(after.view) });
+  expect(errors).toEqual([]);
+});
 
-  // 3. Middle-button pan while wiring.
-  await page.getByRole("button", { name: "Fit", exact: true }).click();
-  await page.mouse.move(a.x, a.y);
-  await page.mouse.down();
-  await page.mouse.up();
+test("gesture: middle-button drag while wiring", async ({ page }) => {
+  const { errors, canvas } = await startWire(page);
+  const before = await wiring(page);
+  const empty = { x: canvas.x + 30, y: canvas.y + canvas.height - 30 };
   await page.mouse.move(empty.x, empty.y, { steps: 5 });
   await page.mouse.down({ button: "middle" });
   await page.mouse.move(empty.x + 80, empty.y - 40, { steps: 8 });
   await page.mouse.up({ button: "middle" });
-  findings.middlePanWhileWiring = { draftStillActive: await draftVisible(), message: await message() };
-  await page.locator("#circuitCanvas").press("Escape");
+  const after = await wiring(page);
+  const scroll = await page.evaluate(() => ({ page: [scrollX, scrollY], canvasArea: document.querySelector(".simulation-canvas").scrollTop }));
+  await save("gesture-middle-pan", { before, after, viewPanned: JSON.stringify(before.view) !== JSON.stringify(after.view), canvasMovedOnScreen: JSON.stringify(before.canvasBox) !== JSON.stringify(after.canvasBox), scroll });
+  expect(errors).toEqual([]);
+});
 
-  // 4. Wheel zoom while wiring: does the preview follow without moving the mouse?
-  await page.getByRole("button", { name: "Fit", exact: true }).click();
-  await page.mouse.move(a.x, a.y);
-  await page.mouse.down();
-  await page.mouse.up();
+test("gesture: wheel zoom while wiring", async ({ page }) => {
+  const { errors, canvas } = await startWire(page);
   const mid = { x: canvas.x + canvas.width * 0.7, y: canvas.y + canvas.height * 0.5 };
   await page.mouse.move(mid.x, mid.y, { steps: 6 });
-  const before = await page.locator(".wire-draft").getAttribute("d");
-  await page.mouse.wheel(0, -300);
-  await page.waitForTimeout(150);
-  const afterWheel = await page.evaluate(({ x, y }) => {
+  const endToCursor = () => page.evaluate(({ x, y }) => {
     const svg = document.querySelector("#circuitCanvas");
     const p = svg.createSVGPoint();
     p.x = x;
@@ -255,24 +263,68 @@ test("drag-to-connect, panning and zooming while a wire is in progress", async (
     const world = p.matrixTransform(svg.getScreenCTM().inverse());
     const d = document.querySelector(".wire-draft")?.getAttribute("d") ?? "";
     const end = [...d.matchAll(/(-?[\d.]+)[ ,](-?[\d.]+)/g)].map((m) => ({ x: Number(m[1]), y: Number(m[2]) })).at(-1);
-    return { draftStillActive: Boolean(d), endToCursorPx: end ? +(Math.hypot(end.x - world.x, end.y - world.y) * svg.getScreenCTM().a).toFixed(1) : null };
+    return end ? +(Math.hypot(end.x - world.x, end.y - world.y) * svg.getScreenCTM().a).toFixed(1) : null;
   }, mid);
-  findings.wheelZoomWhileWiring = { ...afterWheel, previewUnchangedByZoom: before === (await page.locator(".wire-draft").getAttribute("d")) };
+  const beforePx = await endToCursor();
+  await page.mouse.wheel(0, -400);
+  await page.waitForTimeout(200);
+  const afterWheel = { ...(await wiring(page)), endToCursorPx: await endToCursor() };
   await page.screenshot({ path: "test-results/audit-zoom-while-wiring-1280x720.png" });
-  await page.mouse.move(mid.x + 3, mid.y + 3);
-  findings.wheelZoomWhileWiring.afterNextMove = await page.evaluate(() => Boolean(document.querySelector(".wire-draft")));
-  await page.locator("#circuitCanvas").press("Escape");
-  findings.escape = { draftStillActive: await draftVisible(), message: await message() };
+  await page.mouse.move(mid.x + 2, mid.y + 2);
+  const afterNextMove = { endToCursorPx: await endToCursor() };
+  await page.keyboard.press("+");
+  const keyboardZoom = { ...(await wiring(page)), endToCursorPx: await endToCursor() };
+  await save("gesture-wheel-zoom", { beforePx, afterWheel, afterNextMove, keyboardZoom });
+  expect(errors).toEqual([]);
+});
 
-  // 5. Clicking a part body (not a pin) while wiring.
-  await page.getByRole("button", { name: "Fit", exact: true }).click();
-  await page.mouse.move(a.x, a.y);
-  await page.mouse.down();
-  await page.mouse.up();
-  const ledBox = await page.locator('.part[data-part="led1"] .part-hitbox').boundingBox();
-  await page.mouse.click(ledBox.x + ledBox.width / 2, ledBox.y + 4);
-  findings.clickPartBodyWhileWiring = { draftStillActive: await draftVisible(), selection: await page.evaluate(() => JSON.stringify(window.__tm4c.workspace.selection)), message: await message() };
-  await save("gestures-1280x720", findings);
+test("gesture: click a part body, and Escape, while wiring", async ({ page }) => {
+  const { errors } = await startWire(page);
+  const led = await page.locator('.part[data-part="led1"] .part-hitbox').boundingBox();
+  await page.mouse.click(led.x + led.width / 2, led.y + 4);
+  const partClick = { ...(await wiring(page)), selection: await page.evaluate(() => JSON.stringify(window.__tm4c.workspace.selection)) };
+  const a = await centerOf(anchor(page, "board1", "J1.10"));
+  await page.mouse.click(a.x, a.y);
+  await page.locator("#circuitCanvas").press("Escape");
+  await save("gesture-part-escape", { partClick, escape: await wiring(page) });
+  expect(errors).toEqual([]);
+});
+
+test("gesture: a long connection to a pin outside the view", async ({ page }) => {
+  const errors = await open(page, { width: 1280, height: 720 });
+  await addLed(page);
+  for (let i = 0; i < 4; i++) {
+    await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+  }
+  const canvas = await page.locator("#circuitCanvas").boundingBox();
+  const target = await centerOf(anchor(page, "led1", "A"));
+  const inView = target.x > canvas.x && target.x < canvas.x + canvas.width && target.y > canvas.y && target.y < canvas.y + canvas.height;
+  // Find a board pin that is visible at this zoom and start from it.
+  const start = await page.evaluate(({ x, y, w, h }) => {
+    for (const node of document.querySelectorAll('.pin-anchor[data-part="board1"]')) {
+      const r = node.getBoundingClientRect();
+      const cx = r.x + r.width / 2;
+      const cy = r.y + r.height / 2;
+      if (cx > x + 20 && cx < x + w - 20 && cy > y + 20 && cy < y + h - 20) {
+        return { pin: node.dataset.pin, x: cx, y: cy };
+      }
+    }
+    return null;
+  }, { x: canvas.x, y: canvas.y, w: canvas.width, h: canvas.height });
+  const findings = { targetInView: inView, start };
+  if (start) {
+    await page.mouse.click(start.x, start.y);
+    findings.started = (await page.locator(".wire-draft").count()) > 0;
+    // The student now needs to reach led1:A: the only view changes that keep the wire are wheel/keyboard zoom.
+    await page.keyboard.press("0"); // Fit (keyboard)
+    findings.afterKeyboardFit = await wiring(page);
+    const t = await centerOf(anchor(page, "led1", "A"));
+    await page.mouse.move(t.x, t.y, { steps: 10 });
+    await page.mouse.down();
+    await page.mouse.up();
+    findings.completed = await wiring(page);
+  }
+  await save("gesture-long-connection", findings);
   expect(errors).toEqual([]);
 });
 
