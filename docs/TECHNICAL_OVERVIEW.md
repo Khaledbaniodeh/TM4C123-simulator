@@ -1,6 +1,6 @@
 # TM4C123 Simulator — Technical Overview
 
-*Cortex-M4 Firmware & Peripheral Simulation — early technical prototype*
+*Cortex-M4 Firmware & Peripheral Simulation — technical preview*
 
 An independent project. Not affiliated with or endorsed by Texas
 Instruments. Prepared for review by embedded-systems engineers.
@@ -32,10 +32,13 @@ anything other than executed code teach the wrong lessons.
 - **Structured events** (JSON lines with sequence numbers and virtual time)
   streamed to a browser workspace over SSE. The LEDs, pin table, and fault
   badge are projections of those events.
-- **Five firmware examples**: PF1 on, PF1 off, software blink, SW1 polling,
-  and SW1/SW2 GPIO interrupts with PF0 unlock.
-- **35 automated tests** (31 Node, 4 browser) including all RISK-001
-  negative cases. Details: [`RISK-001_Acceptance_Report.md`](RISK-001_Acceptance_Report.md).
+- **Fourteen firmware examples** (A–N): GPIO output and input, interrupts
+  with PF0 unlock, clock tree, SysTick, GPTM timers, LCD1602, ADC with a
+  potentiometer and the temperature sensor; see the README.
+- **Automated tests:** 135 Node tests and 98 browser tests on the showcase
+  release candidate, including all RISK-001 negative cases
+  ([`RISK-001_Acceptance_Report.md`](RISK-001_Acceptance_Report.md)) and a
+  showcase walkthrough ([`SHOWCASE_DEMO.md`](SHOWCASE_DEMO.md)).
 
 ## 3. Execution architecture
 

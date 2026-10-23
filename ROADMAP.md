@@ -62,6 +62,8 @@ when its implementation and acceptance tests pass.
 - [x] Editor, compile/run/pause/reset/stop, diagnostics, pin inspector.
 - [ ] Logic analyzer (virtual-time waveforms).
 - [x] Component wiring editor (external LED, pushbutton, potentiometer, LCD1602).
+- [x] Workspace editing: multi-selection, copy/paste, smart placement, drag-to-connect, pan while wiring.
+- [x] Work safety: browser drafts of source and circuit, confirmation before an example or file replaces edits.
 - [ ] Keil ARMASM → GNU assembler conversion helper.
 
 ## MVP Completion Condition

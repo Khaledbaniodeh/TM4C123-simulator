@@ -1,66 +1,75 @@
 # Project Status
 
-**Last updated:** 2026-10-20 (ADC increment on `feat/adc-exp9`)
-**Stage:** Early technical prototype. The RISK-001 vertical slice is
-implemented and verified (decision D-016: GO WITH CONDITIONS).
-**Public hosted simulator:** No (local trusted mode only).
+**Last updated:** 2026-10-24 (showcase release candidate `release/showcase-rc1`)
+**Stage:** Technical preview. Real firmware execution, the interactive
+LaunchPad and the circuit workspace are implemented and covered by
+automated tests (135 Node + 98 browser tests in CI).
+**Public hosted simulator:** No. Local, trusted, single-user mode only.
 **Hardware equivalence:** Not verified (no physical LaunchPad comparison yet).
 
 ## Status by area
 
 | Area | Status |
 |---|---|
-| Pinned toolchains (GCC 15.2.1, Renode 1.17.0) | ✅ Implemented and verified |
-| Bare-metal startup + linker script | ✅ Implemented and verified |
-| Compiler runner (limits, diagnostics, cleanup) | ✅ Implemented and verified (no container isolation) |
-| Renode TM4C123GH6PM platform | ✅ Implemented and verified |
-| SYSCTL GPIO and timer clock gating | ✅ Implemented and verified |
-| GPIO ports A–F (DATA mask, DIR, DEN, pulls, ODR, LOCK/CR) | ✅ Implemented and verified |
-| GPIO interrupts + NVIC + ISR | ✅ Implemented and verified (falling edge; other modes implemented without dedicated tests) |
-| Bus faults (unclocked, reserved) and unsupported-access reporting | ✅ Implemented and verified |
-| Runtime event bridge (JSON lines → SSE) | ✅ Implemented and verified |
-| Browser workspace | ✅ Implemented and verified (Playwright) |
-| Board model from TI CAD (SPMR240) + pinout check (SPMU296) | ✅ Implemented and verified in CI |
-| Interactive board (pins, tooltips, SW1/SW2, RGB LED, selectable components) | ✅ Implemented and verified (Playwright) |
-| Circuit workspace (pan/zoom, editing, undo/redo, wiring, diagram.json) | ✅ Implemented and verified (Playwright) |
-| External LED / resistor / pushbutton (logic-level netlist) | ✅ Implemented and verified (example F) |
-| Potentiometer (ideal divider → ADC input) | ✅ Implemented and verified (D-033; example M, Playwright) |
-| Logic analyzer part | 🟡 Editor only — no electrical behavior |
-| CI (GitHub Actions, Linux) | ✅ Builds, simulates, and runs all suites on every push |
-| SysTick (interrupt mode, core clock) | ✅ Verified at 16 / 50 / 80 MHz (Renode NVIC; `COUNTFLAG` polling not yet tested) |
-| Clock tree (RCC/RCC2/PLL, PLL lock) | ✅ Implemented and verified (D-030; PLL locks instantly) |
-| GPTM timers (16/32-bit periodic, prescaler, timeout IRQs) | ✅ Implemented and verified for TIMER0A–2A (one-shot implemented, untested; capture/PWM reported unsupported) |
-| LCD1602 (HD44780) in the workspace | ✅ Implemented and verified (D-032; example L, Renode + Playwright) |
-| ADC0/ADC1 sample sequencers + temperature sensor | ✅ Implemented and verified for SS3 (D-033); SS0–SS2, continuous trigger, averaging untested |
-| UART0 + virtual terminal | 📋 Planned (scope added by D-022) |
-| CMSIS-style device header (`TM4C123.h`), `SystemInit`/`SystemCoreClock` | ✅ Implemented and verified (D-031; original code, lab-style examples J/K) |
+| Pinned toolchains (GCC 15.2.1, Renode 1.17.0, SHA-256 verified) | ✅ Implemented and verified |
+| Bare-metal startup, linker script, CMSIS-style `TM4C123.h` + `SystemInit` | ✅ Implemented and verified (D-031) |
+| Compiler runner (fixed argv, time/size limits, diagnostics, cleanup) | ✅ Implemented and verified (**no container isolation**) |
+| Renode TM4C123GH6PM platform, reset, deterministic virtual time | ✅ Implemented and verified |
+| SYSCTL clock gating (GPIO, timers, ADC) and RCC/RCC2/PLL clock tree | ✅ Implemented and verified (D-030) |
+| GPIO A–F (masked DATA, DIR, DEN, pulls, open drain, LOCK/CR, analog mode) | ✅ Implemented and verified |
+| GPIO interrupts → NVIC → ISR | ✅ Verified for falling edge; other modes implemented without dedicated tests |
+| SysTick (interrupt and `COUNTFLAG` polling) | ✅ Implemented and verified (examples G, K, L) |
+| GPTM timers | ✅ TIMER0A–2A periodic verified; one-shot implemented, untested; capture/PWM reported unsupported |
+| ADC0/ADC1 + temperature sensor | ✅ SS3 verified (D-033); SS0–SS2, continuous trigger, averaging untested |
+| Bus faults and unsupported-access reporting | ✅ Implemented and verified |
+| Board model from TI CAD (SPMR240) + pinout check (SPMU296) | ✅ Verified in CI |
+| Interactive board (pins, tooltips, SW1/SW2, RESET, RGB LED, components) | ✅ Implemented and verified (Playwright) |
+| Workspace parts: LED, resistor, pushbutton, potentiometer, LCD1602 | ✅ Implemented and verified (logic level / ideal divider / HD44780) |
+| Editing: multi-selection, copy/paste, smart placement, undo/redo | ✅ Implemented and verified (Playwright) |
+| Wiring: click-to-click, drag-to-connect, pan while wiring, rerouting | ✅ Implemented and verified (Playwright) |
+| Persistence and safe loading (browser drafts, confirm before replacing) | ✅ Implemented and verified (Playwright) |
+| Logic analyzer part | 🟡 Editor only, no electrical behavior |
+| UART0 + virtual terminal | 📋 Planned (Experiment 10) |
+| Container-isolated compile/execute worker | 📋 Planned, **required before any shared deployment** |
 | Keil ARMASM sources | ⛔ Unsupported (conversion path documented) |
-| Container-isolated worker | 📋 Planned — required before any shared deployment |
-| Logic analyzer, component wiring editor | 📋 Planned |
 
 ## Experiments 5–10
 
 | Exp. | Topic | Status |
 |---|---|---|
-| 5 | GPIO output | ✅ Hardware behavior verified with original C firmware; ⛔ Keil ARMASM source |
-| 6 | GPIO inputs & interrupts | ✅ Verified with original C firmware, including `TM4C123.h`-style code (J) |
-| 7 | SysTick & timers | ✅ Verified with original C firmware (G–I), including `TM4C123.h`-style code (K) |
-| 8 | LCD1602 | ✅ Verified with original C firmware (example L) using the Experiment 8 wiring |
-| 9 | ADC | ✅ Verified with original C firmware (examples M, N) |
+| 5 | GPIO output | ✅ Verified with original C firmware; ⛔ Keil ARMASM source |
+| 6 | GPIO inputs & interrupts | ✅ Verified, including `TM4C123.h`-style code (J) |
+| 7 | SysTick & timers | ✅ Verified (G–I), including `TM4C123.h`-style code (K) |
+| 8 | LCD1602 | ✅ Verified (example L) with the Experiment 8 wiring |
+| 9 | ADC | ✅ Verified (examples M, N) |
 | 10 | UART | 📋 Planned |
 
 Details: [`docs/EXPERIMENT_COMPATIBILITY.md`](docs/EXPERIMENT_COMPATIBILITY.md).
 
-## Current blockers
+## Known issues
+
+Ranked for the showcase release. None blocks a local, guided demonstration;
+the first one blocks any *public* deployment.
+
+| Issue | Rank | Notes |
+|---|---|---|
+| Compile/execute backend is not isolated | **Blocker for public hosting** (not for local use) | Local trusted mode only; a validated container worker is required first |
+| Automatic wire routes can pass over unrelated header pads | Important | Pin tables and tooltips are correct. Routes the user reroutes (segment drag) are kept exactly; example F's two GND wires cross 14 pads as shipped and 3 when rerouted this way. A routing-engine change needs a separate risk review |
+| Pin tooltip can say "Not connected" right after a wire is made | Important | Corrects itself on the next hover |
+| Compile errors are listed (Problems tab, with line numbers) but the editor does not jump to them | Important | |
+| The console shows every GPIO transition (e.g. the LCD example) | Important | The Events tab holds the raw stream; console filtering is not implemented |
+| Keyboard zoom while wiring leaves the wire preview behind until the pointer moves | Deferred | Mouse-wheel zoom stays in sync |
+| Pause stays enabled while halted; some status chips wrap; two-line trust notice on narrow screens | Deferred | Cosmetic |
+
+## Current blockers (engineering)
 
 | Blocker | Resolution step |
 |---|---|
-| No physical LaunchPad comparison | Run examples A–E and the negative fixtures on hardware; record the results |
-| No container isolation | Build and validate a compile/execute worker image (no network, CPU/memory/PID limits, read-only FS) |
-| Unmodified lab sources not run in CI | The lab sources are not redistributable; an instructor can compile them against `simulator/firmware/include` and report any missing names |
+| No physical LaunchPad comparison | Run examples A–E and the negative fixtures on hardware and record the results |
+| No container isolation | Build and validate a compile/execute worker image (no network, CPU/memory/PID limits, read-only filesystem) |
+| Unmodified lab sources are not run in CI | They are not redistributable; an instructor can compile them against `simulator/firmware/include` and report missing names |
 
 ## Next engineering task
 
-UART0 with a virtual serial terminal (Experiment 10). See
-the plan at the end of
+UART0 with a virtual serial terminal (Experiment 10); see the plan in
 [`docs/EXPERIMENT_COMPATIBILITY.md`](docs/EXPERIMENT_COMPATIBILITY.md#next-engineering-task).
