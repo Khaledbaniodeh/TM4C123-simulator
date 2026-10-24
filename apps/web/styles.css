@@ -442,12 +442,20 @@ button {
 
 .simulator-header {
   min-height: 64px;
+  gap: 12px;
+}
+
+/* On narrow screens the virtual time moves under the state, not the board name onto two lines. */
+.simulator-header h2 {
+  white-space: nowrap;
 }
 
 .simulation-state {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
-  gap: 8px;
+  gap: 2px 8px;
   color: var(--text-soft);
   font-size: 12px;
 }

@@ -1629,9 +1629,12 @@ async function initialize() {
   try {
     const health = await api("/api/health");
     const { toolchain } = health;
+    // Short enough to keep the notice on one line; the full version string is in the tooltip.
+    const gccVersion = toolchain.gcc?.match(/\b\d+\.\d+\.\d+\b/)?.[0];
     elements.toolchainInfo.textContent = toolchain.gcc
-      ? ` Toolchain: ${toolchain.gcc.replace(/^arm-none-eabi-gcc(\.exe)? /, "GCC ")}; Renode ${toolchain.renodePinned}.`
+      ? ` ${gccVersion ? `GCC ${gccVersion}` : toolchain.gcc} · Renode ${toolchain.renodePinned}`
       : " Toolchain missing — run `npm run setup:tools`.";
+    elements.toolchainInfo.title = toolchain.gcc ? `${toolchain.gcc}; Renode ${toolchain.renodePinned}` : "";
     const { examples } = await api("/api/examples");
     state.examples = examples;
     elements.exampleSelect.replaceChildren(

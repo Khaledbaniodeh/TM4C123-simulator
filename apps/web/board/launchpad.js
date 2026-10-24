@@ -131,12 +131,17 @@ const ESCAPE = { J1: { x: -1, y: 0 }, J3: { x: 1, y: 0 }, J4: { x: -1, y: 0 }, J
 /**
  * On-board controls that automatic wire routes keep out of (the rest of the
  * board stays routable: its headers sit inside it). A wire drawn over a
- * switch would cover it and take its clicks. The 7.4 mm squares match the
- * switches' selectable outlines.
+ * switch would cover it and take its clicks. The areas are the switches'
+ * 7.4 mm selectable outlines, reaching LABEL_REACH from the centre on the
+ * label's side (below SW1/SW2, above RESET) so that a wire, with its width,
+ * also stays off the switch's silkscreen label.
  */
-const KEEP_OUT = ["reset", "sw1", "sw2"].map((key) => {
+const LABEL_REACH = 6.1;
+const KEEP_OUT = [["reset", -1], ["sw1", 1], ["sw2", 1]].map(([key, labelSide]) => {
   const center = GEOMETRY[key];
-  return { x: mm(center.x - 3.7), y: mm(center.y - 3.7), width: mm(7.4), height: mm(7.4) };
+  const top = center.y - (labelSide < 0 ? LABEL_REACH : 3.7);
+  const bottom = center.y + (labelSide > 0 ? LABEL_REACH : 3.7);
+  return { x: mm(center.x - 3.7), y: mm(top), width: mm(7.4), height: mm(bottom - top) };
 });
 
 const PIN_INDEX = new Map();

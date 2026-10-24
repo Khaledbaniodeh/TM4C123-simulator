@@ -25,8 +25,8 @@ the previous work.
 - Example **A — Red LED on (PF1)** is plain C with register defines.
 - Click **Compile**. The status turns **Built**; the inspector shows the
   ELF (entry point, `.isr_vector`, `.text`, `.data`, `.bss`) and the console
-  shows the GCC build result. The notice bar names the exact GCC and Renode
-  versions reported by the server.
+  shows the GCC build result. The notice bar names the GCC and Renode
+  versions reported by the server (hover it for GCC's full version string).
 
 ## 3. Execution on the simulated MCU (1 min)
 

@@ -52,6 +52,15 @@ for (const size of SIZES) {
       inspector?.scrollIntoView({ block: "nearest" });
       const inspectorRect = inspector?.getBoundingClientRect();
       const inspectorReachable = Boolean(inspectorRect && inspectorRect.width > 0 && inspectorRect.right <= viewport.width + 1 && inspectorRect.top < viewport.height);
+      // Lines of text in the trust notice and in the simulator's board name (distinct line boxes of their text).
+      const lines = (node) => {
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        const bottoms = [...range.getClientRects()].filter((r) => r.width > 0).map((r) => r.bottom).sort((a, b) => a - b);
+        return bottoms.filter((bottom, i) => i === 0 || bottom - bottoms[i - 1] > 8).length;
+      };
+      const noticeLines = lines(document.querySelector("#modeNotice"));
+      const boardTitleLines = lines(document.querySelector(".simulator-header h2"));
       const panels = [...document.querySelectorAll("main > *, .layout > *, body > div > *")]
         .slice(0, 8)
         .map((node) => `${node.id || node.className || node.tagName}:${Math.round(node.getBoundingClientRect().width)}`);
@@ -65,6 +74,9 @@ for (const size of SIZES) {
         canvasVisible,
         consoleHeight: Math.round(consolePanel.height),
         consoleLines,
+        noticeLines,
+        boardTitleLines,
+        toolchain: document.querySelector("#toolchainInfo").textContent.trim(),
       };
     });
     console.log(`::notice title=layout ${size.width}x${size.height}::${JSON.stringify(metrics)}`);
@@ -85,6 +97,14 @@ for (const size of SIZES) {
     if (size.width === 1280 && size.height === 720) {
       expect(metrics.canvas.height, "canvas height at 1280x720 (was 323 px)").toBeGreaterThanOrEqual(350);
     }
+    // The trust notice keeps its warning and fits one line from 1280 px (it took two before); the board
+    // name never wraps (at 1024 px the virtual time wrapped it onto two lines).
+    await expect(page.locator("#modeNotice")).toContainText("not sandboxed — only run code you trust");
+    expect(metrics.toolchain).toMatch(/^GCC \d+\.\d+\.\d+ · Renode \d+\.\d+\.\d+$/);
+    if (size.width >= 1280) {
+      expect(metrics.noticeLines, "trust notice lines").toBe(1);
+    }
+    expect(metrics.boardTitleLines, "board name lines").toBe(1);
     await page.click("#stopButton");
     expect(errors).toEqual([]);
   });
