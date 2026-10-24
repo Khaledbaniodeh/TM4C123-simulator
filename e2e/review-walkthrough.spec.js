@@ -82,6 +82,11 @@ test("build errors, run, pause, stop, console and events", async ({ page }) => {
   await shot(page, "08-running");
   await page.click("#pauseButton");
   await expect(page.locator("#simulationStatus")).not.toHaveText("Running");
+  // Halted: the Run button offers Resume, and Pause, with nothing to pause, is disabled.
+  await expect(page.locator("#simulationStatus")).toHaveText("Halted");
+  await expect(page.locator("#pauseButton")).toBeDisabled();
+  await expect(page.locator("#runButton")).toBeEnabled();
+  await expect(page.locator("#runButton")).toHaveText("▶ Resume");
   notice("paused status", await page.locator("#simulationStatus").textContent());
   await shot(page, "09-paused");
   await page.click("#stopButton");
