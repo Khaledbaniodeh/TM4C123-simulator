@@ -7,8 +7,8 @@
     {"type": "potentiometer", "id": "pot1", "top": 105.6, "left": -134.4, "rotate": 0, "attrs": {"value": "10k", "position": 50}}
   ],
   "connections": [
-    ["board1:J1.1", "pot1:VCC", "red", []],
-    ["board1:J3.9", "pot1:SIG", "green", []],
-    ["board1:J3.2", "pot1:GND", "black", []]
+    ["board1:J1.1", "pot1:VCC", "red", ["h-86.4", "v0"]],
+    ["board1:J3.9", "pot1:SIG", "green", ["h9.6", "v19.2", "h0"]],
+    ["board1:J3.2", "pot1:GND", "black", ["h38.4", "v124.8", "h0"]]
   ]
 }

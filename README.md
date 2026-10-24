@@ -87,7 +87,7 @@ scriptable firmware experiments.
 | Board | 40 wireable header pins with live tooltips; SW1/SW2 and RESET; firmware-driven RGB LED; selectable components with honest status |
 | Parts | LED, resistor, pushbutton (logic level), potentiometer (ideal divider), LCD1602 (HD44780); logic analyzer is **editor only** |
 | Editing | Drag, rotate, duplicate, delete, multi-selection, copy/paste, nudging, undo/redo; new parts placed on free canvas |
-| Wiring | Click-to-click or drag-to-connect; pan while wiring; orthogonal routes on a 0.1 in grid; segment rerouting; validation of shorts and duplicates |
+| Wiring | Click-to-click or drag-to-connect; pan while wiring; orthogonal routes on a 0.1 in grid that keep clear of unrelated pin pads; segment rerouting; validation of shorts and duplicates |
 | Inspector | Live pin table (digital levels, drivers, and AIN channel + modeled voltage for ADC inputs), ELF summary, capability list |
 | Files and safety | `diagram.json` save/load (Wokwi-inspired, full compatibility **not** claimed); source and circuit kept in browser storage across reloads; confirmation before an example or a file replaces edited work; keyboard-accessible toolbar (wiring itself needs a pointer) |
 
@@ -200,7 +200,8 @@ the [RISK-001 Acceptance Report](docs/RISK-001_Acceptance_Report.md).
   potentiometer is an ideal divider without loading.
 - **Known workspace rough edges** are tracked in
   [`PROJECT_STATUS.md`](PROJECT_STATUS.md#known-issues), for example
-  automatic wire routes that can pass over unrelated header pads.
+  wires in older saved circuits keep their routes, which can pass over
+  header pads (new wires are routed clear of them).
 
 ## Roadmap
 

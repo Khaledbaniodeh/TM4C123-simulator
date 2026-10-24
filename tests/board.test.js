@@ -7,9 +7,10 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { BOARD_INPUTS, BOARD_LEDS } from "../apps/web/board-state.js";
 import { BOARD_PART, GEOMETRY } from "../apps/web/board/launchpad.js";
-import { GRID } from "../apps/web/workspace/geometry.js";
+import { readFile } from "node:fs/promises";
+import { GRID, autoRoute, bodyCrossings, padCrossings, partBounds, partToWorld, pinEscape, routeWire, wireOverlap } from "../apps/web/workspace/geometry.js";
 import { CATALOG, LIBRARY } from "../apps/web/workspace/parts.js";
-import { createDiagram, validateDiagram } from "../apps/web/workspace/diagram.js";
+import { createDiagram, parseDiagram, validateDiagram } from "../apps/web/workspace/diagram.js";
 import { evaluateCircuit } from "../apps/web/workspace/netlist.js";
 
 const { pinMap } = BOARD_PART;
@@ -96,6 +97,82 @@ describe("board geometry", () => {
     for (const pin of BOARD_PART.pins) {
       assert.ok(Math.abs(pin.x / GRID - Math.round(pin.x / GRID)) < 1e-6, `${pin.name} x`);
       assert.ok(Math.abs(pin.y / GRID - Math.round(pin.y / GRID)) < 1e-6, `${pin.name} y`);
+    }
+  });
+
+  it("routes new wires from a header pin away from its neighbouring column and clear of every other pad", () => {
+    const away = { J1: { x: -1, y: 0 }, J3: { x: 1, y: 0 }, J4: { x: -1, y: 0 }, J2: { x: 1, y: 0 } };
+    for (const pin of BOARD_PART.pins) {
+      assert.deepEqual(pinEscape(pin, { rotate: 0 }, BOARD_PART.size), away[pin.header], pin.name);
+    }
+    const pin = (name) => BOARD_PART.pins.find((p) => p.name === name);
+    const others = (...names) => BOARD_PART.pins.filter((p) => !names.includes(p.name));
+    // From the inner column J3 to a point level with it beyond J1: the default L runs over J1.5.
+    const from = pin("J3.5");
+    const to = { x: -96, y: from.y };
+    assert.equal(padCrossings(routeWire(from, to), others("J3.5")), 1);
+    const route = autoRoute(from, to, { fromEscape: pinEscape(from, {}, BOARD_PART.size), pads: others("J3.5") });
+    assert.equal(route.crossings, 0);
+    assert.ok(route.points[1].x > from.x && route.points[1].y === from.y, "leaves J3 towards the board, away from J1");
+    // Between pins of the two left columns (J1.10 to J3.1): no pad of either column on the way.
+    const across = autoRoute(pin("J1.10"), pin("J3.1"), { fromEscape: away.J1, toEscape: away.J3, pads: others("J1.10", "J3.1") });
+    assert.equal(across.crossings, 0);
+    assert.deepEqual(routeWire(pin("J1.10"), pin("J3.1"), across.routing), across.points);
+  });
+
+  it("keeps automatic routes off the on-board switches", () => {
+    assert.equal(BOARD_PART.keepOut.length, 3);
+    for (const key of ["reset", "sw1", "sw2"]) {
+      const center = { x: GEOMETRY[key].x * 96 / 25.4, y: GEOMETRY[key].y * 96 / 25.4 };
+      assert.ok(BOARD_PART.keepOut.some((r) => center.x > r.x && center.x < r.x + r.width && center.y > r.y && center.y < r.y + r.height), key);
+    }
+    // No header pin lies in a keep-out area: every pin stays reachable.
+    for (const pin of BOARD_PART.pins) {
+      assert.ok(!BOARD_PART.keepOut.some((r) => pin.x > r.x && pin.x < r.x + r.width && pin.y > r.y && pin.y < r.y + r.height), pin.name);
+    }
+    // A route from the right header to a part left of the board goes round SW1 and SW2, not across them.
+    const from = BOARD_PART.pins.find((p) => p.name === "J2.3");
+    const to = { x: -48, y: 120 };
+    const route = autoRoute(from, to, { fromEscape: { x: 1, y: 0 }, pads: BOARD_PART.pins.filter((p) => p !== from), bodies: BOARD_PART.keepOut });
+    assert.equal(route.crossings, 0);
+    assert.equal(route.bodies, 0);
+  });
+
+  it("ships example circuits whose wires cross no unrelated pad, no part body, and no wire of another net", async () => {
+    const ground = new Set(BOARD_PART.pins.filter((p) => BOARD_PART.role(p.name)?.kind === "ground").map((p) => `board1:${p.name}`));
+    for (const id of ["lcd1602-hello", "external-led-button", "adc-potentiometer"]) {
+      const { diagram, errors } = parseDiagram(await readFile(new URL(`../examples/${id}/diagram.json`, import.meta.url), "utf8"), CATALOG);
+      assert.deepEqual(errors, [], id);
+      const pads = diagram.parts.flatMap((part) => CATALOG[part.type].pins.map((p) => ({ id: `${part.id}:${p.name}`, ...partToWorld(p, part, CATALOG[part.type].size) })));
+      const at = (endpoint) => pads.find((p) => p.id === endpoint);
+      const bodies = diagram.parts.filter((part) => CATALOG[part.type].kind !== "board").map((part) => partBounds(part, CATALOG[part.type].size));
+      const wires = [];
+      for (const [from, to, , routing] of diagram.connections) {
+        const points = routeWire(at(from), at(to), routing);
+        assert.equal(padCrossings(points, pads.filter((p) => p.id !== from && p.id !== to)), 0, `${id} ${from}→${to}`);
+        assert.equal(bodyCrossings(points, bodies), 0, `${id} ${from}→${to} passes over a part`);
+        wires.push({ from, to, points });
+      }
+      // Nets: wires sharing a pin, and the board's GND pins, are one net. Wires of different nets
+      // drawn on top of each other would look joined.
+      const net = new Map();
+      const find = (x) => (net.get(x) === x || !net.has(x) ? x : find(net.get(x)));
+      const join = (a, b) => net.set(find(a), find(b));
+      for (const w of wires) {
+        join(w.from, w.to);
+        for (const end of [w.from, w.to]) {
+          if (ground.has(end)) {
+            join(end, "GND");
+          }
+        }
+      }
+      for (const [i, a] of wires.entries()) {
+        for (const b of wires.slice(i + 1)) {
+          if (find(a.from) !== find(b.from)) {
+            assert.equal(wireOverlap(a.points, [b.points]), 0, `${id}: ${a.from}→${a.to} runs along ${b.from}→${b.to}`);
+          }
+        }
+      }
     }
   });
 });

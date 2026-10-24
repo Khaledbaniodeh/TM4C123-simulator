@@ -55,9 +55,9 @@ the previous work.
 - **Pan while wiring:** click the LED's cathode to start a wire, then drag
   empty canvas (or use the middle button). The view moves and the wire stays
   attached; a plain click on empty canvas, or **Esc**, cancels it.
-- Tip: J2 is the outer right header, so its route to a part on the right
-  crosses no other pin. Routes from the inner headers (J3, J4) can pass over
-  neighbouring pads; drag a wire segment to reroute it.
+- Routes keep clear of unrelated pins: a wire from an inner header (J3, J4)
+  first steps away from the neighbouring column. Drag any wire segment to
+  reroute it by hand; that route is kept exactly.
 
 ## 6. LCD1602 (1 min)
 
