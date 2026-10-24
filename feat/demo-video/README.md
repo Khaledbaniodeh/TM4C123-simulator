@@ -1,1 +1,1 @@
-Screenshots from feat/demo-video @ 921a92ee9007f79962b6afe6a446fad20c836869 (run 40142759261, test result: success)
+Screenshots from feat/demo-video @ 0ed03db78a3a5a459f4446ac443713cf82a5e6d7 (run 40143742304, test result: success)
