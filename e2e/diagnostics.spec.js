@@ -217,7 +217,9 @@ test("compiler text is shown as text, never as HTML", async ({ page }) => {
 for (const size of SIZES) {
   test(`problems list and marked line at ${size.width}x${size.height}`, async ({ page }) => {
     const errors = await open(page, size);
-    await build(page, BROKEN);
+    // Long enough to scroll at every size (comment lines after the code; the problems stay on their lines).
+    const filler = Array.from({ length: 80 }, (_, i) => `// line ${i + 18}`);
+    await build(page, [BROKEN.trimEnd(), ...filler, ""].join("\n"));
     await page.locator("#problemsOutput button.problem-row").first().click();
     const state = await editorState(page);
     expect(state.bandOnLine).toBe(true);
