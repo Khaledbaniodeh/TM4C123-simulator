@@ -3,7 +3,8 @@
 A guided walkthrough for presenting the simulator to engineers. Every step
 uses supported, tested behavior; the same flow runs automatically in CI as
 [`e2e/showcase.spec.js`](../e2e/showcase.spec.js), which also produces the
-screenshots in [`docs/images/`](images/).
+screenshots in [`docs/images/`](images/). For a 2-minute recorded version (one
+take of the real app, made in CI), see [`demo/README.md`](../demo/README.md).
 
 **Before the meeting.** Run `npm run setup:tools && npm ci && npm start`,
 open <http://127.0.0.1:5123/> in a desktop browser (1280×720 or larger),

@@ -29,7 +29,7 @@
       "id": "wiring",
       "title": "Interactive wiring",
       "example": "three-timers",
-      "caption": "Circuits are built by dragging from a header pin to a part. The wire is checked, routed clear of other pins, and can be undone."
+      "caption": "Circuits are built by dragging from a header pin to a part; the wire is checked and routed clear of the other pins."
     },
     {
       "id": "button",

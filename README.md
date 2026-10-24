@@ -139,7 +139,9 @@ into the gitignored `.tools/` directory; delete it to uninstall. **Ctrl+C**
 stops the server and shuts Renode down cleanly.
 
 A guided 10-minute walkthrough for presentations:
-[`docs/SHOWCASE_DEMO.md`](docs/SHOWCASE_DEMO.md).
+[`docs/SHOWCASE_DEMO.md`](docs/SHOWCASE_DEMO.md). A 2-minute recorded take of
+the real app, made in CI, with its storyboard and voice-over:
+[`demo/README.md`](demo/README.md).
 
 ## Firmware examples
 

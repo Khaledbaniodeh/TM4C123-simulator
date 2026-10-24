@@ -141,7 +141,7 @@ test("company demo: one take of the real simulator", async ({ page }) => {
   await pause(900);
   await moveTo(pin("board1", "J3.10"), 26);
   await expect(page.locator("#pinTooltip")).toContainText("J3 pin 10");
-  await pause(3200);
+  await pause(4000);
 
   // 2. Real C source: scroll through the timer setup to the three interrupt handlers.
   recording.scene("code");
@@ -157,7 +157,7 @@ test("company demo: one take of the real simulator", async ({ page }) => {
       break;
     }
     await page.mouse.wheel(0, Math.min(190, left));
-    await pause(600);
+    await pause(500);
   }
   // The handlers (lines 71-73) are in view.
   await expect.poll(() => page.evaluate(() => {
@@ -242,7 +242,7 @@ test("company demo: one take of the real simulator", async ({ page }) => {
   await expect(lcd).toHaveAttribute("data-row0", "Hello, TM4C123! ");
   await moveTo(lcd, 24);
   await expect(lcd).toHaveAttribute("data-row1", /LCD1602 . n=\d/);
-  await pause(2800);
+  await pause(2400);
 
   // 8. ADC (example M): the knob sets the voltage on PE3; the firmware picks the LED colour.
   recording.scene("adc");
@@ -260,14 +260,14 @@ test("company demo: one take of the real simulator", async ({ page }) => {
   await moveTo(at(15), 30);
   await page.mouse.up();
   await expect(row("PF3")).toContainText("HIGH");
-  await pause(1700);
+  await pause(1500);
   await moveTo(at(15), 6);
   await page.mouse.down();
   await moveTo(at(95), 40);
   await page.mouse.up();
   await expect(row("PF1")).toContainText("HIGH");
   await expect(row("PE3")).toContainText("pot1 → AIN0");
-  await pause(2300);
+  await pause(2000);
 
   // 9. Diagnostics: a typo, GCC's error with its suggestion, jump to the line, fix, clean build.
   recording.scene("diagnostics");
@@ -317,7 +317,7 @@ test("company demo: one take of the real simulator", async ({ page }) => {
   await click(page.locator("#consoleTools .console-chip", { hasText: "Compact" }));
   await pause(900);
   await moveTo("#modeNotice", 30);
-  await pause(4500);
+  await pause(3800);
 
   const result = await recording.stop();
   console.log(`::notice title=demo recording::${result.frames} frames, ${result.seconds.toFixed(1)} s`);
