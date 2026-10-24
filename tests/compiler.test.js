@@ -84,6 +84,13 @@ describe("compiler runner", () => {
     try {
       assert.equal(result.ok, false);
       assert.match(result.log, /undefined reference to [`']missing_function'/);
+      // Reported as a linker problem; a line only where the linker gives one (from debug info: the call, line 12).
+      const linker = result.diagnostics.find((d) => d.origin === "linker" && /undefined reference to [`']missing_function'/.test(d.message));
+      assert.ok(linker, JSON.stringify(result.diagnostics));
+      assert.equal(linker.severity, "error");
+      assert.equal(linker.column, null);
+      assert.ok(linker.line === null || linker.line === 12, `line ${linker.line}`);
+      assert.ok(result.diagnostics.every((d) => !d.message.includes(result.workDir)), "no build directory in messages");
     } finally {
       await removeBuild(result.workDir);
     }
@@ -106,6 +113,41 @@ describe("compiler runner", () => {
 
   it("parses GCC diagnostic lines", () => {
     const parsed = parseDiagnostics("/tmp/tm4c-build-x/main.c:12:5: error: expected ';' before 'value'\nnote: something");
-    assert.deepEqual(parsed, [{ file: "main.c", line: 12, column: 5, severity: "error", message: "expected ';' before 'value'" }]);
+    assert.deepEqual(parsed, [{ file: "main.c", line: 12, column: 5, severity: "error", message: "expected ';' before 'value'", origin: "compiler" }]);
+  });
+
+  it("parses linker, assembler, and driver diagnostics without inventing a location", () => {
+    const work = "/tmp/tm4c-build-abc";
+    const stderr = [
+      `${work}/main.c: In function 'main':`,
+      `${work}/main.c:12:5: error: 'x' undeclared (first use in this function)`,
+      `${work}/main.c:12:5: note: each undeclared identifier is reported only once for each function it appears in`,
+      `${work}/main.c:20:9: warning: unused variable 'y' [-Wunused-variable]`,
+      `${work}/main.c:3:10: fatal error: missing.h: No such file or directory`,
+      "compilation terminated.",
+      `/opt/xpack/bin/../lib/gcc/arm-none-eabi/15.2.1/../../../../arm-none-eabi/bin/ld: ${work}/ccX1.o: in function \`main':`,
+      `${work}/main.c:15:(.text.main+0x8): undefined reference to \`foo'`,
+      `${work}/main.c:(.text+0xc): undefined reference to \`bar'`,
+      "/opt/xpack/bin/ld: firmware.elf section `.text' will not fit in region `FLASH'",
+      "/opt/xpack/bin/ld: region `FLASH' overflowed by 1234 bytes",
+      "collect2: error: ld returned 1 exit status",
+      "startup.s:7: Error: bad instruction `foo'",
+      "arm-none-eabi-gcc: error: unrecognized command-line option '-mfoo'",
+      `${work}/main.c:30:1: error: conflicting types for 'f'; have 'int(void)' (see ${work}/main.c)`,
+    ].join("\n");
+    assert.deepEqual(parseDiagnostics(stderr, "main.c", work), [
+      { file: "main.c", line: 12, column: 5, severity: "error", message: "'x' undeclared (first use in this function)", origin: "compiler" },
+      { file: "main.c", line: 12, column: 5, severity: "note", message: "each undeclared identifier is reported only once for each function it appears in", origin: "compiler" },
+      { file: "main.c", line: 20, column: 9, severity: "warning", message: "unused variable 'y' [-Wunused-variable]", origin: "compiler" },
+      { file: "main.c", line: 3, column: 10, severity: "error", message: "missing.h: No such file or directory", origin: "compiler" },
+      { file: "main.c", line: 15, column: null, severity: "error", message: "undefined reference to `foo' (in function main)", origin: "linker" },
+      { file: "main.c", line: null, column: null, severity: "error", message: "undefined reference to `bar' (in function main)", origin: "linker" },
+      { file: null, line: null, column: null, severity: "error", message: "firmware.elf section `.text' will not fit in region `FLASH'", origin: "linker" },
+      { file: null, line: null, column: null, severity: "error", message: "region `FLASH' overflowed by 1234 bytes", origin: "linker" },
+      { file: null, line: null, column: null, severity: "error", message: "ld returned 1 exit status", origin: "linker" },
+      { file: "startup.s", line: 7, column: null, severity: "error", message: "bad instruction `foo'", origin: "assembler" },
+      { file: null, line: null, column: null, severity: "error", message: "unrecognized command-line option '-mfoo'", origin: "compiler" },
+      { file: "main.c", line: 30, column: 1, severity: "error", message: "conflicting types for 'f'; have 'int(void)' (see main.c)", origin: "compiler" },
+    ]);
   });
 });

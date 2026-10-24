@@ -21,6 +21,7 @@ import { evaluateCircuit } from "./workspace/netlist.js";
 import { LcdSimulation, bindLcd } from "./workspace/lcd.js";
 import { describeAnalogInput, evaluateAnalog } from "./workspace/analog.js";
 import { DraftStore, browserStorage, compareWork } from "./draft-store.js";
+import { describeLocation, groupDiagnostics, isNavigable, lineMarks, nextProblem, problemRange, summarize } from "./diagnostics.js";
 
 const CAPABILITIES = [
   { name: "ARM GCC build → Cortex-M4 ELF", status: "verified" },
@@ -70,6 +71,7 @@ const elements = {
   stopButton: $("#stopButton"),
   editor: $("#codeEditor"),
   lineNumbers: $("#lineNumbers"),
+  editorHighlight: $("#editorHighlight"),
   cursorPosition: $("#cursorPosition"),
   editorStatus: $("#editorStatus"),
   draftStatus: $("#draftStatus"),
@@ -143,6 +145,10 @@ const state = {
    * ask; null once any other load (example switch, restore) replaces the circuit.
    */
   importedCircuit: null,
+  /** Problems of the last build (diagnostics with their notes) and the source they were reported for. */
+  problems: { list: [], source: null },
+  /** The editor line marked for the problem last navigated to: { line, severity }, or null. */
+  problemLine: null,
 };
 
 // Drafts of the student's work in this browser (see draft-store.js).
@@ -187,17 +193,18 @@ function recordEvent(message) {
   }
 }
 
-function showProblems(diagnostics, errorText) {
+/**
+ * Lists a build's problems (errors and warnings, each followed by its notes)
+ * and marks their lines in the editor gutter. `source` is the code they were
+ * reported for. Text from the compiler is only ever set as text.
+ */
+function showProblems(diagnostics, errorText, source = null) {
+  const problems = groupDiagnostics(diagnostics);
+  state.problems = { list: problems, source };
   elements.problemsOutput.replaceChildren();
-  const problems = diagnostics.filter((d) => d.severity !== "note");
   elements.problemCount.textContent = String(problems.length + (errorText && !problems.length ? 1 : 0));
-  for (const diagnostic of problems) {
-    const row = document.createElement("button");
-    row.type = "button";
-    row.className = `problem-row ${diagnostic.severity}`;
-    row.textContent = `${diagnostic.file}:${diagnostic.line}:${diagnostic.column}  ${diagnostic.severity}: ${diagnostic.message}`;
-    row.addEventListener("click", () => goToLine(diagnostic.line, diagnostic.column));
-    elements.problemsOutput.append(row);
+  for (const problem of problems) {
+    elements.problemsOutput.append(problemRow(problem), ...problem.notes.map((note) => problemRow(note, true)));
   }
   if (errorText && !problems.length) {
     const row = document.createElement("div");
@@ -205,6 +212,87 @@ function showProblems(diagnostics, errorText) {
     row.textContent = errorText;
     elements.problemsOutput.append(row);
   }
+  markProblemLine(null);
+  updateLineNumbers();
+}
+
+/** One row of the Problems list: a button that goes to the code when the problem has a line in main.c. */
+function problemRow(diagnostic, note = false) {
+  const navigable = isNavigable(diagnostic);
+  const row = document.createElement(navigable ? "button" : "div");
+  row.className = `problem-row ${diagnostic.severity}${note ? " note" : ""}${navigable ? "" : " no-location"}`;
+  if (navigable) {
+    row.type = "button";
+    row.title = `Go to ${describeLocation(diagnostic)} (F8: next problem)`;
+    row.addEventListener("click", () => goToProblem(diagnostic));
+  } else {
+    row.title = "No source line: the tool did not report one";
+  }
+  const parts = [
+    ["problem-location", describeLocation(diagnostic)],
+    ["problem-severity", `${diagnostic.severity}:`],
+    ["problem-message", diagnostic.message],
+  ];
+  parts.forEach(([className, text], index) => {
+    const span = document.createElement("span");
+    span.className = className;
+    span.textContent = text;
+    row.append(...(index ? [" ", span] : [span]));
+  });
+  return row;
+}
+
+/** Selects the problem's code (the identifier or symbol at its column), marks its line, and scrolls it into view. */
+function goToProblem(diagnostic) {
+  const { start, end, line } = problemRange(elements.editor.value, diagnostic.line, diagnostic.column);
+  elements.editor.focus();
+  elements.editor.setSelectionRange(start, end);
+  scrollEditorToLine(line);
+  markProblemLine({ line, severity: diagnostic.severity });
+  updateCursorPosition();
+}
+
+function editorLineHeight() {
+  return parseFloat(getComputedStyle(elements.editor).lineHeight) || 20;
+}
+
+/** Scrolls the editor so `line` is in view, a third of the way down, unless it already is. */
+function scrollEditorToLine(line) {
+  const height = editorLineHeight();
+  const padding = parseFloat(getComputedStyle(elements.editor).paddingTop) || 0;
+  const top = padding + (line - 1) * height;
+  const editor = elements.editor;
+  if (top < editor.scrollTop || top + height > editor.scrollTop + editor.clientHeight) {
+    editor.scrollTop = Math.max(0, top - editor.clientHeight / 3);
+  }
+}
+
+/** Highlights one editor line for a problem ({ line, severity }), or clears the highlight (null). */
+function markProblemLine(mark) {
+  state.problemLine = mark;
+  positionProblemLine();
+}
+
+function positionProblemLine() {
+  const band = elements.editorHighlight;
+  const mark = state.problemLine;
+  band.hidden = !mark;
+  if (!mark) {
+    return;
+  }
+  const editor = elements.editor;
+  const height = editorLineHeight();
+  const padding = parseFloat(getComputedStyle(editor).paddingTop) || 0;
+  band.dataset.severity = mark.severity;
+  band.style.left = `${editor.offsetLeft}px`;
+  band.style.width = `${editor.clientWidth}px`;
+  band.style.height = `${height}px`;
+  band.style.top = `${editor.offsetTop + padding + (mark.line - 1) * height - editor.scrollTop}px`;
+}
+
+/** The editor line the cursor is on (1-based). */
+function cursorLine() {
+  return elements.editor.value.slice(0, elements.editor.selectionStart).split("\n").length;
 }
 
 function selectConsoleTab(name) {
@@ -227,9 +315,30 @@ function workspaceMessage(text, level = "info") {
 // Editor
 // ---------------------------------------------------------------------------
 
+/**
+ * Line numbers, with the lines of the last build's problems marked (hover for
+ * the messages). Once the code changes the marks are dimmed: lines may have
+ * moved since that build.
+ */
 function updateLineNumbers() {
   const count = elements.editor.value.split("\n").length;
-  elements.lineNumbers.textContent = Array.from({ length: count }, (_, i) => i + 1).join("\n");
+  const marks = lineMarks(state.problems.list);
+  const stale = state.problems.source !== null && state.problems.source !== elements.editor.value;
+  const fragment = document.createDocumentFragment();
+  for (let line = 1; line <= count; line++) {
+    const mark = marks.get(line);
+    const separator = line < count ? "\n" : "";
+    if (!mark) {
+      fragment.append(`${line}${separator}`);
+      continue;
+    }
+    const span = document.createElement("span");
+    span.className = `gutter-mark ${mark.severity}${stale ? " stale" : ""}`;
+    span.title = mark.messages.join("\n") + (stale ? "\n(from the last build; the code has changed since)" : "");
+    span.textContent = String(line);
+    fragment.append(span, separator);
+  }
+  elements.lineNumbers.replaceChildren(fragment);
 }
 
 function updateCursorPosition() {
@@ -237,25 +346,18 @@ function updateCursorPosition() {
   elements.cursorPosition.textContent = `Ln ${before.length}, Col ${before.at(-1).length + 1}`;
 }
 
-function goToLine(line, column = 1) {
-  const lines = elements.editor.value.split("\n");
-  const offset = lines.slice(0, line - 1).reduce((sum, text) => sum + text.length + 1, 0) + column - 1;
-  elements.editor.focus();
-  elements.editor.setSelectionRange(offset, offset);
-  const lineHeight = parseFloat(getComputedStyle(elements.editor).lineHeight) || 20;
-  elements.editor.scrollTop = Math.max(0, (line - 5) * lineHeight);
-  updateCursorPosition();
-}
-
 function buildIsCurrent() {
   return state.build !== null && state.build.source === elements.editor.value;
 }
 
 function updateEditorStatus() {
+  const failed = state.problems.source === elements.editor.value && state.problems.list.some((p) => p.severity === "error");
   if (state.busy === "compiling") {
     elements.editorStatus.textContent = "Compiling…";
   } else if (buildIsCurrent()) {
     elements.editorStatus.textContent = "Built";
+  } else if (failed) {
+    elements.editorStatus.textContent = `Build failed: ${summarize(state.problems.list)}`;
   } else if (state.build) {
     elements.editorStatus.textContent = "Changed since build";
   } else {
@@ -1051,14 +1153,22 @@ async function compile() {
   log("Compiling main.c with arm-none-eabi-gcc…", "info");
   try {
     const result = await api("/api/build", { body: { source } });
-    showProblems(result.diagnostics ?? [], result.ok ? null : result.error);
+    showProblems(result.diagnostics ?? [], result.ok ? null : result.error, source);
     if (!result.ok) {
       state.build = null;
-      log(`Build failed: ${result.error}`, "error");
+      const summary = summarize(state.problems.list);
+      log(`Build failed: ${result.error}${summary ? ` (${summary}; see Problems)` : ""}`, "error");
       for (const line of (result.log ?? "").split(/\r?\n/).filter(Boolean).slice(0, 20)) {
         log(line, "error");
       }
       selectConsoleTab("problems");
+      // Show where the first error is, without taking focus from the button that was used.
+      const first = state.problems.list.find((p) => p.severity === "error" && isNavigable(p));
+      if (first && elements.editor.value === source) {
+        const { line } = problemRange(source, first.line, first.column);
+        scrollEditorToLine(line);
+        markProblemLine({ line, severity: "error" });
+      }
       return false;
     }
     state.build = { id: result.buildId, source, elf: result.elf };
@@ -1430,6 +1540,7 @@ elements.exampleSelect.addEventListener("change", () => {
   }
 });
 elements.editor.addEventListener("input", () => {
+  markProblemLine(null); // the marked line may have moved
   updateLineNumbers();
   updateCursorPosition();
   updateEditorStatus();
@@ -1439,12 +1550,21 @@ elements.editor.addEventListener("click", updateCursorPosition);
 elements.editor.addEventListener("keyup", updateCursorPosition);
 elements.editor.addEventListener("scroll", () => {
   elements.lineNumbers.scrollTop = elements.editor.scrollTop;
+  positionProblemLine();
 });
+new ResizeObserver(positionProblemLine).observe(elements.editor);
 elements.editor.addEventListener("keydown", (event) => {
   if (event.key === "Tab") {
     event.preventDefault();
     elements.editor.setRangeText("    ", elements.editor.selectionStart, elements.editor.selectionEnd, "end");
     elements.editor.dispatchEvent(new Event("input"));
+  } else if (event.key === "F8") {
+    // Next problem (Shift+F8: previous), from the cursor's line, wrapping around.
+    const target = nextProblem(state.problems.list, cursorLine(), event.shiftKey ? -1 : 1);
+    if (target) {
+      event.preventDefault();
+      goToProblem(target);
+    }
   }
 });
 
