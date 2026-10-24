@@ -324,7 +324,7 @@ test("pins stay hoverable and wireable after a wire is attached", async ({ page 
   await expect(page.locator(".wire")).toHaveCount(1);
 
   await anchor(page, "board1", "J1.10").hover();
-  await expect(page.locator("#pinTooltip")).toContainText("1 wire connected");
+  await expect(page.locator("#pinTooltip")).toContainText("Wired to led1:A"); // the pin's wire, named
   await anchor(page, "board1", "J1.10").click();
   await expect(page.locator("#workspaceMessage")).toContainText("Wiring from board1:J1.10");
   await anchor(page, "led1", "C").click();

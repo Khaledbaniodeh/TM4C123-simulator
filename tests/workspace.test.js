@@ -7,6 +7,7 @@ import { describe, it } from "node:test";
 import {
   GRID,
   autoRoute,
+  bodyCrossings,
   clientToWorld,
   editableSegment,
   fitViewBox,
@@ -173,6 +174,28 @@ describe("geometry", () => {
       assert.ok(Math.abs(point.x - intended[i].x) < 1e-9 && Math.abs(point.y - intended[i].y) < 1e-9, `point ${i}`);
       assert.ok(i === 0 || point.x === drawn[i - 1].x || point.y === drawn[i - 1].y, `segment ${i} axis-aligned`);
     });
+  });
+
+  it("keeps new wires out of part bodies, but lets them reach pins on a part's edge", () => {
+    const a = { x: 0, y: 0 };
+    const b = { x: 96, y: 48 };
+    // A part sitting on the default L's horizontal run (a button whose cap the wire would cover).
+    const button = { x: 38.4, y: -19.2, width: 38.4, height: 38.4 };
+    assert.equal(bodyCrossings(routeWire(a, b), [button]), 1);
+    const route = autoRoute(a, b, { bodies: [button] });
+    assert.equal(route.bodies, 0);
+    assert.deepEqual(route.routing, ["v0"], "the other L goes round it");
+    // A pin on the part's own edge is reached from outside without counting as crossing the part.
+    const edgePin = { x: 38.4, y: 0 };
+    const toPin = autoRoute({ x: 0, y: 0 }, edgePin, { toEscape: { x: -1, y: 0 }, bodies: [button] });
+    assert.equal(toPin.bodies, 0);
+    assert.deepEqual(toPin.routing, []);
+    // Running along an edge does not count either; going through the middle does.
+    assert.equal(bodyCrossings([{ x: 0, y: -19.2 }, { x: 100, y: -19.2 }], [button]), 0);
+    assert.equal(bodyCrossings([{ x: 57.6, y: -40 }, { x: 57.6, y: 40 }], [button]), 1);
+    // Pads still come first: a body is crossed only when every pad-free route would cross one.
+    const walled = autoRoute(a, b, { pads: [{ x: 0, y: 19.2 }], bodies: [button] });
+    assert.equal(walled.crossings, 0);
   });
 
   it("keeps new wires off existing wires when a clean alternative exists", () => {

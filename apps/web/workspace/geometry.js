@@ -308,23 +308,28 @@ function lanesAround(first, second, count, grid) {
  * Candidates leave each pin along its escape direction (a stub of 0, 1, or 2
  * grid) and join the stubs with an L, or with a detour through a horizontal
  * or vertical lane up to `lanes` grid from either stub. The winner crosses the
- * fewest unrelated pin pads, then runs along existing wires the least, then
- * has the fewest bends, then is the shortest; the default L (routing [], as
- * in older diagrams) wins every tie. The winner becomes instructions with
- * routingFor(), and `points` is what routeWire() draws for them, so the
- * preview, the created wire, and the wire after saving and reloading are the
- * same polyline.
+ * fewest unrelated pin pads, then passes through the fewest part bodies (a
+ * wire over a part would also cover its controls, such as a button cap), then
+ * runs along existing wires the least, then has the fewest bends, then is the
+ * shortest; the default L (routing [], as in older diagrams) wins every tie.
+ * The winner becomes instructions with routingFor(), and `points` is what
+ * routeWire() draws for them, so the preview, the created wire, and the wire
+ * after saving and reloading are the same polyline.
  *
  * Options:
  *   fromEscape, toEscape  unit vectors from pinEscape(), or null (a free end)
- *   pads   [{ x, y }] pin centres to keep clear of (not the wire's own pins)
- *   wires  [[{ x, y }, ...]] polylines of the existing wires
+ *   pads    [{ x, y }] pin centres to keep clear of (not the wire's own pins)
+ *   bodies  [{ x, y, width, height }] part outlines to keep out of (not the
+ *           board, whose headers sit inside it); a band along each edge,
+ *           where pins sit, does not count
+ *   wires   [[{ x, y }, ...]] polylines of the existing wires
  *
- * Returns { routing, points, crossings, overlap }.
+ * Returns { routing, points, crossings, bodies, overlap }.
  */
-export function autoRoute(from, to, { fromEscape = null, toEscape = null, pads = [], wires = [], grid = GRID, lanes = 12 } = {}) {
+export function autoRoute(from, to, { fromEscape = null, toEscape = null, pads = [], bodies = [], wires = [], grid = GRID, lanes = 12 } = {}) {
   const stubs = (point, escape) => (escape ? [0, 1, 2] : [0]).map((k) => (k ? { x: point.x + escape.x * k * grid, y: point.y + escape.y * k * grid } : point));
   const clearance = grid * 0.45;
+  const inset = grid / 4;
   const candidates = [];
   const add = (inner) => {
     const points = simplify([from, ...inner, to]);
@@ -350,17 +355,51 @@ export function autoRoute(from, to, { fromEscape = null, toEscape = null, pads =
     if (best && crossings > best.crossings) {
       continue;
     }
+    const through = bodyCrossings(candidate.points, bodies, inset);
+    if (best && crossings === best.crossings && through > best.through) {
+      continue;
+    }
     const overlap = segmentOverlap(candidate.points, segments, clearance);
-    if (!best || crossings < best.crossings || overlap < best.overlap) {
-      best = { candidate, crossings, overlap };
-      if (!crossings && !overlap) {
+    if (!best || crossings < best.crossings || through < best.through || overlap < best.overlap) {
+      best = { candidate, crossings, through, overlap };
+      if (!crossings && !through && !overlap) {
         break;
       }
     }
   }
   const routing = routingFor(best.candidate.points);
   const points = routeWire(from, to, routing);
-  return { routing, points, crossings: padCrossings(points, pads, clearance), overlap: segmentOverlap(points, segments, clearance) };
+  return {
+    routing,
+    points,
+    crossings: padCrossings(points, pads, clearance),
+    bodies: bodyCrossings(points, bodies, inset),
+    overlap: segmentOverlap(points, segments, clearance),
+  };
+}
+
+/**
+ * Part bodies ({ x, y, width, height }) a polyline passes through. A band
+ * `inset` wide along each edge does not count, so a wire may reach a pin on
+ * the edge (or run along the edge) without counting as crossing the part.
+ */
+export function bodyCrossings(points, bodies, inset = GRID / 4) {
+  let count = 0;
+  for (const body of bodies) {
+    const left = body.x + inset;
+    const right = body.x + body.width - inset;
+    const top = body.y + inset;
+    const bottom = body.y + body.height - inset;
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i - 1];
+      const b = points[i];
+      if (Math.max(a.x, b.x) > left && Math.min(a.x, b.x) < right && Math.max(a.y, b.y) > top && Math.min(a.y, b.y) < bottom) {
+        count++;
+        break;
+      }
+    }
+  }
+  return count;
 }
 
 /**
