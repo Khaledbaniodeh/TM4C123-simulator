@@ -54,11 +54,16 @@ export function partToWorld(local, part, size) {
 
 /** Axis-aligned world bounds of a (possibly rotated) part. */
 export function partBounds(part, size) {
+  return areaBounds({ x: 0, y: 0, width: size.width, height: size.height }, part, size);
+}
+
+/** Axis-aligned world bounds of a rectangle given in a part's local coordinates. */
+export function areaBounds(area, part, size) {
   const corners = [
-    { x: 0, y: 0 },
-    { x: size.width, y: 0 },
-    { x: 0, y: size.height },
-    { x: size.width, y: size.height },
+    { x: area.x, y: area.y },
+    { x: area.x + area.width, y: area.y },
+    { x: area.x, y: area.y + area.height },
+    { x: area.x + area.width, y: area.y + area.height },
   ].map((corner) => partToWorld(corner, part, size));
   const xs = corners.map((c) => c.x);
   const ys = corners.map((c) => c.y);
