@@ -11,7 +11,7 @@ import { spawnSync } from "node:child_process";
 const OUT = process.argv[2] ?? "demo-output";
 const NAME = "tm4c123-simulator-demo";
 const { scenes: SCRIPT } = JSON.parse(readFileSync(new URL("./scenes.json", import.meta.url), "utf8"));
-const { end, scenes, frames } = JSON.parse(readFileSync(`${OUT}/timeline.json`, "utf8"));
+const { end, scenes, events = [], frames } = JSON.parse(readFileSync(`${OUT}/timeline.json`, "utf8"));
 if (!frames.length) {
   throw new Error("no frames recorded");
 }
@@ -38,8 +38,10 @@ ffmpeg(["-f", "concat", "-safe", "0", "-i", `${OUT}/frames.txt`,
   "-vf", "fps=30,scale=1920:1080:flags=lanczos,format=yuv420p",
   "-c:v", "libx264", "-preset", "slow", "-crf", "18", "-movflags", "+faststart", video]);
 
-// Captions: each scene's text from its recorded start to the next scene, one sentence per cue,
-// each sentence given time in proportion to its words.
+// Captions: each scene's text from its recorded start to the next scene, one sentence per cue.
+// A sentence listed in the scene's "sync" starts when its event was recorded (the LED lit, the
+// error listed, ...), so the words never run ahead of the picture; the sentences between two
+// such moments share that time in proportion to their words.
 const stamp = (seconds) => {
   const ms = Math.max(0, Math.round(seconds * 1000));
   const pad = (n, w = 2) => String(n).padStart(w, "0");
@@ -50,19 +52,41 @@ const timed = scenes.map((mark, i) => ({
   start: Math.max(0, mark.t - t0),
   end: i + 1 < scenes.length ? scenes[i + 1].t - t0 : total,
   text: SCRIPT.find((s) => s.id === mark.id).caption,
+  sync: SCRIPT.find((s) => s.id === mark.id).sync ?? {},
 }));
 const cues = [];
 for (const scene of timed) {
   const sentences = scene.text.match(/[^.:;]+[.:;]?/g).map((s) => s.trim()).filter(Boolean);
-  const words = sentences.map((s) => s.split(/\s+/).length);
-  const sum = words.reduce((a, b) => a + b, 0);
-  let at = scene.start;
+  const anchors = new Map([[0, scene.start]]);
   sentences.forEach((sentence, i) => {
-    const length = (scene.end - scene.start) * words[i] / sum;
-    cues.push({ start: at, end: at + length, text: sentence });
-    at += length;
+    const key = Object.keys(scene.sync).find((k) => sentence.startsWith(k));
+    const event = key && events.find((e) => e.id === `${scene.id}:${scene.sync[key]}`);
+    if (!key) {
+      return;
+    }
+    if (!event) {
+      throw new Error(`${scene.id}: no recorded event "${scene.sync[key]}"`);
+    }
+    anchors.set(i, Math.min(Math.max(event.t - t0, scene.start), scene.end - 1));
+  });
+  const starts = [...anchors.keys()].sort((a, b) => a - b);
+  starts.forEach((first, k) => {
+    const last = k + 1 < starts.length ? starts[k + 1] : sentences.length;
+    const from = anchors.get(first);
+    const to = k + 1 < starts.length ? anchors.get(starts[k + 1]) : scene.end;
+    const words = sentences.slice(first, last).map((s) => s.split(/\s+/).length);
+    const sum = words.reduce((a, b) => a + b, 0);
+    let at = from;
+    words.forEach((count, j) => {
+      const length = (to - from) * count / sum;
+      cues.push({ start: at, end: at + length, text: sentences[first + j] });
+      at += length;
+    });
   });
 }
+// Reading speed per cue, for checking the pacing in the log.
+const fastest = cues.map((c) => ({ text: c.text, rate: c.text.split(/\s+/).length / (c.end - c.start) })).sort((a, b) => b.rate - a.rate)[0];
+console.log(`fastest caption: ${fastest.rate.toFixed(1)} words/s ("${fastest.text}")`);
 const srt = `${OUT}/${NAME}.srt`;
 writeFileSync(srt, cues.map((c, i) => `${i + 1}\n${stamp(c.start)} --> ${stamp(c.end - 0.05)}\n${c.text}\n`).join("\n"));
 ffmpeg(["-i", video,

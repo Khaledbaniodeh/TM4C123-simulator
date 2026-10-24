@@ -57,12 +57,14 @@ compiling and Renode start-up run at real speed.
 | 7 | 1:01 | LCD1602 | L `lcd1602-hello` | **Run**: `Hello, TM4C123!`, CGRAM heart, counter |
 | 8 | 1:18 | ADC potentiometer | M `adc-potentiometer` | **Run**; select pot1; slider to 15 % (green), then 95 % (3.135 V on PE3, red) |
 | 9 | 1:36 | Compiler diagnostics | M `adc-potentiometer` | Type a typo (`GREEN_LEDS`); **Compile** → Problems with GCC's "did you mean 'GREEN_LED'?"; click it → line 84; fix; `Built` |
-| 10 | 1:47 | Console and limits | M `adc-potentiometer` | Console tab, Detailed/Compact views; the trust notice |
+| 10 | 1:47 | Console and limits | M `adc-potentiometer` | Console tab (severity, source, the build history); the trust notice |
 
 ## Voice-over script
 
-About 240 words, roughly 1:45 at a calm pace. The same text is in
-[`scenes.json`](scenes.json), which the captions are built from.
+About 235 words, roughly 1:45 at a calm pace. The same text is in
+[`scenes.json`](scenes.json), which the captions are built from; there,
+`sync` starts a sentence at the moment it describes (the LED lit, the error
+listed), so captions never run ahead of the picture.
 
 1. **Workspace.** This is the TM4C123 Simulator: TI's EK-TM4C123GXL
    LaunchPad, placed from TI's CAD data, in an interactive circuit workspace.
@@ -76,17 +78,15 @@ About 240 words, roughly 1:45 at a calm pace. The same text is in
 5. **Wiring.** Circuits are built by dragging from a header pin to a part;
    the wire is checked and routed clear of the other pins.
 6. **Button.** Here the firmware polls an external pushbutton on PA6. Hold
-   it: the pin reads low, and the firmware drives PA7 high to light the
-   external LED.
+   it: PA6 reads low, and the firmware lights the external LED on PA7.
 7. **LCD.** An LCD1602 in 4-bit mode. The display shows only what the
    firmware's GPIO writes tell the HD44780 model: a greeting, a custom CGRAM
    heart, and a counter.
-8. **ADC.** A potentiometer feeds ADC0 on PE3. Turn the knob: the pin table
-   shows the voltage, and the firmware's 12-bit reading switches the LED from
-   green to red.
+8. **ADC.** A potentiometer feeds ADC0 on PE3. Turn the knob: the voltage on
+   PE3 changes, and the firmware switches the LED from green to red.
 9. **Diagnostics.** Mistakes are reported as GCC reports them. The Problems
-   list shows the error with GCC's own suggestion and jumps to its line. The
-   fix rebuilds cleanly.
+   list shows GCC's error and its suggestion, and jumps to the line. The fix
+   rebuilds cleanly.
 10. **Close.** The console groups every simulator message by severity and
     source. This runs locally in trusted mode; timing is approximate and not
     yet validated against physical hardware.

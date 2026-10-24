@@ -17,49 +17,74 @@
       "id": "compile",
       "title": "GCC compilation",
       "example": "three-timers",
-      "caption": "Compile runs the real arm-none-eabi-gcc toolchain. The inspector shows the resulting Cortex-M4 ELF and its sections."
+      "caption": "Compile runs the real arm-none-eabi-gcc toolchain. The inspector shows the resulting Cortex-M4 ELF and its sections.",
+      "sync": {
+        "The inspector": "elf"
+      }
     },
     {
       "id": "run",
       "title": "ELF execution in Renode, RGB LED",
       "example": "three-timers",
-      "caption": "Run loads that ELF into Renode, which executes it on an emulated Cortex-M4 with the project's TM4C123 peripheral models. Three timer interrupts toggle the RGB LED; every pin change is a simulator event."
+      "caption": "Run loads that ELF into Renode, which executes it on an emulated Cortex-M4 with the project's TM4C123 peripheral models. Three timer interrupts toggle the RGB LED; every pin change is a simulator event.",
+      "sync": {
+        "Three timer interrupts": "running"
+      }
     },
     {
       "id": "wiring",
       "title": "Interactive wiring",
       "example": "three-timers",
-      "caption": "Circuits are built by dragging from a header pin to a part; the wire is checked and routed clear of the other pins."
+      "caption": "Circuits are built by dragging from a header pin to a part; the wire is checked and routed clear of the other pins.",
+      "sync": {
+        "the wire is checked": "connected"
+      }
     },
     {
       "id": "button",
       "title": "External button",
       "example": "external-led-button",
-      "caption": "Here the firmware polls an external pushbutton on PA6. Hold it: the pin reads low, and the firmware drives PA7 high to light the external LED."
+      "caption": "Here the firmware polls an external pushbutton on PA6. Hold it: PA6 reads low, and the firmware lights the external LED on PA7.",
+      "sync": {
+        "Hold it:": "hold"
+      }
     },
     {
       "id": "lcd",
       "title": "LCD1602 driven by firmware",
       "example": "lcd1602-hello",
-      "caption": "An LCD1602 in 4-bit mode. The display shows only what the firmware's GPIO writes tell the HD44780 model: a greeting, a custom CGRAM heart, and a counter."
+      "caption": "An LCD1602 in 4-bit mode. The display shows only what the firmware's GPIO writes tell the HD44780 model: a greeting, a custom CGRAM heart, and a counter.",
+      "sync": {
+        "a greeting": "text"
+      }
     },
     {
       "id": "adc",
       "title": "ADC potentiometer",
       "example": "adc-potentiometer",
-      "caption": "A potentiometer feeds ADC0 on PE3. Turn the knob: the pin table shows the voltage, and the firmware's 12-bit reading switches the LED from green to red."
+      "caption": "A potentiometer feeds ADC0 on PE3. Turn the knob: the voltage on PE3 changes, and the firmware switches the LED from green to red.",
+      "sync": {
+        "Turn the knob:": "knob"
+      }
     },
     {
       "id": "diagnostics",
       "title": "Compiler diagnostics",
       "example": "adc-potentiometer",
-      "caption": "Mistakes are reported as GCC reports them. The Problems list shows the error with GCC's own suggestion and jumps to its line. The fix rebuilds cleanly."
+      "caption": "Mistakes are reported as GCC reports them. The Problems list shows GCC's error and its suggestion, and jumps to the line. The fix rebuilds cleanly.",
+      "sync": {
+        "The Problems list": "problems",
+        "The fix": "fix"
+      }
     },
     {
       "id": "console",
       "title": "Console and limits",
       "example": "adc-potentiometer",
-      "caption": "The console groups every simulator message by severity and source. This runs locally in trusted mode; timing is approximate and not yet validated against physical hardware."
+      "caption": "The console groups every simulator message by severity and source. This runs locally in trusted mode; timing is approximate and not yet validated against physical hardware.",
+      "sync": {
+        "This runs locally": "notice"
+      }
     }
   ]
 }

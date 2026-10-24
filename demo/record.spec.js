@@ -65,19 +65,24 @@ async function startRecording(page) {
     cdp.send("Page.screencastFrameAck", { sessionId }).catch(() => {});
   });
   await cdp.send("Page.startScreencast", { format: "jpeg", quality: 92, maxWidth: 1920, maxHeight: 1080, everyNthFrame: 1 });
-  const marks = [];
+  const scenes = [];
+  const events = [];
   return {
     scene(id) {
       if (!SCENES.some((s) => s.id === id)) {
         throw new Error(`unknown scene ${id}`);
       }
-      marks.push({ id, t: Date.now() / 1000 });
+      scenes.push({ id, t: Date.now() / 1000 });
+    },
+    /** A moment within the scene that a caption sentence starts at (scenes.json "sync"). */
+    event(name) {
+      events.push({ id: `${scenes.at(-1).id}:${name}`, t: Date.now() / 1000 });
     },
     async stop() {
       const end = Date.now() / 1000;
       await cdp.send("Page.stopScreencast");
       await Promise.all(writes);
-      await writeFile(`${OUT}/timeline.json`, JSON.stringify({ end, scenes: marks, frames }, null, 1));
+      await writeFile(`${OUT}/timeline.json`, JSON.stringify({ end, scenes, events, frames }, null, 1));
       return { frames: frames.length, seconds: end - (frames[0]?.t ?? end) };
     },
   };
@@ -171,10 +176,11 @@ test("company demo: one take of the real simulator", async ({ page }) => {
   recording.scene("compile");
   await click("#compileButton");
   await expect(page.locator("#editorStatus")).toHaveText("Built");
-  await pause(1200);
+  await pause(1800);
   // Wheel the inspector until its "Firmware image" section (the ELF) is at the top.
   const firmware = page.locator(".inspector-section", { hasText: "Firmware image" });
   await expect(firmware).toContainText(".isr_vector");
+  recording.event("elf");
   await moveTo(".inspector", 18);
   const inspectorTop = (await page.locator(".inspector").boundingBox()).y;
   let scrolled = 0;
@@ -194,9 +200,10 @@ test("company demo: one take of the real simulator", async ({ page }) => {
   // 4. Execution in Renode: three timer interrupts toggle the RGB LED.
   recording.scene("run");
   await run();
+  recording.event("running");
   await expect(row("PF1")).toContainText("GPIO output");
   await moveTo(page.locator('.part[data-type="tm4c123gxl-launchpad"]'), 24);
-  await pause(6500);
+  await pause(5000);
 
   // 5. Wiring: add an LED and drag a wire from header pin J2.3 to its anode.
   recording.scene("wiring");
@@ -215,7 +222,8 @@ test("company demo: one take of the real simulator", async ({ page }) => {
   await page.mouse.up();
   await expect(page.locator(".wire")).toHaveCount(1);
   await expect(page.locator("#workspaceMessage")).toHaveText("Connected board1:J2.3 → led1:A.");
-  await pause(3200);
+  recording.event("connected");
+  await pause(4200);
 
   // 6. External button (example F): hold it, PA6 reads low, the firmware lights the LED on PA7.
   recording.scene("button");
@@ -223,12 +231,13 @@ test("company demo: one take of the real simulator", async ({ page }) => {
   await expect(page.locator('.part[data-part="btn1"]')).toHaveCount(1);
   await run();
   await expect(row("PA7")).toContainText("LOW");
+  recording.event("hold");
   await moveTo(page.locator('.part[data-part="btn1"] .button-cap'), 30);
   await pause(500);
   await page.mouse.down();
   await expect(row("PA7")).toContainText("HIGH");
   await expect(page.locator('.part[data-part="led1"] .part-led')).toHaveClass(/lit/);
-  await pause(2400);
+  await pause(3400);
   await page.mouse.up();
   await expect(row("PA7")).toContainText("LOW");
   await pause(700);
@@ -240,9 +249,10 @@ test("company demo: one take of the real simulator", async ({ page }) => {
   await run();
   const lcd = page.locator('.part[data-part="lcd1"] .part-lcd');
   await expect(lcd).toHaveAttribute("data-row0", "Hello, TM4C123! ");
+  recording.event("text");
   await moveTo(lcd, 24);
   await expect(lcd).toHaveAttribute("data-row1", /LCD1602 . n=\d/);
-  await pause(2400);
+  await pause(2000);
 
   // 8. ADC (example M): the knob sets the voltage on PE3; the firmware picks the LED colour.
   recording.scene("adc");
@@ -255,19 +265,20 @@ test("company demo: one take of the real simulator", async ({ page }) => {
   await expect(slider).toBeVisible();
   const track = await slider.boundingBox();
   const at = (percent) => ({ x: track.x + 8 + (track.width - 16) * percent / 100, y: track.y + track.height / 2 });
+  recording.event("knob");
   await moveTo(at(50), 24);
   await page.mouse.down();
   await moveTo(at(15), 30);
   await page.mouse.up();
   await expect(row("PF3")).toContainText("HIGH");
-  await pause(1500);
+  await pause(2000);
   await moveTo(at(15), 6);
   await page.mouse.down();
   await moveTo(at(95), 40);
   await page.mouse.up();
   await expect(row("PF1")).toContainText("HIGH");
   await expect(row("PE3")).toContainText("pot1 → AIN0");
-  await pause(2000);
+  await pause(2800);
 
   // 9. Diagnostics: a typo, GCC's error with its suggestion, jump to the line, fix, clean build.
   recording.scene("diagnostics");
@@ -294,13 +305,15 @@ test("company demo: one take of the real simulator", async ({ page }) => {
   await expect(page.getByRole("tab", { name: /Problems/ })).toHaveAttribute("aria-selected", "true");
   const error = page.locator("#problemsOutput .problem-row.error").first();
   await expect(error).toContainText("GREEN_LEDS");
-  await pause(2500);
+  recording.event("problems");
+  await pause(3300);
   await click(error);
   await expect.poll(() => page.evaluate(() => {
     const editor = document.querySelector("#codeEditor");
     return editor.value.slice(editor.selectionStart, editor.selectionEnd);
   })).toBe("GREEN_LEDS");
   await pause(1000);
+  recording.event("fix");
   await page.keyboard.type("GREEN_LED", { delay: 70 });
   await pause(600);
   await click("#compileButton");
@@ -308,16 +321,13 @@ test("company demo: one take of the real simulator", async ({ page }) => {
   await expect(page.locator("#problemCount")).toHaveText("0");
   await pause(1500);
 
-  // 10. Console: messages by severity and source; then the honest limits in the notice bar.
+  // 10. Console: every message with its severity and source; then the honest limits in the notice bar.
   recording.scene("console");
   await click(page.getByRole("tab", { name: /Console/ }));
-  await pause(800);
-  await click(page.locator("#consoleTools .console-chip", { hasText: "Detailed" }));
-  await pause(1600);
-  await click(page.locator("#consoleTools .console-chip", { hasText: "Compact" }));
-  await pause(900);
+  await pause(2400);
+  recording.event("notice");
   await moveTo("#modeNotice", 30);
-  await pause(3800);
+  await pause(4600);
 
   const result = await recording.stop();
   console.log(`::notice title=demo recording::${result.frames} frames, ${result.seconds.toFixed(1)} s`);
