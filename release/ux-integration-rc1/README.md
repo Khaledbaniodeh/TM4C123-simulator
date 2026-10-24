@@ -1,1 +1,1 @@
-Screenshots from release/ux-integration-rc1 @ 87f6954bbefea1f1be650887f007f569b6e09d18 (run 40090956528, test result: success)
+Screenshots from release/ux-integration-rc1 @ 75f9593e23a1f7a59c4ac38e186677950cbc4783 (run 40092519137, test result: success)
