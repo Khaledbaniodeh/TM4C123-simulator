@@ -79,7 +79,7 @@ export class Workspace extends EventTarget {
   #pastedIds = new Set(); // ids created by pastes of this clipboard (the cascade may overlap them)
   #gesture = null;
   #wireDraft = null; // { from }: the pin the wire in progress starts at
-  #routeObstacles = null; // { pads, wires } that automatic routes keep clear of; rebuilt after the wires change
+  #routeObstacles = null; // { pads, bodies, wires } that automatic routes keep clear of; rebuilt after the wires change
   #lastRoute = null; // { key, obstacles, route }: the preview route, reused while the wire end stays put
   #tooltip;
   #showGrid = true;
@@ -1098,6 +1098,7 @@ export class Workspace extends EventTarget {
         const definition = this.#catalog[part.type];
         return definition.pins.map((pin) => ({ id: `${part.id}:${pin.name}`, ...partToWorld(pin, part, definition.size) }));
       }),
+      bodies: this.diagram.parts.filter((part) => !this.#isBoard(part.id)).map((part) => partBounds(part, this.#catalog[part.type].size)),
       wires: this.diagram.connections.map((connection) => this.#wirePoints(connection)).filter(Boolean),
     };
     const key = `${from} ${to} ${end.x} ${end.y}`;
@@ -1106,6 +1107,7 @@ export class Workspace extends EventTarget {
         fromEscape: this.#pinEscape(from),
         toEscape: to ? this.#pinEscape(to) : null,
         pads: this.#routeObstacles.pads.filter((pad) => pad.id !== from && pad.id !== to),
+        bodies: this.#routeObstacles.bodies,
         wires: this.#routeObstacles.wires,
       });
       this.#lastRoute = { key, obstacles: this.#routeObstacles, route };

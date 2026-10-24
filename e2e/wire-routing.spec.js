@@ -97,6 +97,15 @@ const measure = (page) => page.evaluate((grid) => {
     const t = Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / (((b.x - a.x) ** 2 + (b.y - a.y) ** 2) || 1)));
     return Math.hypot(p.x - (a.x + t * (b.x - a.x)), p.y - (a.y + t * (b.y - a.y)));
   };
+  // Part outlines (not the board), less a band along each edge where pins sit, as the router sees them.
+  const inset = grid / 4;
+  const bodies = [...document.querySelectorAll(".part:not([data-part='board1']) .part-hitbox")].map((node) => {
+    const box = node.getBBox();
+    const svg = document.querySelector("#circuitCanvas");
+    const toWorld = svg.getScreenCTM().inverse().multiply(node.getScreenCTM());
+    const corners = [[box.x, box.y], [box.x + box.width, box.y + box.height]].map(([x, y]) => new DOMPoint(x, y).matrixTransform(toWorld));
+    return { id: node.closest(".part").dataset.part, left: Math.min(corners[0].x, corners[1].x) + inset, right: Math.max(corners[0].x, corners[1].x) - inset, top: Math.min(corners[0].y, corners[1].y) + inset, bottom: Math.max(corners[0].y, corners[1].y) - inset };
+  });
   return [...document.querySelectorAll(".wire")].map((w) => {
     const d = w.querySelector(".wire-core").getAttribute("d");
     const points = [...d.matchAll(/(-?[\d.]+)[ ,](-?[\d.]+)/g)].map((m) => ({ x: Number(m[1]), y: Number(m[2]) }));
@@ -110,11 +119,15 @@ const measure = (page) => page.evaluate((grid) => {
       attached: Math.hypot(points[0].x - ws.pinPosition(w.dataset.from).x, points[0].y - ws.pinPosition(w.dataset.from).y) < 1e-3
         && Math.hypot(points.at(-1).x - ws.pinPosition(w.dataset.to).x, points.at(-1).y - ws.pinPosition(w.dataset.to).y) < 1e-3,
       crossed: pads.filter((p) => !own.has(p.id) && points.some((q, i) => i > 0 && dist(p, points[i - 1], q) < 0.45 * grid)).map((p) => p.id),
+      overParts: bodies.filter((r) => points.some((q, i) => i > 0
+        && Math.max(q.x, points[i - 1].x) > r.left && Math.min(q.x, points[i - 1].x) < r.right
+        && Math.max(q.y, points[i - 1].y) > r.top && Math.min(q.y, points[i - 1].y) < r.bottom)).map((r) => r.id),
     };
   });
 }, G);
 
 const padsCrossed = (wires) => wires.reduce((sum, w) => sum + w.crossed.length, 0);
+const partsCrossed = (wires) => wires.reduce((sum, w) => sum + w.overParts.length, 0);
 const crossings = (wires) => wires.filter((w) => w.crossed.length).map((w) => `${w.wire}: ${w.crossed.join(" ")}`);
 
 for (const size of SIZES) {
@@ -148,6 +161,7 @@ for (const size of SIZES) {
       wiresCrossingPads: { before: before.filter((w) => w.crossed.length).length, after: after.filter((w) => w.crossed.length).length },
       bends: { before: before.reduce((s, w) => s + w.bends, 0), after: after.reduce((s, w) => s + w.bends, 0) },
       plainL: after.filter((w) => w.routing.length === 0).length,
+      partBodiesCrossed: { before: partsCrossed(before), after: partsCrossed(after) },
     };
     console.log(`::notice title=routing crowded ${tag}::${JSON.stringify(summary)}`);
     await writeFile(`test-results/routing-crowded-${tag}.json`, JSON.stringify({ summary, before, after }, null, 2));
@@ -331,14 +345,20 @@ test("shipped examples store the routes the editor draws: clean, and the same wh
     }
     await page.locator("#circuitCanvas").press("Escape");
     const redrawn = await measure(page);
-    report[example] = { wires: redrawn.length, padsCrossed: { shipped: padsCrossed(asShipped), redrawn: padsCrossed(redrawn) }, routing: redrawn.map((w) => `${w.wire} ${JSON.stringify(w.routing)}`) };
+    report[example] = {
+      wires: redrawn.length,
+      padsCrossed: { shipped: padsCrossed(asShipped), redrawn: padsCrossed(redrawn) },
+      partBodiesCrossed: { shipped: partsCrossed(asShipped), redrawn: partsCrossed(redrawn) },
+      routing: redrawn.map((w) => `${w.wire} ${JSON.stringify(w.routing)}`),
+    };
     expect(crossings(asShipped), `${example} as shipped`).toEqual([]);
     expect(crossings(redrawn), `${example} redrawn`).toEqual([]);
+    expect(asShipped.filter((w) => w.overParts.length).map((w) => `${w.wire} over ${w.overParts.join(" ")}`), `${example}: no wire over a part`).toEqual([]);
     // The same connections in the same order, and exactly the stored routes.
     expect(JSON.parse(await serialize(page)).connections.map((c) => c.slice(0, 2))).toEqual(shipped.connections.map((c) => c.slice(0, 2)));
     expect(redrawn.map((w) => w.routing), `${example}: shipped routes are the editor's own`).toEqual(shipped.connections.map((c) => c[3]));
   }
-  console.log(`::notice title=routing examples::${JSON.stringify(Object.fromEntries(Object.entries(report).map(([k, v]) => [k, v.padsCrossed])))}`);
+  console.log(`::notice title=routing examples::${JSON.stringify(Object.fromEntries(Object.entries(report).map(([k, v]) => [k, { pads: v.padsCrossed, parts: v.partBodiesCrossed }])))}`);
   await writeFile("test-results/routing-examples.json", JSON.stringify(report, null, 2));
   expect(errors).toEqual([]);
 });
