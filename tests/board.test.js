@@ -120,6 +120,24 @@ describe("board geometry", () => {
     assert.deepEqual(routeWire(pin("J1.10"), pin("J3.1"), across.routing), across.points);
   });
 
+  it("keeps automatic routes off the on-board switches", () => {
+    assert.equal(BOARD_PART.keepOut.length, 3);
+    for (const key of ["reset", "sw1", "sw2"]) {
+      const center = { x: GEOMETRY[key].x * 96 / 25.4, y: GEOMETRY[key].y * 96 / 25.4 };
+      assert.ok(BOARD_PART.keepOut.some((r) => center.x > r.x && center.x < r.x + r.width && center.y > r.y && center.y < r.y + r.height), key);
+    }
+    // No header pin lies in a keep-out area: every pin stays reachable.
+    for (const pin of BOARD_PART.pins) {
+      assert.ok(!BOARD_PART.keepOut.some((r) => pin.x > r.x && pin.x < r.x + r.width && pin.y > r.y && pin.y < r.y + r.height), pin.name);
+    }
+    // A route from the right header to a part left of the board goes round SW1 and SW2, not across them.
+    const from = BOARD_PART.pins.find((p) => p.name === "J2.3");
+    const to = { x: -48, y: 120 };
+    const route = autoRoute(from, to, { fromEscape: { x: 1, y: 0 }, pads: BOARD_PART.pins.filter((p) => p !== from), bodies: BOARD_PART.keepOut });
+    assert.equal(route.crossings, 0);
+    assert.equal(route.bodies, 0);
+  });
+
   it("ships example circuits whose wires cross no unrelated pin pad and no part body", async () => {
     for (const id of ["lcd1602-hello", "external-led-button", "adc-potentiometer"]) {
       const { diagram, errors } = parseDiagram(await readFile(new URL(`../examples/${id}/diagram.json`, import.meta.url), "utf8"), CATALOG);

@@ -737,8 +737,9 @@ neighbouring column, since J1|J3 and J4|J2 stand 0.1 in apart; part pins
 outward from the part edge, turned with the part), with a stub of 0–2 grid,
 and join through an L or a detour lane up to 12 grid away. The route that
 crosses the fewest pads wins, then the one through the fewest part bodies
-(not the board, whose headers sit inside it; a wire over a part would also
-cover its controls, such as a pushbutton's cap), then the one that overlaps
+(for the board, whose headers sit inside it, only its RESET, SW1, and SW2
+switches; a wire over a part or a switch would cover it and take its
+clicks), then the one that overlaps
 existing wires least, then the fewest bends, then the shortest; the plain L
 wins every tie.
 
