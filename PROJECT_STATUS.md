@@ -54,7 +54,7 @@ the first one blocks any *public* deployment.
 | Issue | Rank | Notes |
 |---|---|---|
 | Compile/execute backend is not isolated | **Blocker for public hosting** (not for local use) | Local trusted mode only; a validated container worker is required first |
-| Automatic wire routes can pass over unrelated header pads | Important | Pin tables and tooltips are correct. Routes the user reroutes (segment drag) are kept exactly; example F's two GND wires cross 14 pads as shipped and 3 when rerouted this way. A routing-engine change needs a separate risk review |
+| Older saved circuits keep their wire routes, which can pass over unrelated header pads | Minor | New wires are routed clear of unrelated pads (D-035) and the shipped examples cross none; existing wires are never re-routed automatically. Drag a segment to reroute one. Dense circuits get longer routes with more bends |
 | Pin tooltip can say "Not connected" right after a wire is made | Important | Corrects itself on the next hover |
 | Compile errors are listed (Problems tab, with line numbers) but the editor does not jump to them | Important | |
 | The console shows every GPIO transition (e.g. the LCD example) | Important | The Events tab holds the raw stream; console filtering is not implemented |

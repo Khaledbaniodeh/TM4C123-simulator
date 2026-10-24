@@ -723,6 +723,47 @@ demonstrations; lab code that polls `COUNTFLAG` runs unchanged, more slowly.
 
 ---
 
+### D-035 — Clean Automatic Routes for New Wires
+
+**Date:** 2026-10-24
+**Status:** Accepted
+
+**Decision:**
+
+A new wire's automatic route keeps clear of unrelated pin pads and, where
+it can, of existing wires (`geometry.js` `autoRoute`). Candidate routes leave
+each pin along its escape direction (header columns away from the
+neighbouring column, since J1|J3 and J4|J2 stand 0.1 in apart; part pins
+outward from the part edge, turned with the part), with a stub of 0–2 grid,
+and join through an L or a detour lane up to 12 grid away. The route that
+crosses the fewest pads wins, then the one that overlaps existing wires
+least, then the fewest bends, then the shortest; the plain L wins every tie.
+
+The route is stored as ordinary routing instructions: source-side steps plus
+a zero-length step that sets the axis of the closing L, so the target end is
+always exact. The preview draws `routeWire()` of exactly those instructions,
+so the preview, the created wire, and the reloaded wire are one polyline.
+
+**Reason:**
+
+The wiring audit measured 203 unrelated pads crossed by default L routes over
+nine circuits. Re-routing existing wires (an "escape" rule applied at render
+time) would have changed 46 of 79 saved wires and could flip shapes while a
+part moves, so routing happens once, when a wire is created.
+
+**Conditions:**
+
+- Existing wires are never recomputed: older diagrams (routing `[]`) and
+  routes a user drew render exactly as before; moving or rotating a part
+  keeps every stored route.
+- The shipped example circuits store the routes the editor draws for their
+  wires in file order (connections unchanged; only the routing arrays).
+- Dense circuits get longer routes with more bends (the crowded audit circuit:
+  87 → 0 pads crossed, 30 → 66 bends). Rotated parts can put a pin half a grid
+  off the grid, and a route may then pass between two pads.
+
+---
+
 ## Adding a New Decision
 
 A new decision entry should include:
@@ -779,3 +820,4 @@ Architecture-changing implementation must not begin before the relevant decision
 | D-032 | LCD1602 as a workspace part driven by GPIO events | Accepted |
 | D-033 | ADC model, analog inputs, and the workspace potentiometer | Accepted |
 | D-034 | Polling firmware speed: measured, no engine change | Accepted |
+| D-035 | Clean automatic routes for new wires | Accepted |

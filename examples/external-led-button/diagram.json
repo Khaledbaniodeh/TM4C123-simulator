@@ -11,8 +11,8 @@
   "connections": [
     ["board1:J1.10", "r1:2", "green", []],
     ["r1:1", "led1:A", "green", []],
-    ["led1:C", "board1:J3.2", "black", []],
+    ["led1:C", "board1:J3.2", "black", ["v-57.6", "h211.2", "v0"]],
     ["board1:J1.9", "btn1:2", "blue", []],
-    ["btn1:1", "board1:J3.2", "black", []]
+    ["btn1:1", "board1:J3.2", "black", ["v-9.6", "h172.8", "v0"]]
   ]
 }

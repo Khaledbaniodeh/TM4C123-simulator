@@ -8,7 +8,7 @@
   ],
   "connections": [
     ["board1:J1.1", "pot1:VCC", "red", []],
-    ["board1:J3.9", "pot1:SIG", "green", []],
-    ["board1:J3.2", "pot1:GND", "black", []]
+    ["board1:J3.9", "pot1:SIG", "green", ["h9.6", "v19.2", "h0"]],
+    ["board1:J3.2", "pot1:GND", "black", ["h9.6", "v-19.2", "h0"]]
   ]
 }

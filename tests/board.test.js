@@ -7,9 +7,10 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { BOARD_INPUTS, BOARD_LEDS } from "../apps/web/board-state.js";
 import { BOARD_PART, GEOMETRY } from "../apps/web/board/launchpad.js";
-import { GRID, autoRoute, padCrossings, pinEscape, routeWire } from "../apps/web/workspace/geometry.js";
+import { readFile } from "node:fs/promises";
+import { GRID, autoRoute, padCrossings, partToWorld, pinEscape, routeWire } from "../apps/web/workspace/geometry.js";
 import { CATALOG, LIBRARY } from "../apps/web/workspace/parts.js";
-import { createDiagram, validateDiagram } from "../apps/web/workspace/diagram.js";
+import { createDiagram, parseDiagram, validateDiagram } from "../apps/web/workspace/diagram.js";
 import { evaluateCircuit } from "../apps/web/workspace/netlist.js";
 
 const { pinMap } = BOARD_PART;
@@ -117,6 +118,19 @@ describe("board geometry", () => {
     const across = autoRoute(pin("J1.10"), pin("J3.1"), { fromEscape: away.J1, toEscape: away.J3, pads: others("J1.10", "J3.1") });
     assert.equal(across.crossings, 0);
     assert.deepEqual(routeWire(pin("J1.10"), pin("J3.1"), across.routing), across.points);
+  });
+
+  it("ships example circuits whose wires cross no unrelated pin pad", async () => {
+    for (const id of ["lcd1602-hello", "external-led-button", "adc-potentiometer"]) {
+      const { diagram, errors } = parseDiagram(await readFile(new URL(`../examples/${id}/diagram.json`, import.meta.url), "utf8"), CATALOG);
+      assert.deepEqual(errors, [], id);
+      const pads = diagram.parts.flatMap((part) => CATALOG[part.type].pins.map((p) => ({ id: `${part.id}:${p.name}`, ...partToWorld(p, part, CATALOG[part.type].size) })));
+      const at = (endpoint) => pads.find((p) => p.id === endpoint);
+      for (const [from, to, , routing] of diagram.connections) {
+        const points = routeWire(at(from), at(to), routing);
+        assert.equal(padCrossings(points, pads.filter((p) => p.id !== from && p.id !== to)), 0, `${id} ${from}→${to}`);
+      }
+    }
   });
 });
 

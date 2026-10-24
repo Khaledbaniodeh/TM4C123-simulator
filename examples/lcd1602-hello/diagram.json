@@ -7,18 +7,18 @@
     {"type": "lcd1602", "id": "lcd1", "top": 297.6, "left": -67.2, "rotate": 0, "attrs": {}}
   ],
   "connections": [
-    ["board1:J2.1", "lcd1:VSS", "black", []],
-    ["board1:J3.1", "lcd1:VDD", "red", []],
-    ["board1:J3.2", "lcd1:V0", "black", []],
+    ["board1:J2.1", "lcd1:VSS", "black", ["v-9.6", "h0"]],
+    ["board1:J3.1", "lcd1:VDD", "red", ["v-19.2", "h0"]],
+    ["board1:J3.2", "lcd1:V0", "black", ["h9.6", "v163.2", "h0"]],
     ["board1:J1.3", "lcd1:RS", "orange", []],
     ["board1:J1.4", "lcd1:RW", "gray", []],
-    ["board1:J3.2", "lcd1:RW", "black", []],
-    ["board1:J2.2", "lcd1:E", "yellow", []],
-    ["board1:J1.7", "lcd1:D4", "green", []],
-    ["board1:J1.2", "lcd1:D5", "green", []],
-    ["board1:J2.7", "lcd1:D6", "blue", []],
-    ["board1:J2.6", "lcd1:D7", "blue", []],
+    ["board1:J3.2", "lcd1:RW", "black", ["h19.2", "v153.6", "h0"]],
+    ["board1:J2.2", "lcd1:E", "yellow", ["h9.6", "v144", "h0"]],
+    ["board1:J1.7", "lcd1:D4", "green", ["h-9.6", "v38.4", "h0"]],
+    ["board1:J1.2", "lcd1:D5", "green", ["h-9.6", "v-38.4", "h0"]],
+    ["board1:J2.7", "lcd1:D6", "blue", ["h19.2", "v115.2", "h0"]],
+    ["board1:J2.6", "lcd1:D7", "blue", ["h28.8", "v115.2", "h0"]],
     ["board1:J3.1", "lcd1:A", "red", []],
-    ["board1:J2.1", "lcd1:K", "black", []]
+    ["board1:J2.1", "lcd1:K", "black", ["h38.4", "v0"]]
   ]
 }
