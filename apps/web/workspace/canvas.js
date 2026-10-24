@@ -14,6 +14,7 @@ import {
   fitViewBox,
   normalizeRotation,
   panViewBox,
+  areaBounds,
   partBounds,
   partToWorld,
   partTransform,
@@ -1118,7 +1119,13 @@ export class Workspace extends EventTarget {
         const definition = this.#catalog[part.type];
         return definition.pins.map((pin) => ({ id: `${part.id}:${pin.name}`, ...partToWorld(pin, part, definition.size) }));
       }),
-      bodies: this.diagram.parts.filter((part) => !this.#isBoard(part.id)).map((part) => partBounds(part, this.#catalog[part.type].size)),
+      // A part keeps wires off its whole body; the board, whose headers sit inside it, only off its switches.
+      bodies: this.diagram.parts.flatMap((part) => {
+        const definition = this.#catalog[part.type];
+        return definition.kind === "board"
+          ? (definition.keepOut ?? []).map((area) => areaBounds(area, part, definition.size))
+          : [partBounds(part, definition.size)];
+      }),
       wires: this.diagram.connections.map((connection) => this.#wirePoints(connection)).filter(Boolean),
     };
     const key = `${from} ${to} ${end.x} ${end.y}`;

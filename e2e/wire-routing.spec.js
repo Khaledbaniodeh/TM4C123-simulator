@@ -126,6 +126,22 @@ const measure = (page) => page.evaluate((grid) => {
   });
 }, G);
 
+/** Wires whose drawn path crosses a clickable control (on-board switch or external button cap), in screen space. */
+const coveredControls = (page) => page.evaluate(() => {
+  const controls = [...document.querySelectorAll(".part [data-input], .part .button-cap")].map((node) => {
+    const r = node.getBoundingClientRect();
+    return { name: node.dataset.input ?? node.closest(".part").dataset.part, left: r.left + 2, right: r.right - 2, top: r.top + 2, bottom: r.bottom - 2 };
+  });
+  return [...document.querySelectorAll(".wire .wire-core")].flatMap((path) => {
+    const matrix = path.getScreenCTM();
+    const points = [...path.getAttribute("d").matchAll(/(-?[\d.]+)[ ,](-?[\d.]+)/g)].map((m) => new DOMPoint(Number(m[1]), Number(m[2])).matrixTransform(matrix));
+    const wire = path.closest(".wire");
+    return controls.filter((c) => points.some((q, i) => i > 0
+      && Math.max(q.x, points[i - 1].x) > c.left && Math.min(q.x, points[i - 1].x) < c.right
+      && Math.max(q.y, points[i - 1].y) > c.top && Math.min(q.y, points[i - 1].y) < c.bottom)).map((c) => `${wire.dataset.from}→${wire.dataset.to} over ${c.name}`);
+  });
+});
+
 const padsCrossed = (wires) => wires.reduce((sum, w) => sum + w.crossed.length, 0);
 const partsCrossed = (wires) => wires.reduce((sum, w) => sum + w.overParts.length, 0);
 const crossings = (wires) => wires.filter((w) => w.crossed.length).map((w) => `${w.wire}: ${w.crossed.join(" ")}`);
@@ -334,6 +350,7 @@ test("shipped examples store the routes the editor draws: clean, and the same wh
     await page.evaluate(() => window.__tm4c.workspace.fit());
     const shipped = JSON.parse(await serialize(page));
     const asShipped = await measure(page);
+    expect(await coveredControls(page), `${example}: no wire covers SW1, SW2, RESET, or a button`).toEqual([]);
     await pointerAway(page);
     await page.screenshot({ path: `test-results/routing-example-${example}-1280x720.png` });
     await page.locator("#circuitCanvas").screenshot({ path: `test-results/routing-example-${example}-canvas.png` });
