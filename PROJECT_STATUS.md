@@ -29,7 +29,7 @@ automated tests (164 Node + 124 browser tests in CI).
 | Editing: multi-selection, copy/paste, smart placement, undo/redo | ✅ Implemented and verified (Playwright) |
 | Wiring: click-to-click, drag-to-connect, pan while wiring, rerouting | ✅ Implemented and verified (Playwright) |
 | Automatic routes for new wires: clear of unrelated pads, parts, and the board's switches and their labels | ✅ Implemented and verified (D-035) |
-| Compile problems: GCC and linker diagnostics listed, each goes to its line (F8 / Shift+F8) | ✅ Implemented and verified (Playwright) |
+| Compile problems: GCC and linker diagnostics listed; only those with a line in `main.c` (the editable file) go to it (F8 / Shift+F8); others, such as linker errors without a source location, are listed but not navigable | ✅ Implemented and verified (Playwright) |
 | Console: severity and source per message, compact/detailed views, filters | ✅ Implemented and verified (Playwright) |
 | Persistence and safe loading (browser drafts, confirm before replacing) | ✅ Implemented and verified (Playwright) |
 | Logic analyzer part | 🟡 Editor only, no electrical behavior |
