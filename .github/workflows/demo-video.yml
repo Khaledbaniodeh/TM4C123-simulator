@@ -1,0 +1,88 @@
+name: Demo video
+
+# Records the company demo (demo/record.spec.js) in one take of the real app (pinned GCC + Renode,
+# Playwright Chromium) and builds the MP4 with demo/make-video.mjs. Separate from CI: it does not
+# gate merges and does not change the test suite.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "demo/**"
+      - "!demo/**.md"
+      - ".github/workflows/demo-video.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: demo-video-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  record:
+    name: Record the demo video
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Cache pinned toolchains
+        uses: actions/cache@v4
+        with:
+          path: .tools
+          key: tools-${{ runner.os }}-${{ hashFiles('tools.lock.json') }}
+
+      - name: Install pinned toolchains (verified by SHA-256)
+        run: npm run setup:tools
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          ffmpeg -hide_banner -version | head -1
+
+      - name: Record one take of the real app
+        run: npx playwright test -c demo/playwright.config.js
+
+      - name: Build the video, captions, and stills
+        run: |
+          node demo/make-video.mjs demo-output
+          ffprobe -v error -show_entries format=duration:stream=codec_name,width,height,r_frame_rate -of compact demo-output/tm4c123-simulator-demo.mp4
+          ls -la demo-output demo-output/stills
+
+      - name: Upload the video
+        uses: actions/upload-artifact@v4
+        with:
+          name: tm4c123-simulator-demo-video
+          path: |
+            demo-output/tm4c123-simulator-demo.mp4
+            demo-output/tm4c123-simulator-demo-captioned.mp4
+            demo-output/tm4c123-simulator-demo.srt
+            demo-output/timeline.json
+          retention-days: 90
+
+      - name: Upload the stills
+        uses: actions/upload-artifact@v4
+        with:
+          name: tm4c123-simulator-demo-stills
+          path: demo-output/stills/
+          retention-days: 90
+
+      - name: Upload the recording's test output on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-recording-failure
+          path: test-results/demo/
+          retention-days: 14
