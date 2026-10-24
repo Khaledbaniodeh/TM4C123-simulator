@@ -403,8 +403,10 @@ workspace.addEventListener("view", () => {
 });
 workspace.addEventListener("wire", (event) => {
   const { detail } = event;
-  if (detail.state === "started") {
+  if (detail.state === "started" || detail.state === "waiting") {
     workspaceMessage(`Wiring from ${detail.from} — click a target pin (Esc cancels).`);
+  } else if (detail.state === "dragging") {
+    workspaceMessage(`Wiring from ${detail.from} — release on a target pin (Esc cancels).`);
   } else if (detail.state === "invalid") {
     workspaceMessage(detail.error, "error");
   } else if (detail.state === "created") {
