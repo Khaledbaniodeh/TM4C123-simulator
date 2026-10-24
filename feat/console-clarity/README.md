@@ -1,1 +1,1 @@
-Screenshots from feat/console-clarity @ d1ee658437cff99fa9aac76c7662ee7e456a0d74 (run 40084195939, test result: failure)
+Screenshots from feat/console-clarity @ 145b6910f2576ada2f29ed719b3ce7502ef401f6 (run 40088419110, test result: success)
