@@ -4,6 +4,9 @@
 # Binary assets
 *.png binary
 
+# Shell scripts run on Linux CI runners: always LF
+*.sh text eol=lf
+
 # Web workspace
 apps/web/** linguist-documentation=false
 apps/web/** linguist-generated=false

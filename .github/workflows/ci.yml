@@ -90,26 +90,21 @@ jobs:
           path: results
         continue-on-error: true
 
+      # Only the publishing script, from this commit; no credentials kept in the checkout.
+      - uses: actions/checkout@v4
+        with:
+          path: source
+          sparse-checkout: scripts/ci
+          persist-credentials: false
+
+      # Runs on other branches can publish at the same moment: the script retries on the
+      # branch's latest tip (bounded, never forced) and fails if it cannot publish.
       - name: Commit PNG screenshots
         env:
           GH_TOKEN: ${{ github.token }}
+          TEST_RESULT: ${{ needs.test.result }}
         run: |
           set -euo pipefail
-          shopt -s globstar nullglob
-          files=(results/**/*.png)
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "No screenshots produced."; exit 0
-          fi
-          git init -q publish && cd publish
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          if git fetch -q --depth=1 origin ci-artifacts; then git checkout -q -b ci-artifacts FETCH_HEAD; else git checkout -q --orphan ci-artifacts; fi
-          dest="${GITHUB_REF_NAME}"
-          rm -rf "$dest" && mkdir -p "$dest"
-          for f in "${files[@]}"; do cp "../$f" "$dest/$(basename "$f")"; done
-          printf 'Screenshots from %s @ %s (run %s, test result: %s)\n' "$GITHUB_REF_NAME" "$GITHUB_SHA" "$GITHUB_RUN_ID" "${{ needs.test.result }}" > "$dest/README.md"
-          git add -A
-          git commit -q -m "screenshots: ${GITHUB_REF_NAME} @ ${GITHUB_SHA::7}" || exit 0
-          git push -q origin ci-artifacts
-          echo "::notice title=Screenshots::https://github.com/${GITHUB_REPOSITORY}/tree/ci-artifacts/${dest}"
+          export PUBLISH_REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          readme=$(printf 'Screenshots from %s @ %s (run %s, test result: %s)' "$GITHUB_REF_NAME" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$TEST_RESULT")
+          bash source/scripts/ci/publish-screenshots.sh results "$GITHUB_REF_NAME" "$readme"
