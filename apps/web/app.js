@@ -22,6 +22,7 @@ import { LcdSimulation, bindLcd } from "./workspace/lcd.js";
 import { describeAnalogInput, evaluateAnalog } from "./workspace/analog.js";
 import { DraftStore, browserStorage, compareWork } from "./draft-store.js";
 import { describeLocation, groupDiagnostics, isNavigable, lineMarks, nextProblem, problemRange, summarize } from "./diagnostics.js";
+import { CATEGORIES, ConsoleLog, DEFAULT_FILTER, consoleRows } from "./console-log.js";
 
 const CAPABILITIES = [
   { name: "ARM GCC build → Cortex-M4 ELF", status: "verified" },
@@ -109,6 +110,11 @@ const elements = {
   problemsOutput: $("#problemsOutput"),
   eventsOutput: $("#eventsOutput"),
   problemCount: $("#problemCount"),
+  consoleErrorCount: $("#consoleErrorCount"),
+  consoleTools: $("#consoleTools"),
+  consoleCategory: $("#consoleCategory"),
+  consoleFilter: $("#consoleFilter"),
+  consoleSummary: $("#consoleSummary"),
   eventCount: $("#eventCount"),
   clearConsoleButton: $("#clearConsoleButton"),
 };
@@ -162,23 +168,133 @@ state.analog = evaluateAnalog(history.diagram, CATALOG);
 // Console
 // ---------------------------------------------------------------------------
 
-function log(message, level = "info", virtualTimeNs) {
-  const line = document.createElement("div");
-  line.className = "console-line";
+/** The compiler's output as lines for a console message's details (at most 200), or null. */
+function compilerOutput(text) {
+  const lines = (text ?? "").split(/\r?\n/).filter(Boolean);
+  return lines.length ? lines.slice(0, 200) : null;
+}
+
+/** Rows the console shows at most (the newest); the log itself keeps more (console-log.js). */
+const CONSOLE_ROWS = 400;
+const consoleLog = new ConsoleLog();
+const consoleView = { filter: { ...DEFAULT_FILTER, levels: new Set(DEFAULT_FILTER.levels) }, scheduled: false };
+
+/**
+ * Adds a console message. `options`: { category (a CATEGORIES key; default
+ * "system"), key (what it is about, e.g. a pin), details (extra lines, shown
+ * folded under the message) }. Rendering waits for the next frame, so bursts
+ * of simulator events cost one update.
+ */
+function log(message, level = "info", virtualTimeNs, options = {}) {
+  consoleLog.add({ level, message, time: virtualTimeNs, category: options.category ?? "system", key: options.key ?? null, details: options.details ?? null });
+  if (!consoleView.scheduled) {
+    consoleView.scheduled = true;
+    requestAnimationFrame(() => {
+      consoleView.scheduled = false;
+      renderConsole();
+    });
+  }
+}
+
+/**
+ * Brings the console up to date: rows are updated in place by key (a growing
+ * row keeps its element), and the view stays at the bottom only if it was
+ * there, so reading older messages is not interrupted.
+ */
+function renderConsole() {
+  const errorsSoFar = consoleLog.errorCount;
+  elements.consoleErrorCount.hidden = errorsSoFar === 0;
+  elements.consoleErrorCount.textContent = String(errorsSoFar);
+  const output = elements.consoleOutput;
+  if (output.hidden) {
+    return; // rendered when the Console tab is shown
+  }
+  const atBottom = output.scrollHeight - output.scrollTop - output.clientHeight < 24;
+  const { rows, hidden, truncated } = consoleRows(consoleLog.entries, consoleView.filter, CONSOLE_ROWS);
+  const existing = new Map([...output.children].map((node) => [node.dataset.key, node]));
+  const keys = new Set(rows.map((row) => row.key));
+  for (const [key, node] of existing) {
+    if (!keys.has(key)) {
+      node.remove();
+    }
+  }
+  let previous = null;
+  for (const row of rows) {
+    const signature = `${row.count}|${row.time}|${row.message}`;
+    let node = existing.get(row.key);
+    if (!node) {
+      node = document.createElement("div");
+      node.className = "console-line";
+      node.dataset.key = row.key;
+    }
+    if (node.dataset.signature !== signature) {
+      fillConsoleRow(node, row);
+      node.dataset.signature = signature;
+    }
+    const position = previous ? previous.nextSibling : output.firstChild;
+    if (node !== position) {
+      output.insertBefore(node, position);
+    }
+    previous = node;
+  }
+  const notes = [];
+  if (hidden) {
+    notes.push(`${hidden} hidden by filters`);
+  }
+  if (truncated || consoleLog.dropped) {
+    notes.push(`${truncated + consoleLog.dropped} older not shown`);
+  }
+  elements.consoleSummary.textContent = notes.join(" · ");
+  elements.consoleSummary.title = notes.length ? `${notes.join("; ")}. Errors are always shown.` : "Errors are always shown.";
+  if (atBottom) {
+    output.scrollTop = output.scrollHeight;
+  }
+}
+
+function fillConsoleRow(node, row) {
+  node.dataset.level = row.level;
+  node.dataset.category = row.category;
   const time = document.createElement("span");
   time.className = "console-time";
-  time.textContent = virtualTimeNs === undefined ? "" : formatVirtualTime(virtualTimeNs);
+  time.textContent = row.time === undefined ? "" : formatVirtualTime(row.time);
   const badge = document.createElement("span");
-  badge.className = `console-level ${level}`;
-  badge.textContent = level.toUpperCase();
-  const text = document.createElement("span");
-  text.textContent = message;
-  line.append(time, badge, text);
-  elements.consoleOutput.append(line);
-  while (elements.consoleOutput.childElementCount > 1_000) {
-    elements.consoleOutput.firstElementChild.remove();
+  badge.className = `console-level ${row.level}`;
+  badge.textContent = row.level.toUpperCase();
+  const text = document.createElement("div");
+  text.className = "console-text";
+  const message = document.createElement("span");
+  message.className = "console-message";
+  message.textContent = row.message;
+  text.append(message);
+  if (row.count > 1 && !row.grouped) {
+    const count = document.createElement("span");
+    count.className = "console-count";
+    count.title = `Repeated ${row.count} times`;
+    count.textContent = `×${row.count}`;
+    text.append(count);
   }
-  elements.consoleOutput.scrollTop = elements.consoleOutput.scrollHeight;
+  if (row.details?.length) {
+    const details = document.createElement("details");
+    details.className = "console-details";
+    const summary = document.createElement("summary");
+    summary.textContent = `Compiler output (${row.details.length} line${row.details.length === 1 ? "" : "s"})`;
+    const pre = document.createElement("pre");
+    pre.textContent = row.details.join("\n");
+    details.append(summary, pre);
+    text.append(details);
+  }
+  node.replaceChildren(time, badge, text);
+}
+
+function setConsoleFilter(changes) {
+  Object.assign(consoleView.filter, changes);
+  for (const chip of elements.consoleTools.querySelectorAll("[data-view]")) {
+    chip.setAttribute("aria-pressed", String(chip.dataset.view === consoleView.filter.view));
+  }
+  for (const chip of elements.consoleTools.querySelectorAll("[data-level]")) {
+    chip.setAttribute("aria-pressed", String(consoleView.filter.levels.has(chip.dataset.level)));
+  }
+  renderConsole();
 }
 
 function recordEvent(message) {
@@ -302,8 +418,13 @@ function selectConsoleTab(name) {
     tab.setAttribute("aria-selected", String(active));
   });
   elements.consoleOutput.hidden = name !== "console";
+  elements.consoleTools.hidden = name !== "console";
   elements.problemsOutput.hidden = name !== "problems";
   elements.eventsOutput.hidden = name !== "events";
+  if (name === "console") {
+    renderConsole();
+    elements.consoleOutput.scrollTop = elements.consoleOutput.scrollHeight;
+  }
 }
 
 function workspaceMessage(text, level = "info") {
@@ -468,7 +589,7 @@ const workspace = new Workspace(elements.canvas, elements.tooltip, {
     } else if (kind === "board") {
       sendInput(target, pressed);
     } else {
-      log(`${part.id} ${pressed ? "pressed" : "released"}`, "info", state.board.virtualTimeNs);
+      log(`${part.id} ${pressed ? "pressed" : "released"}`, "info", state.board.virtualTimeNs, { category: "input" });
       reevaluateCircuit();
     }
     workspace.refreshStates();
@@ -559,7 +680,7 @@ async function sendAnalog(body) {
   try {
     await api(`/api/sessions/${state.session.id}/input`, { body });
   } catch (error) {
-    log(`Analog input ${JSON.stringify(body)} failed: ${error.message}`, "error");
+    log(`Analog input ${JSON.stringify(body)} failed: ${error.message}`, "error", undefined, { category: "input" });
   }
 }
 
@@ -600,7 +721,7 @@ function feedLcds(event) {
     const { warnings } = lcd.controller;
     while (lcd.reportedWarnings < warnings.length) {
       const warning = warnings[lcd.reportedWarnings++];
-      log(`${id}: ${warning.detail}`, "warning", warning.virtualTimeNs);
+      log(`${id}: ${warning.detail}`, "warning", warning.virtualTimeNs, { category: "peripheral" });
     }
   }
 }
@@ -679,7 +800,7 @@ function renderDraftStatus() {
   if ((status === "failed" || status === "unavailable") && !draftWarningShown) {
     draftWarningShown = true;
     const reason = status === "failed" ? `Browser storage refused the draft (${drafts.lastError?.name ?? "error"})` : "Browser storage is unavailable";
-    log(`${reason}: your code and circuit are not saved and will be lost on reload. Save downloads the circuit; copy main.c into a file.`, "warning");
+    log(`${reason}: your code and circuit are not saved and will be lost on reload. Save downloads the circuit; copy main.c into a file.`, "warning", undefined, { category: "workspace" });
   } else if (status === "saved") {
     draftWarningShown = false;
   }
@@ -689,7 +810,7 @@ function loadDiagramText(text, origin) {
   const { diagram, errors } = parseDiagram(text, CATALOG);
   if (!diagram) {
     workspaceMessage(`Could not load ${origin}: ${errors[0]}`, "error");
-    log(`Diagram ${origin} rejected: ${errors.join(" ")}`, "error");
+    log(`Diagram ${origin} rejected: ${errors.join(" ")}`, "error", undefined, { category: "workspace" });
     return false;
   }
   history.reset(diagram);
@@ -1150,17 +1271,15 @@ async function compile() {
   const source = elements.editor.value;
   state.busy = "compiling";
   render();
-  log("Compiling main.c with arm-none-eabi-gcc…", "info");
+  log("Compiling main.c with arm-none-eabi-gcc…", "info", undefined, { category: "build" });
   try {
     const result = await api("/api/build", { body: { source } });
     showProblems(result.diagnostics ?? [], result.ok ? null : result.error, source);
     if (!result.ok) {
       state.build = null;
       const summary = summarize(state.problems.list);
-      log(`Build failed: ${result.error}${summary ? ` (${summary}; see Problems)` : ""}`, "error");
-      for (const line of (result.log ?? "").split(/\r?\n/).filter(Boolean).slice(0, 20)) {
-        log(line, "error");
-      }
+      // One error message; the compiler's own output folds under it (and every problem is in the Problems tab).
+      log(`Build failed: ${result.error}${summary ? ` (${summary}; see Problems)` : ""}`, "error", undefined, { category: "build", details: compilerOutput(result.log) });
       selectConsoleTab("problems");
       // Show where the first error is, without taking focus from the button that was used.
       const first = state.problems.list.find((p) => p.severity === "error" && isNavigable(p));
@@ -1178,10 +1297,12 @@ async function compile() {
       `Build succeeded in ${result.durationMs} ms: ${result.elf.bytes}-byte ELF, entry 0x${result.elf.entry.toString(16)}` +
         (warnings ? `, ${warnings} warning(s)` : ""),
       warnings ? "warning" : "success",
+      undefined,
+      { category: "build", details: warnings ? compilerOutput(result.log) : null },
     );
     return true;
   } catch (error) {
-    log(`Build request failed: ${error.message}`, "error");
+    log(`Build request failed: ${error.message}`, "error", undefined, { category: "build" });
     return false;
   } finally {
     state.busy = null;
@@ -1203,7 +1324,7 @@ async function startSession() {
   state.busy = "starting";
   state.session = { id: null, state: "starting", stream: null };
   render();
-  log("Starting Renode and loading the ELF…", "info");
+  log("Starting Renode and loading the ELF…", "info", undefined, { category: "run" });
   try {
     // Apply the circuit's inputs before the CPU runs (wired drives, potentiometers, die temperature).
     reevaluateCircuit();
@@ -1227,14 +1348,14 @@ async function startSession() {
     stream.onerror = () => {
       if (state.session.id === sessionId && !["stopped", "error"].includes(state.session.state)) {
         state.session.state = "error";
-        log("Lost the event stream from the simulator.", "error");
+        log("Lost the event stream from the simulator.", "error", undefined, { category: "run" });
         closeStream();
         render();
       }
     };
   } catch (error) {
     state.session.state = "error";
-    log(`Could not start the simulation: ${error.message}`, "error");
+    log(`Could not start the simulation: ${error.message}`, "error", undefined, { category: "run" });
   } finally {
     state.busy = null;
     render();
@@ -1261,7 +1382,7 @@ async function control(action) {
   try {
     await api(`/api/sessions/${state.session.id}/control`, { body: { action } });
   } catch (error) {
-    log(`${action} failed: ${error.message}`, "error");
+    log(`${action} failed: ${error.message}`, "error", undefined, { category: "run" });
   }
 }
 
@@ -1280,7 +1401,7 @@ async function sendInput(name, pressed) {
   try {
     await api(`/api/sessions/${state.session.id}/input`, { body: { input: name, pressed } });
   } catch (error) {
-    log(`Input ${name} failed: ${error.message}`, "error");
+    log(`Input ${name} failed: ${error.message}`, "error", undefined, { category: "input" });
   }
 }
 
@@ -1291,7 +1412,7 @@ async function drivePin(pin, level) {
   try {
     await api(`/api/sessions/${state.session.id}/input`, { body: { pin, level } });
   } catch (error) {
-    log(`External drive ${pin}=${level} failed: ${error.message}`, "error");
+    log(`External drive ${pin}=${level} failed: ${error.message}`, "error", undefined, { category: "input" });
   }
 }
 
@@ -1364,11 +1485,11 @@ function handleMessage(sessionId, message) {
     }
     state.realTimeFactor = message.state === "running" ? message.realTimeFactor ?? state.realTimeFactor : null;
     if (message.message) {
-      log(message.message, message.state === "error" ? "error" : "info", message.virtualTimeNs);
+      log(message.message, message.state === "error" ? "error" : "info", message.virtualTimeNs, { category: "run" });
     } else if (previous !== message.state && message.state === "running") {
-      log("CPU running.", "success", message.virtualTimeNs);
+      log("CPU running.", "success", message.virtualTimeNs, { category: "run" });
     } else if (previous !== message.state && message.state === "paused") {
-      log("CPU halted.", "info", message.virtualTimeNs);
+      log("CPU halted.", "info", message.virtualTimeNs, { category: "run" });
     }
     if (message.state === "stopped" || message.state === "error") {
       closeStream();
@@ -1382,27 +1503,30 @@ function handleMessage(sessionId, message) {
     feedLcds(event);
     const described = describeEvent(event);
     if (described) {
-      log(described[0], described[1], event.virtualTimeNs);
+      log(described[0], described[1], event.virtualTimeNs, {
+        category: event.type === "digital-pin-changed" ? "gpio" : "peripheral",
+        key: event.pin?.pinId ?? event.peripheral ?? null,
+      });
     }
     break;
   }
   case "mcu-reset":
-    log("MCU reset: peripherals at reset values, CPU restarts from the vector table.", "info", message.virtualTimeNs);
+    log("MCU reset: peripherals at reset values, CPU restarts from the vector table.", "info", message.virtualTimeNs, { category: "run" });
     break;
   case "board-input":
-    log(`${message.input} ${message.pressed ? "pressed" : "released"}`, "info", message.virtualTimeNs);
+    log(`${message.input} ${message.pressed ? "pressed" : "released"}`, "info", message.virtualTimeNs, { category: "input" });
     break;
   case "analog-input":
-    log(`External circuit applies ${message.volts === null ? "nothing (disconnected)" : `${message.volts.toFixed(3)} V`} to ${message.pin}`, "info", message.virtualTimeNs);
+    log(`External circuit applies ${message.volts === null ? "nothing (disconnected)" : `${message.volts.toFixed(3)} V`} to ${message.pin}`, "info", message.virtualTimeNs, { category: "input" });
     break;
   case "die-temperature":
-    log(`Die temperature set to ${message.celsius} °C`, "info", message.virtualTimeNs);
+    log(`Die temperature set to ${message.celsius} °C`, "info", message.virtualTimeNs, { category: "input" });
     break;
   case "external-drive":
-    log(`External circuit drives ${message.pin} ${message.level === "release" ? "released" : message.level.toUpperCase()}`, "info", message.virtualTimeNs);
+    log(`External circuit drives ${message.pin} ${message.level === "release" ? "released" : message.level.toUpperCase()}`, "info", message.virtualTimeNs, { category: "input" });
     break;
   case "session-limit":
-    log(`Session limit reached (${message.kind}).`, "error");
+    log(`Session limit reached (${message.kind}).`, "error", undefined, { category: "run" });
     break;
   default:
     break;
@@ -1476,7 +1600,7 @@ function restoreWork() {
   const what = [changes.source && "main.c", changes.circuit && "circuit"].filter(Boolean).join(" and ");
   if (what) {
     workspaceMessage(`Restored your ${what} from this browser (example "${example.title}").`);
-    log(`Restored your edited ${what} from this browser's local storage (started from example "${example.title}").`, "success");
+    log(`Restored your edited ${what} from this browser's local storage (started from example "${example.title}").`, "success", undefined, { category: "workspace" });
   }
   render();
 }
@@ -1609,8 +1733,29 @@ elements.loadDiagramInput.addEventListener("change", async () => {
 });
 
 elements.consoleTabs.forEach((tab) => tab.addEventListener("click", () => selectConsoleTab(tab.dataset.console)));
+elements.consoleCategory.append(
+  new Option("All sources", "all"),
+  ...Object.entries(CATEGORIES).map(([value, label]) => new Option(label, value)),
+);
+elements.consoleTools.addEventListener("click", (event) => {
+  const chip = event.target.closest(".console-chip");
+  if (chip?.dataset.view) {
+    setConsoleFilter({ view: chip.dataset.view });
+  } else if (chip?.dataset.level) {
+    // "Info" covers information and success messages; errors are not a choice (always shown).
+    const levels = new Set(consoleView.filter.levels);
+    const group = chip.dataset.level === "info" ? ["info", "success"] : [chip.dataset.level];
+    const on = !levels.has(chip.dataset.level);
+    group.forEach((level) => (on ? levels.add(level) : levels.delete(level)));
+    setConsoleFilter({ levels });
+  }
+});
+elements.consoleCategory.addEventListener("change", () => setConsoleFilter({ category: elements.consoleCategory.value }));
+elements.consoleFilter.addEventListener("input", () => setConsoleFilter({ text: elements.consoleFilter.value.trim() }));
 elements.clearConsoleButton.addEventListener("click", () => {
+  consoleLog.clear();
   elements.consoleOutput.replaceChildren();
+  renderConsole();
   elements.eventsOutput.replaceChildren();
   state.eventCount = 0;
   elements.eventCount.textContent = "0";
@@ -1633,7 +1778,7 @@ if (restored.source?.source != null) {
   elements.editor.value = restored.source.source;
 }
 if (restored.unreadable.length) {
-  log(`A saved ${restored.unreadable.join(" and ")} draft could not be read; it was set aside and the example is shown instead.`, "warning");
+  log(`A saved ${restored.unreadable.join(" and ")} draft could not be read; it was set aside and the example is shown instead.`, "warning", undefined, { category: "workspace" });
 }
 renderDraftStatus();
 updateLineNumbers();

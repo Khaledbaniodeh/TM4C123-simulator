@@ -183,13 +183,26 @@
     <section class="console-panel" aria-label="Build and simulation output">
       <div class="console-header">
         <div class="console-tabs" role="tablist">
-          <button class="console-tab active" type="button" role="tab" data-console="console" aria-selected="true">Console</button>
+          <button class="console-tab active" type="button" role="tab" data-console="console" aria-selected="true">
+            Console <span id="consoleErrorCount" class="error-count" title="Errors in the console" hidden>0</span>
+          </button>
           <button class="console-tab" type="button" role="tab" data-console="problems" aria-selected="false">
             Problems <span id="problemCount">0</span>
           </button>
           <button class="console-tab" type="button" role="tab" data-console="events" aria-selected="false">
             Events <span id="eventCount">0</span>
           </button>
+        </div>
+        <div id="consoleTools" class="console-tools" role="group" aria-label="Console view and filters">
+          <div class="console-segmented" role="group" aria-label="Console view">
+            <button class="console-chip" type="button" data-view="compact" aria-pressed="true" title="Fold runs of GPIO pin changes into one line">Compact</button>
+            <button class="console-chip" type="button" data-view="detailed" aria-pressed="false" title="Every message, every GPIO pin change">Detailed</button>
+          </div>
+          <button class="console-chip" type="button" data-level="warning" aria-pressed="true" title="Show warnings (errors are always shown)">Warnings</button>
+          <button class="console-chip" type="button" data-level="info" aria-pressed="true" title="Show information and success messages (errors are always shown)">Info</button>
+          <select id="consoleCategory" class="console-select" aria-label="Show messages from"></select>
+          <input id="consoleFilter" class="console-filter" type="search" placeholder="Filter" aria-label="Filter console messages (errors are always shown)" spellcheck="false">
+          <span id="consoleSummary" class="console-summary"></span>
         </div>
         <button id="clearConsoleButton" class="clear-console-button" type="button">Clear</button>
       </div>

@@ -89,6 +89,7 @@ scriptable firmware experiments.
 | Editing | Drag, rotate, duplicate, delete, multi-selection, copy/paste, nudging, undo/redo; new parts placed on free canvas |
 | Wiring | Click-to-click or drag-to-connect; pan while wiring; orthogonal routes on a 0.1 in grid that keep clear of unrelated pin pads; segment rerouting; validation of shorts and duplicates |
 | Compile problems | Errors, warnings, and notes from GCC and the linker in a Problems list; each goes to its line and column (F8 / Shift+F8 step through them), lines marked in the gutter; linker errors without a line are listed as such, never given one |
+| Console | Every message has a severity and a source (build, simulation, GPIO pins, peripherals, inputs, workspace); a compact view folds runs of GPIO pin changes into one line, a detailed view shows each; level, source, and text filters, which never hide an error; repeats counted (×N); compiler output folded under its error; the page keeps at most 400 rows |
 | Inspector | Live pin table (digital levels, drivers, and AIN channel + modeled voltage for ADC inputs), ELF summary, capability list |
 | Files and safety | `diagram.json` save/load (Wokwi-inspired, full compatibility **not** claimed); source and circuit kept in browser storage across reloads; confirmation before an example or a file replaces edited work; keyboard-accessible toolbar (wiring itself needs a pointer) |
 
