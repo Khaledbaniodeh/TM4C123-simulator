@@ -14,6 +14,7 @@ import {
   partBounds,
   padCrossings,
   partToWorld,
+  pinApproach,
   pinEscape,
   placeInView,
   placementKey,
@@ -208,6 +209,27 @@ describe("geometry", () => {
     assert.equal(route.overlap, 0);
     // A wire one grid away is a separate wire, not an overlap.
     assert.equal(wireOverlap(routeWire(a, b), [[{ x: -20, y: 9.6 }, { x: 80, y: 9.6 }]]), 0);
+  });
+
+  it("keeps the approach to other pins free, so a later wire to them never runs along this one", () => {
+    // A row of pins along a part's top edge, entered from above (like the LCD1602 header).
+    const pin = (x) => ({ x, y: 96 });
+    const up = { x: 0, y: -1 };
+    assert.deepEqual(pinApproach(pin(48), up), [pin(48), { x: 48, y: 96 - 2 * GRID }]);
+    assert.equal(pinApproach(pin(48), null), null);
+    // The default L from (0, 0) to (48, 48) comes down x = 48, right where another pin at (48, 67.2)
+    // is entered from above: that wire would later have to run along this one.
+    const a = { x: 0, y: 0 };
+    const b = { x: 48, y: 48 };
+    const approaches = [pinApproach({ x: 48, y: 67.2 }, up, 6 * GRID)];
+    assert.equal(autoRoute(a, b).routing.length, 0, "without approaches: the default L");
+    assert.ok(wireOverlap(routeWire(a, b), approaches) > 0);
+    const route = autoRoute(a, b, { approaches });
+    assert.deepEqual(route.routing, ["v0"], "the other L leaves the approach free");
+    assert.equal(route.overlap, 0);
+    // Pads still come first: an approach is kept free only when a pad-free route allows it.
+    const forced = autoRoute(a, b, { approaches, pads: [{ x: 0, y: 28.8 }, { x: 19.2, y: 48 }, { x: 28.8, y: 0 }] });
+    assert.equal(forced.crossings, 0);
   });
 
   it("returns the route crossing the fewest pads when none is clean, deterministically", () => {
