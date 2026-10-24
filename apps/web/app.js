@@ -21,6 +21,7 @@ import { evaluateCircuit } from "./workspace/netlist.js";
 import { LcdSimulation, bindLcd } from "./workspace/lcd.js";
 import { describeAnalogInput, evaluateAnalog } from "./workspace/analog.js";
 import { DraftStore, browserStorage, compareWork } from "./draft-store.js";
+import { describeLocation, groupDiagnostics, isNavigable, lineMarks, nextProblem, problemRange, summarize } from "./diagnostics.js";
 
 const CAPABILITIES = [
   { name: "ARM GCC build → Cortex-M4 ELF", status: "verified" },
@@ -70,6 +71,7 @@ const elements = {
   stopButton: $("#stopButton"),
   editor: $("#codeEditor"),
   lineNumbers: $("#lineNumbers"),
+  editorHighlight: $("#editorHighlight"),
   cursorPosition: $("#cursorPosition"),
   editorStatus: $("#editorStatus"),
   draftStatus: $("#draftStatus"),
@@ -143,6 +145,10 @@ const state = {
    * ask; null once any other load (example switch, restore) replaces the circuit.
    */
   importedCircuit: null,
+  /** Problems of the last build (diagnostics with their notes) and the source they were reported for. */
+  problems: { list: [], source: null },
+  /** The editor line marked for the problem last navigated to: { line, severity }, or null. */
+  problemLine: null,
 };
 
 // Drafts of the student's work in this browser (see draft-store.js).
