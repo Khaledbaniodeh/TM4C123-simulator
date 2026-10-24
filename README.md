@@ -1,508 +1,237 @@
 <div align="center">
 
-# TM4C123 Educational Web Simulator
+# TM4C123 Simulator
 
-<img
-  src="./docs/images/Tm4c123.png"
-  alt="TM4C123 Educational Web Simulator project banner"
-  width="100%"
-/>
+### Real Cortex-M4 firmware, running on simulated TM4C123 silicon, in an interactive circuit workspace
 
-<br>
+C source → `arm-none-eabi-gcc` → Cortex-M4 ELF → Renode → register-level TM4C123 models → browser
 
-[![Project Stage](https://img.shields.io/badge/stage-planning%20%26%20feasibility-1f6feb?style=for-the-badge)](PROJECT_STATUS.md)
-[![Development](https://img.shields.io/badge/development-temporarily%20paused-d29922?style=for-the-badge)](PROJECT_STATUS.md)
-[![Target](https://img.shields.io/badge/target-TM4C123G%20LaunchPad-c62828?style=for-the-badge)](docs/TM4C123_Simulator_MVP_Specification_v0.1.md)
-[![Contributions](https://img.shields.io/badge/contributions-welcome-2da44e?style=for-the-badge)](CONTRIBUTING.md)
+[![CI](https://github.com/Khaledbaniodeh/TM4C123-simulator/actions/workflows/ci.yml/badge.svg)](https://github.com/Khaledbaniodeh/TM4C123-simulator/actions/workflows/ci.yml)
+![Stage](https://img.shields.io/badge/stage-technical%20preview-1f6feb)
+![Hardware equivalence](https://img.shields.io/badge/hardware%20equivalence-not%20verified-d29922)
+![Hosting](https://img.shields.io/badge/hosting-local%20only-6e7681)
 
-### A planned browser-based learning simulator for the TM4C123G LaunchPad
+<img src="./docs/images/showcase-firmware-running.png" alt="The simulator running example A: the compiled firmware drives PF1 HIGH as a GPIO output and the LaunchPad's red LED lights; the inspector shows the ELF sections and the console shows the clock-gate and pin events" width="100%">
 
-Write normal TM4C123 C firmware, compile it for ARM Cortex-M4, execute it through a simulation engine, and observe register-level behavior through interactive virtual hardware.
-
-**Current status:** Planning and feasibility stage — no usable simulator release is available yet.
-
-[Project Status](PROJECT_STATUS.md) ·
-[Roadmap](ROADMAP.md) ·
-[Help Wanted](HELP_WANTED.md) ·
-[Contributing](CONTRIBUTING.md) ·
-[Support](SUPPORT.md)
+<sub>Captured by the automated showcase test: example A was compiled with GCC,
+executed in Renode, and drove PF1 HIGH through the GPIO model. The LED, pin
+table, ELF summary and console are all projections of simulator events.</sub>
 
 </div>
 
 ---
 
-## Table of Contents
+## What it is
 
-- [Overview](#overview)
-- [Current Project Status](#current-project-status)
-- [Project Vision](#project-vision)
-- [Target Execution Flow](#target-execution-flow)
-- [Planned MVP Components](#planned-mvp-components)
-- [Planned Firmware Support](#planned-firmware-support)
-- [First Technical Milestone](#first-technical-milestone)
-- [Architecture Direction](#architecture-direction)
-- [Why Development Is Paused](#why-development-is-paused)
-- [Repository Documentation](#repository-documentation)
-- [Help Wanted](#help-wanted)
-- [Contributing](#contributing)
-- [Project Principles](#project-principles)
-- [Status Summary](#status-summary)
-- [Disclaimer](#disclaimer)
+A simulator for the **EK-TM4C123GXL LaunchPad** that compiles your C code
+with the real ARM GCC toolchain and **executes the resulting ELF** on a
+Cortex-M4F in [Renode](https://renode.io/), with TM4C123GH6PM peripherals
+modeled **at the register level** in C#. A browser workspace shows the board,
+lets you wire external parts to its header pins, and reflects only what the
+simulated MCU actually does.
 
----
+It is built for learning and demonstrating bare-metal programming (GPIO,
+interrupts, clocks, timers, LCD, ADC) without a board, and for reproducible,
+scriptable firmware experiments.
 
-## Overview
+## Why it is technically interesting
 
-The **TM4C123 Educational Web Simulator** is a planned browser-based simulator for the **TM4C123G LaunchPad**, inspired by the interactive workflow of tools such as Wokwi.
+- **The firmware really runs.** No source-text matching or scripted
+  animation: the LEDs, the LCD and the pin table change only because the
+  compiled code wrote to simulated registers.
+- **Register-level models with real failure modes.** Clock gating
+  (`RCGCGPIO`/`PRGPIO`), the PF0 commit lock, open drain and pulls, edge
+  interrupts through the NVIC, and **precise bus faults** (a missing clock
+  enable produces a HardFault with the documented `BFAR`).
+- **Deterministic virtual time.** The orchestrator advances emulation in
+  fixed `RunFor` steps; repeated runs produce identical event timestamps.
+- **Board geometry from TI's CAD data.** The LaunchPad is placed from the
+  SPMR240 design files, and all 40 header pins are checked in CI against
+  TI's SPMU296 user guide.
+- **A circuit workspace driven by the MCU.** Wires form a logic-level
+  netlist and a potentiometer forms an ideal divider; both feed the GPIO and
+  ADC models as real inputs. An HD44780 LCD decodes the firmware's own GPIO
+  writes.
+- **Honest about gaps.** Unmodeled peripherals and registers are reported
+  as events instead of silently "working"; the UI labels what is tested.
 
-The project is intended primarily for students learning:
+## Gallery
 
-- Embedded C
-- ARM Cortex-M4 fundamentals
-- Memory-mapped I/O
-- GPIO configuration
-- Interrupt handling
-- SysTick
-- General-purpose timers
-- Analog-to-digital conversion
-- LCD interfacing
-- Register-level microcontroller programming
+| | |
+|---|---|
+| <img src="./docs/images/showcase-lcd1602.png" alt="LCD1602 wired to Port B showing Hello, TM4C123! written by the firmware"> | <img src="./docs/images/showcase-adc-potentiometer.png" alt="Potentiometer at 95 percent: 3.135 V into AIN0, the ADC result turns the red LED on"> |
+| **LCD1602 (HD44780)** on Port B, driven only by the firmware's GPIO writes (example L) | **Potentiometer → ADC0** on PE3/AIN0; the firmware picks the LED colour from the 12-bit result (example M) |
+| <img src="./docs/images/showcase-external-button.png" alt="External pushbutton held: PA6 low, the firmware drives PA7 high and the external LED lights"> | <img src="./docs/images/showcase-drag-to-connect.png" alt="A wire drawn by dragging from header pin J2.3 to an LED, routed cleanly"> |
+| **External button and LED** wired to J1: holding the button lights the LED through the firmware (example F) | **Wiring:** press on a pin, drag, release on another pin; the wire is validated and undoable |
 
-The goal is not to imitate hardware behavior only through frontend animations.
+## What works today
 
-A visible result must originate from:
+**Simulation (Renode + C# models).** Each row has automated tests, unless marked.
 
-```text
-Real compiled firmware
-→ CPU execution
-→ register operations
-→ peripheral behavior
-→ pin-state changes
-→ browser visualization
+| Area | Scope |
+|---|---|
+| Toolchain | Pinned xPack `arm-none-eabi-gcc` 15.2.1 and Renode 1.17.0, SHA-256 verified; original startup code, linker script and CMSIS-style `TM4C123.h` |
+| Core | Cortex-M4F + NVIC, vector-table boot, reset, deterministic virtual time |
+| SYSCTL | GPIO/timer/ADC clock gating; RCC/RCC2/PLL clock tree (16–80 MHz) |
+| GPIO A–F | Masked DATA, DIR, DEN, pull-up/down, open drain, PF0 LOCK/CR, analog mode, edge interrupts (falling edge tested) |
+| SysTick | Interrupt and `COUNTFLAG` polling at the core clock |
+| GPTM | TIMER0–5, 16/32-bit periodic with prescaler, timeout interrupts (TIMER0A–2A tested) |
+| ADC0/ADC1 | Sample sequencer 3, processor trigger, internal temperature sensor (SS0–SS2 implemented, untested) |
+| Faults | Precise bus faults on unclocked and reserved accesses; CPU fault details from the SCB registers |
+| Not modeled | UART, SSI, I2C, PWM and others: **accesses are reported, never silently accepted** |
+
+**Workspace (browser).**
+
+| Area | Scope |
+|---|---|
+| Board | 40 wireable header pins with live tooltips; SW1/SW2 and RESET; firmware-driven RGB LED; selectable components with honest status |
+| Parts | LED, resistor, pushbutton (logic level), potentiometer (ideal divider), LCD1602 (HD44780); logic analyzer is **editor only** |
+| Editing | Drag, rotate, duplicate, delete, multi-selection, copy/paste, nudging, undo/redo; new parts placed on free canvas |
+| Wiring | Click-to-click or drag-to-connect; pan while wiring; orthogonal routes on a 0.1 in grid; segment rerouting; validation of shorts and duplicates |
+| Inspector | Live pin table (digital levels, drivers, and AIN channel + modeled voltage for ADC inputs), ELF summary, capability list |
+| Files and safety | `diagram.json` save/load (Wokwi-inspired, full compatibility **not** claimed); source and circuit kept in browser storage across reloads; confirmation before an example or a file replaces edited work; keyboard-accessible toolbar (wiring itself needs a pointer) |
+
+Lab coverage for Experiments 5–10:
+[`docs/EXPERIMENT_COMPATIBILITY.md`](docs/EXPERIMENT_COMPATIBILITY.md).
+
+## Architecture
+
+```mermaid
+flowchart LR
+  UI[Browser workspace<br/>editor · board · wiring · inspector] -- build / run / inputs --> ORCH[Node.js orchestrator<br/>127.0.0.1 only]
+  ORCH -- fixed argv, time & size limits --> GCC[arm-none-eabi-gcc 15.2.1] --> ELF[(ELF)]
+  ORCH -- Monitor: LoadELF · RunFor · Reset --> R[Renode 1.17.0<br/>Cortex-M4F + NVIC]
+  R -- MMIO --> M[C# TM4C123 models<br/>SYSCTL · GPIO · GPTM · ADC<br/>reporting placeholders]
+  M -- JSON-lines events<br/>virtual time + sequence --> ORCH
+  ORCH -- Server-Sent Events --> UI
 ```
 
-The project is intentionally limited to selected university laboratory examples rather than complete TM4C123 or complete Wokwi compatibility.
+- **Virtual time is authoritative.** Wall-clock pacing is only for display;
+  the UI shows the measured real-time factor.
+- **No log scraping.** Pin state comes from model events; CPU faults come
+  from the ARMv7-M SCB registers (CFSR/HFSR/BFAR).
+- **The browser never decides hardware state.** External parts only turn
+  wiring into pin drives that the GPIO and ADC models apply.
 
----
+Details: [`docs/TECHNICAL_OVERVIEW.md`](docs/TECHNICAL_OVERVIEW.md) ·
+[`docs/PERIPHERAL_MODELS.md`](docs/PERIPHERAL_MODELS.md) ·
+[`docs/RUNTIME_EVENTS.md`](docs/RUNTIME_EVENTS.md) ·
+[`docs/DECISION_LOG.md`](docs/DECISION_LOG.md) ·
+[`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)
 
-## Current Project Status
+## Quick start
 
-> [!IMPORTANT]
-> This repository does not currently contain a finished or usable simulator.
+Requirements: **Node.js ≥ 20.11**, Windows x64 or Linux x64, about 2 GB of
+disk for the toolchains. No administrator rights are needed.
 
-The project is presently in the:
-
-```text
-Architecture
-Planning
-Compatibility analysis
-Infrastructure planning
-Feasibility validation
+```bash
+git clone https://github.com/Khaledbaniodeh/TM4C123-simulator.git
+cd TM4C123-simulator
+npm run setup:tools    # downloads pinned GCC + Renode into .tools/ and verifies SHA-256
+npm ci
+npm start              # http://127.0.0.1:5123/
 ```
 
-stage.
+`setup:tools` installs exactly the versions in [`tools.lock.json`](tools.lock.json)
+into the gitignored `.tools/` directory; delete it to uninstall. **Ctrl+C**
+stops the server and shuts Renode down cleanly.
 
-The repository currently contains detailed technical documentation, task definitions, architecture decisions, compatibility requirements, and feasibility plans.
+A guided 10-minute walkthrough for presentations:
+[`docs/SHOWCASE_DEMO.md`](docs/SHOWCASE_DEMO.md).
 
-Implementation code will be added only after the first end-to-end execution path is proven.
+## Firmware examples
 
-See the full status report in [`PROJECT_STATUS.md`](PROJECT_STATUS.md).
+| Example | Shows |
+|---|---|
+| [`gpiof-red-led`](examples/gpiof-red-led/main.c) | **A**: clock enable + PRGPIO wait, PF1 output HIGH → red LED on |
+| [`gpiof-led-off`](examples/gpiof-led-off/main.c) | **B**: identical configuration, DATA LOW → LED off |
+| [`gpiof-blink`](examples/gpiof-blink/main.c) | **C**: masked DATA alias + software delay blink |
+| [`sw1-red-led`](examples/sw1-red-led/main.c) | **D**: SW1 active-low input with internal pull-up, polled |
+| [`switch-interrupts`](examples/switch-interrupts/main.c) | **E**: PF0 unlock, falling-edge GPIO interrupts, NVIC IRQ 30, ISR |
+| [`external-led-button`](examples/external-led-button/main.c) | **F**: external LED (PA7 + 220 Ω) and pushbutton (PA6 → GND) wired in the workspace |
+| [`systick-blink`](examples/systick-blink/main.c) | **G**: RCC2/PLL to 50 MHz, SysTick interrupt every 100 ms |
+| [`timer1a-prescaled`](examples/timer1a-prescaled/main.c) | **H**: TIMER1A 16-bit periodic with prescaler 256 |
+| [`three-timers`](examples/three-timers/main.c) | **I**: TIMER0A/1A/2A at 250/500/1000 ms |
+| [`lab-gpio-interrupts`](examples/lab-gpio-interrupts/main.c) | **J**: Experiment 6 style with `TM4C123.h` (`GPIOF->…`, `NVIC_EnableIRQ`) |
+| [`lab-systick-timer`](examples/lab-systick-timer/main.c) | **K**: Experiment 7 style with `SysTick_Config(SystemCoreClock / 10)` |
+| [`lcd1602-hello`](examples/lcd1602-hello/main.c) | **L**: Experiment 8, LCD1602 4-bit on Port B with a CGRAM character |
+| [`adc-potentiometer`](examples/adc-potentiometer/main.c) | **M**: Experiment 9, ADC0 SS3 reads a potentiometer on PE3/AIN0 |
+| [`adc-temperature`](examples/adc-temperature/main.c) | **N**: Experiment 9, internal temperature sensor on ADC1 SS3 with an ISR |
 
----
+Negative fixtures (missing clock / DIR / DEN, compile and link errors,
+unsupported accesses) are in [`tests/fixtures/firmware/`](tests/fixtures/firmware/).
 
-## Project Vision
+## Tests and evidence
 
-The long-term student workflow is planned to look like this:
-
-1. Open the simulator in a browser.
-2. Write normal TM4C123 C code.
-3. Compile the program for ARM Cortex-M4.
-4. Generate an ELF firmware file.
-5. Start a simulated TM4C123 session.
-6. Execute the compiled firmware.
-7. Interact with virtual buttons and components.
-8. Observe LEDs, LCD output, ADC values, interrupts, timers, and digital signals.
-9. Inspect errors and unsupported register behavior clearly.
-
-The simulator should eventually allow students to connect and use:
-
-- The TM4C123G LaunchPad
-- External LEDs
-- Pushbuttons
-- Resistors
-- An LCD1602
-- A potentiometer
-- A logic analyzer
-
----
-
-## Target Execution Flow
-
-```text
-┌──────────────────────┐
-│     User C Source    │
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│ ARM Cortex-M4 Build  │
-│ arm-none-eabi-gcc    │
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│     ELF Firmware     │
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│   Execution Engine   │
-│ Cortex-M4 + Time     │
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│ TM4C123 MMIO Models  │
-│ GPIO / Timers / ADC  │
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│ Pins and Components  │
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│ Browser Visualization│
-└──────────────────────┘
+```bash
+npm test           # Node: compiler, Renode integration, API, peripherals, workspace model, board pin map
+npm run test:e2e   # Playwright: real UI against the real toolchain and Renode
 ```
 
-The frontend must not manufacture LED, LCD, button, ADC, or timer behavior independently of firmware execution.
+On this release candidate, CI ([`ci.yml`](.github/workflows/ci.yml)) runs
+**135 Node tests and 98 browser tests** with the pinned toolchains; every
+browser test compiles and executes real firmware where it needs to. Browser
+screenshots from each run are published to the
+[`ci-artifacts`](https://github.com/Khaledbaniodeh/TM4C123-simulator/tree/ci-artifacts)
+branch. [`hardware-reference.yml`](.github/workflows/hardware-reference.yml)
+re-checks the board model against TI's documents, and
+[`perf-probe.yml`](.github/workflows/perf-probe.yml) measures simulation
+speed. The first end-to-end proof and its negative cases are documented in
+the [RISK-001 Acceptance Report](docs/RISK-001_Acceptance_Report.md).
 
----
+## Limitations
 
-## Planned MVP Components
+- **Local, trusted, single-user tool.** The server binds to `127.0.0.1` and
+  checks the `Host` header, but compilation and execution are **not
+  sandboxed** (time- and size-limited child processes only). Do not expose it
+  to untrusted users or the internet. There is **no public hosted version**.
+  See [`SECURITY.md`](SECURITY.md).
+- **Not compared with physical hardware.** Behavior is implemented from
+  public datasheet descriptions and verified by tests, not against a real
+  LaunchPad.
+- **Approximate timing.** One instruction per clock at the configured system
+  clock; not cycle-accurate. Interactive runs are slower than real time
+  (0.1–0.8× on Windows); firmware that busy-polls a register runs at about
+  0.13× in CI, while interrupt + `WFI` code runs at real time
+  ([`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)).
+- **Peripheral coverage.** UART, SSI, I2C, PWM and others are placeholders
+  that report accesses. The logic analyzer is not functional yet.
+- **Simplified electrical model.** External parts are logic-level; the
+  potentiometer is an ideal divider without loading.
+- **Known workspace rough edges** are tracked in
+  [`PROJECT_STATUS.md`](PROJECT_STATUS.md#known-issues), for example
+  automatic wire routes that can pass over unrelated header pads.
 
-| Component | Planned purpose |
-|---|---|
-| TM4C123G LaunchPad | Main simulated development board |
-| Built-in RGB LED | PF1, PF2, and PF3 output examples |
-| SW1 | PF4 active-low button input |
-| SW2 | PF0 active-low button input |
-| External LED | Basic GPIO output and wiring |
-| Pushbutton | External digital input |
-| Resistor | Basic educational circuit wiring |
-| Potentiometer | Analog voltage input |
-| LCD1602 | Character-display laboratory examples |
-| Logic analyzer | Digital waveform observation |
+## Roadmap
 
----
+Next: UART0 with a virtual terminal (Experiment 10), a container-isolated
+compile/execute worker (required before any shared deployment), and a
+logic analyzer. See [`ROADMAP.md`](ROADMAP.md) and
+[`PROJECT_STATUS.md`](PROJECT_STATUS.md).
 
-## Planned Firmware Support
-
-The MVP is intended to support selected educational examples involving:
-
-### GPIO
-
-- Digital input and output
-- Port clock enable
-- Direction configuration
-- Digital enable
-- Pull-up configuration
-- Built-in RGB LED control
-- SW1 and SW2 polling
-
-### Protected PF0 Configuration
-
-- GPIO lock register
-- Commit control
-- PF0 unlock sequence
-- SW2 input configuration
-
-### Interrupts
-
-- GPIO edge interrupts
-- Interrupt masking
-- Interrupt status
-- Interrupt clearing
-- NVIC interrupt enable
-- Interrupt service routines
-
-### SysTick
-
-- Reload configuration
-- Current-value reset
-- Periodic interrupt generation
-- Counter and LED-toggle examples
-
-### General-Purpose Timers
-
-Planned initial timer coverage includes:
+## Repository layout
 
 ```text
-TIMER0A
-TIMER1A
-TIMER2A
+apps/orchestrator/   Node.js server: compiler runner, Renode session, HTTP/SSE API
+apps/web/            Browser workspace (plain ES modules, no build step)
+simulator/firmware/  Startup, linker script, device header (include/), SystemInit
+simulator/renode/    Renode platform (.repl) and C# peripheral models
+examples/            Firmware examples A–N (with diagram.json where wired)
+tests/               Node test suites + negative firmware fixtures
+e2e/                 Playwright browser tests, including the showcase walkthrough
+docs/                Architecture, decisions, models, events, reports
 ```
 
-### LCD1602
+## Contributing and feedback
 
-- HD44780-compatible behavior
-- 4-bit communication mode
-- Commands and character data
-- Planned Port B laboratory examples
-
-### ADC
-
-- ADC0
-- Sample Sequencer 3
-- PE3 / AIN0
-- Polling examples
-- Interrupt examples
-- Potentiometer-based analog input
-
-### Logic Analyzer
-
-- Digital state transitions
-- Virtual timestamps
-- HIGH and LOW waveforms
-- Deterministic signal capture
-
----
-
-## First Technical Milestone
-
-Before building a large UI, the project must prove this complete vertical slice:
-
-```text
-C source
-→ Cortex-M4 ELF
-→ execution engine
-→ SYSCTL clock configuration
-→ GPIOF register writes
-→ effective PF1 output
-→ red LED state in the browser
-```
-
-This milestone must demonstrate that:
-
-- Real C source is compiled.
-- Real Cortex-M4 instructions are executed.
-- TM4C123 memory-mapped registers are modeled.
-- GPIO state is calculated from register behavior.
-- The browser receives the resulting output event.
-- The LED is not controlled through hardcoded frontend behavior.
-
-No large component editor or complete visual workspace should be implemented before this path is validated.
-
----
-
-## Architecture Direction
-
-The current architecture direction includes the following candidates:
-
-| Layer | Current direction |
-|---|---|
-| Frontend | React and TypeScript |
-| Backend orchestration | Node.js and TypeScript |
-| Firmware compiler | ARM GNU Embedded Toolchain |
-| Firmware artifact | ELF |
-| Initial execution-engine candidate | Renode |
-| TM4C123 peripheral models | Custom register-level models |
-| Renode peripheral language | C# |
-| Communication | Structured runtime events |
-| Project wiring format | Wokwi-inspired `diagram.json` |
-| Execution model | Isolated server-side workers |
-| Timing model | Deterministic virtual time |
-
-Some of these choices remain conditional on the successful completion of the feasibility spike.
-
-Read the architecture documentation:
-
-- [`Architecture Design`](docs/PM-003_TM4C123_Architecture_Design_v0.1.md)
-- [`Decision Log`](docs/DECISION_LOG.md)
-- [`Repository Structure`](docs/REPOSITORY_STRUCTURE.md)
-- [`Feasibility Spike Plan`](docs/RISK-001_TM4C123_Feasibility_Spike_Plan_v0.1.md)
-
----
-
-## Why Development Is Paused
-
-The next implementation phase requires a suitable environment for:
-
-- Docker-based isolation
-- ARM Cortex-M4 cross-compilation
-- `arm-none-eabi-gcc`
-- ELF inspection and loading
-- Renode or another suitable execution engine
-- Custom TM4C123 peripheral development
-- Automated integration testing
-- CI runners
-- Adequate storage and memory
-- Safe execution of untrusted user code
-
-The currently checked environment does not yet provide all required tools and resources.
-
-Development is therefore temporarily paused while a more suitable development environment and additional technical support are arranged.
-
-This pause does not mean the project has been abandoned.
-
-See:
-
-- [`Infrastructure Requirements`](docs/INFRASTRUCTURE_REQUIREMENTS.md)
-- [`Help Wanted`](HELP_WANTED.md)
-- [`Project Status`](PROJECT_STATUS.md)
-
----
-
-## Repository Documentation
-
-### Core Planning Documents
-
-| Document | Purpose |
-|---|---|
-| [`MVP Specification`](docs/TM4C123_Simulator_MVP_Specification_v0.1.md) | Defines the initial product scope |
-| [`Compatibility Matrix`](docs/PM-002_TM4C123_Compatibility_Matrix_v0.1.md) | Maps laboratory examples to required support |
-| [`Architecture Design`](docs/PM-003_TM4C123_Architecture_Design_v0.1.md) | Describes the proposed technical architecture |
-| [`Feasibility Spike Plan`](docs/RISK-001_TM4C123_Feasibility_Spike_Plan_v0.1.md) | Defines the first technical proof |
-| [`Decision Log`](docs/DECISION_LOG.md) | Records important architecture decisions |
-| [`Glossary`](docs/GLOSSARY.md) | Explains project terminology |
-| [`Infrastructure Requirements`](docs/INFRASTRUCTURE_REQUIREMENTS.md) | Documents required development resources |
-| [`Repository Structure`](docs/REPOSITORY_STRUCTURE.md) | Explains current and proposed repository layout |
-
-### Project and Community Documents
-
-| Document | Purpose |
-|---|---|
-| [`Project Status`](PROJECT_STATUS.md) | Current project condition |
-| [`Roadmap`](ROADMAP.md) | Planned project stages |
-| [`Help Wanted`](HELP_WANTED.md) | Areas where technical help is needed |
-| [`Contributing`](CONTRIBUTING.md) | Contribution workflow and requirements |
-| [`Support`](SUPPORT.md) | How to request technical help |
-| [`Security`](SECURITY.md) | Security reporting and execution risks |
-| [`Code of Conduct`](CODE_OF_CONDUCT.md) | Collaboration standards |
-
----
-
-## Help Wanted
-
-Technical contributors are welcome.
-
-The project would benefit most from expertise in:
-
-- ARM Cortex-M4 architecture
-- TM4C123 register-level programming
-- Bare-metal startup and linker scripts
-- Renode platform development
-- C# peripheral modeling
-- ELF loading and inspection
-- Docker sandboxing
-- Secure execution of untrusted code
-- React and TypeScript
-- Node.js orchestration
-- WebSocket or event-stream design
-- Digital pin and circuit-state modeling
-- Automated testing
-- CI/CD
-- Development infrastructure
-- Technical architecture review
-
-Contributors do not need to implement the complete simulator.
-
-The project workflow is intentionally divided into small, bounded, independently testable tasks.
-
-See [`HELP_WANTED.md`](HELP_WANTED.md) for current needs.
-
----
-
-## Contributing
-
-Before contributing:
-
-1. Read [`CONTRIBUTING.md`](CONTRIBUTING.md).
-2. Review [`PROJECT_STATUS.md`](PROJECT_STATUS.md).
-3. Read the relevant documents inside `docs/`.
-4. Select one small task with a defined scope.
-5. Open an Issue before starting architecture-changing work.
-6. Avoid broad or unrelated refactoring.
-7. Include exact commands and test results.
-8. Document unsupported behavior and known limitations.
-9. Do not claim that unimplemented functionality works.
-10. Keep changes consistent with approved architecture decisions.
-
-Useful Issue templates include:
-
-- Contribution offer
-- Technical help request
-- Architecture question
-- Bug report
-
----
-
-## Project Principles
-
-The project follows these principles:
-
-- **Correctness before visual polish**
-- **Real firmware execution**
-- **Register-level hardware behavior**
-- **Small and reviewable tasks**
-- **Deterministic virtual time**
-- **No hidden frontend hardware logic**
-- **No silent unsupported behavior**
-- **Clear acceptance criteria**
-- **Reproducible tests**
-- **Secure execution isolation**
-- **Honest project status**
-
----
-
-## Status Summary
-
-| Area | Status |
-|---|---|
-| Product scope | Documented |
-| MVP requirements | Documented |
-| Laboratory examples | Documented |
-| Compatibility matrix | Documented |
-| Architecture design | Documented |
-| Feasibility-spike plan | Documented |
-| Task workflow | Documented |
-| Infrastructure requirements | Documented |
-| Development environment | Not yet provisioned |
-| Compiler integration | Not implemented |
-| ELF loading | Not implemented |
-| Cortex-M4 execution | Not implemented |
-| TM4C123 peripheral models | Not implemented |
-| Browser simulator UI | Not implemented |
-| Public hosted simulator | Not available |
-| Stable release | Not available |
-
----
+Technical review is very welcome, especially on silicon behavior, timing
+fidelity, and reference programs to validate against real hardware. See
+[`docs/TECHNICAL_OVERVIEW.md` §8](docs/TECHNICAL_OVERVIEW.md#8-where-expert-feedback-would-be-most-valuable),
+[`CONTRIBUTING.md`](CONTRIBUTING.md) and [`HELP_WANTED.md`](HELP_WANTED.md).
 
 ## Disclaimer
 
-This is an independent educational project.
-
-It is not affiliated with, sponsored by, or endorsed by:
-
-- Texas Instruments
-- Wokwi
-- Renode
-- Any university
-
-Product names, company names, board names, and trademarks belong to their respective owners.
-
-The project banner is used for educational project presentation. Any third-party product imagery or marks remain the property of their respective owners.
-
----
-
-<div align="center">
-
-### TM4C123 Educational Web Simulator
-
-**Architecture first. Real firmware execution. Honest simulation.**
-
-[Back to top](#tm4c123-educational-web-simulator)
-
-</div>
+An independent project. It is **not affiliated with, sponsored by, or
+endorsed by Texas Instruments**, Antmicro/Renode, Wokwi, or any university.
+TM4C123, Tiva, and LaunchPad are trademarks of their respective owners.
+Simulation results are not a substitute for testing on hardware.

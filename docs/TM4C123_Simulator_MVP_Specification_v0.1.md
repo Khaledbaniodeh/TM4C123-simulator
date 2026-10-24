@@ -1,4 +1,4 @@
-TM4C123 Educational Web Simulator
+TM4C123 Simulator
 
 MVP Specification v0.1
 
@@ -280,7 +280,7 @@ EEPROM and hibernation
 
 Complete PWM/motor-control simulation
 
-All UART/I2C/SSI modules
+All UART/I2C/SSI modules (amended 2026-10-19 by decision D-022: UART0 on PA0/PA1 with a virtual terminal is now in the planned scope; other UART, I2C, and SSI modules remain excluded)
 
 JTAG/SWD or GDB debugging
 

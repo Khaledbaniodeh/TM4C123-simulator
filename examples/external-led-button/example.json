@@ -1,0 +1,8 @@
+{
+  "id": "external-led-button",
+  "title": "F — External LED + button (PA7/PA6)",
+  "summary": "External LED on PA7 through a resistor and a pushbutton on PA6 to GND, wired in the workspace. The firmware lights the LED while the button is held.",
+  "experiment": 6,
+  "expected": "External LED ON while the external button is held",
+  "inputs": ["btn1"]
+}

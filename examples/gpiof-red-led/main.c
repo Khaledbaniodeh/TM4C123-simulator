@@ -1,18 +1,15 @@
 /*
- * TM4C123 Educational Web Simulator
- * Reference Firmware Example
+ * TM4C123 Simulator — firmware example A
  *
- * Example: Turn on the built-in red LED connected to PF1.
+ * Turn on the LaunchPad's red LED (PF1).
  *
- * Expected future simulator behavior:
- *   1. Enable the GPIO Port F clock.
- *   2. Configure PF1 as a digital output.
- *   3. Drive PF1 HIGH.
- *   4. Display the red LED as ON in the browser.
+ *   1. Enable the GPIO Port F clock (SYSCTL RCGCGPIO bit 5).
+ *   2. Wait until Port F reports ready (SYSCTL PRGPIO bit 5).
+ *   3. Configure PF1 as a digital GPIO output.
+ *   4. Drive PF1 HIGH.
  *
- * Project status:
- *   This firmware is a reference example.
- *   Simulator execution support is not implemented yet.
+ * Expected result in the simulator: PF1 resolves HIGH (driven by GPIO
+ * output) and the red LED is ON. Verified by tests/integration.
  */
 
 #include <stdint.h>
@@ -23,7 +20,7 @@
 #define SYSCTL_RCGCGPIO_R REG32(0x400FE608u)
 #define SYSCTL_PRGPIO_R   REG32(0x400FEA08u)
 
-/* GPIO Port F registers */
+/* GPIO Port F registers (APB aperture) */
 #define GPIO_PORTF_DATA_R  REG32(0x400253FCu)
 #define GPIO_PORTF_DIR_R   REG32(0x40025400u)
 #define GPIO_PORTF_AFSEL_R REG32(0x40025420u)

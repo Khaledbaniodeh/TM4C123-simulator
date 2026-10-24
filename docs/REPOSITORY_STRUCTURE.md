@@ -6,7 +6,37 @@ The implementation structure is not final until the feasibility spike `RISK-001`
 
 ---
 
-## Current Repository Stage
+## Implemented Layout (2026-10-19, RISK-001)
+
+The RISK-001 implementation follows a subset of the proposed structure
+below. The `spike/` directory from the RISK-001 plan was not used, because
+the code is intended to grow into the product.
+
+```text
+TM4C123-simulator/
+├── apps/
+│   ├── orchestrator/src/     compiler.js · renode-session.js · server.js
+│   └── web/                  index.html · app.js · board-state.js · styles.css
+├── simulator/
+│   ├── firmware/             startup.s · linker.ld (TM4C123GH6PM)
+│   └── renode/
+│       ├── platforms/        tm4c123gh6pm.repl
+│       └── peripherals/      TM4C123SystemControl.cs · TM4C123GPIO.cs ·
+│                             TM4C123UnimplementedPeripheral.cs · TM4C123EventSink.cs
+├── examples/<id>/            main.c + example.json (A–E)
+├── tests/                    *.test.js (node:test) · helpers.js · fixtures/firmware/
+├── e2e/                      Playwright browser tests
+├── scripts/                  setup-tools.mjs · lib/tools.mjs
+├── tools.lock.json           pinned GCC + Renode with SHA-256
+└── .github/workflows/ci.yml  Linux CI
+```
+
+The sections below describe the original planning-stage layout and the
+proposed long-term structure.
+
+---
+
+## Planning-Stage Repository (historical)
 
 The repository is currently focused on:
 

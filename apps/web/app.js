@@ -1,0 +1,1518 @@
+/*
+ * TM4C123 Simulator — browser application controller.
+ *
+ * Responsibilities (each in its own module):
+ *   - simulation session: compile/run/reset via the local orchestrator,
+ *     event stream from Renode                               (this file)
+ *   - board/pin projection of simulator events               (board-state.js)
+ *   - circuit editing, undo/redo, diagram.json               (workspace/*.js)
+ *   - logic-level evaluation of wired external parts          (workspace/netlist.js)
+ *
+ * The browser never decides hardware state: LEDs, pin values, and timing
+ * come from Renode events. External parts only translate wiring into pin
+ * drives that are applied through the real GPIO model.
+ */
+import { applyEvent, createBoardState, describePin, formatVirtualTime } from "./board-state.js";
+import { BOARD_PART } from "./board/launchpad.js";
+import { CATALOG, LIBRARY } from "./workspace/parts.js";
+import { Workspace } from "./workspace/canvas.js";
+import { History, WIRE_COLORS, commands, createDiagram, findPart, parseDiagram, serializeDiagram, splitEndpoint } from "./workspace/diagram.js";
+import { evaluateCircuit } from "./workspace/netlist.js";
+import { LcdSimulation, bindLcd } from "./workspace/lcd.js";
+import { describeAnalogInput, evaluateAnalog } from "./workspace/analog.js";
+import { DraftStore, browserStorage, compareWork } from "./draft-store.js";
+
+const CAPABILITIES = [
+  { name: "ARM GCC build → Cortex-M4 ELF", status: "verified" },
+  { name: "Cortex-M4 execution (Renode)", status: "verified" },
+  { name: "SYSCTL clock gating (GPIO, timers, ADC)", status: "verified" },
+  { name: "GPIO A–F: DIR / DEN / masked DATA", status: "verified" },
+  { name: "Pull-up / pull-down, open drain", status: "verified" },
+  { name: "PF0 GPIOLOCK / GPIOCR commit", status: "verified" },
+  { name: "GPIO edge interrupts → NVIC → ISR", status: "verified" },
+  { name: "Bus fault: unclocked / reserved access", status: "verified" },
+  { name: "On-board RGB LED, SW1/SW2", status: "verified" },
+  { name: "Wired external LED / resistor / pushbutton (logic level)", status: "verified" },
+  { name: "PLL / RCC / RCC2 system clock (16–80 MHz)", status: "verified" },
+  { name: "SysTick interrupt and COUNTFLAG at the core clock", status: "verified" },
+  { name: "GPTM 16/32-bit periodic timers + IRQs", status: "verified" },
+  { name: "CMSIS-style TM4C123.h + SystemInit (50 MHz)", status: "verified" },
+  { name: "ADC0/ADC1 SS3, temperature sensor, potentiometer", status: "verified" },
+  { name: "LCD1602 (HD44780) in the workspace", status: "verified" },
+  { name: "UART0 / serial terminal", status: "missing" },
+  { name: "Logic analyzer capture", status: "missing" },
+];
+
+const STATUS_LABELS = {
+  verified: "Implemented & tested",
+  unverified: "Engine-provided, not yet verified",
+  missing: "Not implemented yet",
+};
+
+/** GPIOs whose live state is shown when a board component is selected. */
+const COMPONENT_PINS = {
+  D1: ["PF1", "PF2", "PF3"],
+  SW1: ["PF4"],
+  SW2: ["PF0"],
+  R9: ["PD0", "PB6"],
+  R10: ["PD1", "PB7"],
+};
+
+const $ = (selector) => document.querySelector(selector);
+
+const elements = {
+  exampleSelect: $("#exampleSelect"),
+  exampleSummary: $("#exampleSummary"),
+  compileButton: $("#compileButton"),
+  runButton: $("#runButton"),
+  pauseButton: $("#pauseButton"),
+  resetButton: $("#resetButton"),
+  stopButton: $("#stopButton"),
+  editor: $("#codeEditor"),
+  lineNumbers: $("#lineNumbers"),
+  cursorPosition: $("#cursorPosition"),
+  editorStatus: $("#editorStatus"),
+  draftStatus: $("#draftStatus"),
+  simulationStatus: $("#simulationStatus"),
+  stateIndicator: $("#stateIndicator"),
+  virtualTime: $("#virtualTime"),
+  footerStatus: $("#footerStatus"),
+  toolchainInfo: $("#toolchainInfo"),
+  canvas: $("#circuitCanvas"),
+  tooltip: $("#pinTooltip"),
+  faultBadge: $("#faultBadge"),
+  pinTable: $("#pinTable"),
+  elfInfo: $("#elfInfo"),
+  capabilityList: $("#capabilityList"),
+  selectionPanel: $("#selectionPanel"),
+  zoomInButton: $("#zoomInButton"),
+  zoomOutButton: $("#zoomOutButton"),
+  fitButton: $("#fitButton"),
+  zoomValue: $("#zoomValue"),
+  gridToggle: $("#gridToggle"),
+  snapToggle: $("#snapToggle"),
+  undoButton: $("#undoButton"),
+  redoButton: $("#redoButton"),
+  rotateButton: $("#rotateButton"),
+  duplicateButton: $("#duplicateButton"),
+  deleteButton: $("#deleteButton"),
+  addPartButton: $("#addPartButton"),
+  partLibrary: $("#partLibrary"),
+  saveDiagramButton: $("#saveDiagramButton"),
+  loadDiagramButton: $("#loadDiagramButton"),
+  loadDiagramInput: $("#loadDiagramInput"),
+  workspaceMessage: $("#workspaceMessage"),
+  consoleTabs: document.querySelectorAll(".console-tab"),
+  consoleOutput: $("#consoleOutput"),
+  problemsOutput: $("#problemsOutput"),
+  eventsOutput: $("#eventsOutput"),
+  problemCount: $("#problemCount"),
+  eventCount: $("#eventCount"),
+  clearConsoleButton: $("#clearConsoleButton"),
+};
+
+/** UI state. `session.state` mirrors the orchestrator: none | starting | paused | running | stopped | error. */
+const state = {
+  examples: [],
+  build: null,
+  busy: null,
+  session: { id: null, state: "none", stream: null },
+  board: createBoardState(),
+  realTimeFactor: null,
+  eventCount: 0,
+  /** External pushbuttons and on-board switches currently held. */
+  pressed: new Set(),
+  /** Last evaluation of the wired circuit. */
+  circuit: { leds: {}, boardInputs: {}, errors: [] },
+  /** External drives currently applied to the simulator, by GPIO name. */
+  appliedDrives: new Map(),
+  /** HD44780 simulations for the LCD1602 parts, by part id (live sessions only). */
+  lcds: new Map(),
+  /** Last analog evaluation (potentiometers) and the voltages applied to the simulator. */
+  analog: { pots: {}, inputs: {}, errors: [], notes: [] },
+  appliedAnalog: new Map(),
+  /** Die temperature for the ADC's internal sensor (°C). */
+  dieCelsius: 25,
+  /**
+   * The example the work started from: its id, unedited source, and circuit
+   * (serialized). Student edits are whatever differs from it.
+   */
+  baseline: { exampleId: null, source: "", diagramText: serializeDiagram(createDiagram({ author: "" })) },
+  /**
+   * The current circuit as loaded from a diagram file (serialized), so loading another file over it does not
+   * ask; null once any other load (example switch, restore) replaces the circuit.
+   */
+  importedCircuit: null,
+};
+
+// Drafts of the student's work in this browser (see draft-store.js).
+const drafts = new DraftStore(browserStorage());
+const restored = drafts.read((text) => parseDiagram(text, CATALOG));
+const history = new History(restored.diagram ?? createDiagram({ author: "" }));
+// Analog sources of the restored circuit, for the pin table before anything runs (nothing is sent).
+state.analog = evaluateAnalog(history.diagram, CATALOG);
+
+// ---------------------------------------------------------------------------
+// Console
+// ---------------------------------------------------------------------------
+
+function log(message, level = "info", virtualTimeNs) {
+  const line = document.createElement("div");
+  line.className = "console-line";
+  const time = document.createElement("span");
+  time.className = "console-time";
+  time.textContent = virtualTimeNs === undefined ? "" : formatVirtualTime(virtualTimeNs);
+  const badge = document.createElement("span");
+  badge.className = `console-level ${level}`;
+  badge.textContent = level.toUpperCase();
+  const text = document.createElement("span");
+  text.textContent = message;
+  line.append(time, badge, text);
+  elements.consoleOutput.append(line);
+  while (elements.consoleOutput.childElementCount > 1_000) {
+    elements.consoleOutput.firstElementChild.remove();
+  }
+  elements.consoleOutput.scrollTop = elements.consoleOutput.scrollHeight;
+}
+
+function recordEvent(message) {
+  state.eventCount += 1;
+  elements.eventCount.textContent = String(state.eventCount);
+  const line = document.createElement("div");
+  line.className = "event-line";
+  line.textContent = JSON.stringify(message);
+  elements.eventsOutput.append(line);
+  while (elements.eventsOutput.childElementCount > 2_000) {
+    elements.eventsOutput.firstElementChild.remove();
+  }
+}
+
+function showProblems(diagnostics, errorText) {
+  elements.problemsOutput.replaceChildren();
+  const problems = diagnostics.filter((d) => d.severity !== "note");
+  elements.problemCount.textContent = String(problems.length + (errorText && !problems.length ? 1 : 0));
+  for (const diagnostic of problems) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = `problem-row ${diagnostic.severity}`;
+    row.textContent = `${diagnostic.file}:${diagnostic.line}:${diagnostic.column}  ${diagnostic.severity}: ${diagnostic.message}`;
+    row.addEventListener("click", () => goToLine(diagnostic.line, diagnostic.column));
+    elements.problemsOutput.append(row);
+  }
+  if (errorText && !problems.length) {
+    const row = document.createElement("div");
+    row.className = "problem-row error";
+    row.textContent = errorText;
+    elements.problemsOutput.append(row);
+  }
+}
+
+function selectConsoleTab(name) {
+  elements.consoleTabs.forEach((tab) => {
+    const active = tab.dataset.console === name;
+    tab.classList.toggle("active", active);
+    tab.setAttribute("aria-selected", String(active));
+  });
+  elements.consoleOutput.hidden = name !== "console";
+  elements.problemsOutput.hidden = name !== "problems";
+  elements.eventsOutput.hidden = name !== "events";
+}
+
+function workspaceMessage(text, level = "info") {
+  elements.workspaceMessage.textContent = text;
+  elements.workspaceMessage.dataset.level = level;
+}
+
+// ---------------------------------------------------------------------------
+// Editor
+// ---------------------------------------------------------------------------
+
+function updateLineNumbers() {
+  const count = elements.editor.value.split("\n").length;
+  elements.lineNumbers.textContent = Array.from({ length: count }, (_, i) => i + 1).join("\n");
+}
+
+function updateCursorPosition() {
+  const before = elements.editor.value.slice(0, elements.editor.selectionStart).split("\n");
+  elements.cursorPosition.textContent = `Ln ${before.length}, Col ${before.at(-1).length + 1}`;
+}
+
+function goToLine(line, column = 1) {
+  const lines = elements.editor.value.split("\n");
+  const offset = lines.slice(0, line - 1).reduce((sum, text) => sum + text.length + 1, 0) + column - 1;
+  elements.editor.focus();
+  elements.editor.setSelectionRange(offset, offset);
+  const lineHeight = parseFloat(getComputedStyle(elements.editor).lineHeight) || 20;
+  elements.editor.scrollTop = Math.max(0, (line - 5) * lineHeight);
+  updateCursorPosition();
+}
+
+function buildIsCurrent() {
+  return state.build !== null && state.build.source === elements.editor.value;
+}
+
+function updateEditorStatus() {
+  if (state.busy === "compiling") {
+    elements.editorStatus.textContent = "Compiling…";
+  } else if (buildIsCurrent()) {
+    elements.editorStatus.textContent = "Built";
+  } else if (state.build) {
+    elements.editorStatus.textContent = "Changed since build";
+  } else {
+    elements.editorStatus.textContent = "Not built";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Workspace integration
+// ---------------------------------------------------------------------------
+
+function simulationLive() {
+  return state.session.state === "running" || state.session.state === "paused";
+}
+
+/** Pin states keyed by GPIO name, only while a simulation is live. */
+function livePinStates() {
+  return simulationLive() ? state.board.pins : {};
+}
+
+const workspace = new Workspace(elements.canvas, elements.tooltip, {
+  catalog: CATALOG,
+  history,
+  getPartState(part) {
+    const definition = CATALOG[part.type];
+    if (definition.kind === "board") {
+      return {
+        live: simulationLive(),
+        pins: livePinStates(),
+        pressed: state.pressed,
+        fault: simulationLive() ? state.board.fault : null,
+      };
+    }
+    if (definition.kind === "led") {
+      return { on: simulationLive() && state.circuit.leds[part.id]?.on === true };
+    }
+    if (definition.kind === "pushbutton") {
+      return { pressed: state.pressed.has(part.id) };
+    }
+    if (definition.kind === "lcd1602") {
+      const lcd = simulationLive() ? state.lcds.get(part.id) : null;
+      return { lcd: lcd ? lcd.snapshot() : null };
+    }
+    return {};
+  },
+  getPinInfo(part, pinName) {
+    if (!part) {
+      return null;
+    }
+    const definition = CATALOG[part.type];
+    if (definition.kind === "board") {
+      const info = BOARD_PART.pinInfo(pinName);
+      if (info.gpio) {
+        const live = simulationLive() ? describePin(state.board, info.gpio) : null;
+        const analog = analogInputOf(info.gpio);
+        if (analog) {
+          info.lines.push(analog.tooltip);
+        }
+        const digital = analog ? "Digital (GPIO model)" : "Simulation";
+        info.lines.push(live ? `${digital}: ${live.label} (${live.detail})` : "Simulation: not running");
+      }
+      return info;
+    }
+    const pin = definition.pins.find((p) => p.name === pinName);
+    const lines = [definition.status === "simulated" ? "Logic-level model" : "Editor only — no electrical model yet"];
+    if (definition.kind === "potentiometer") {
+      const pot = state.analog.pots[part.id];
+      lines[0] = "Ideal voltage divider (analog)";
+      lines.push(pot ? `Wiper: ${pot.reason}` : "Wiper: not evaluated");
+      lines.push(pot?.pins.length ? `Drives ADC input ${pot.pins.join(", ")}` : "SIG is not wired to an ADC pin");
+    }
+    if (definition.kind === "led" && simulationLive()) {
+      const led = state.circuit.leds[part.id];
+      lines.push(led ? `LED ${led.on ? "ON" : "off"}: ${led.reason}` : "LED off");
+    }
+    if (definition.kind === "lcd1602") {
+      lines[0] = "HD44780 model driven by firmware GPIO writes";
+      const binding = bindLcd(history.diagram, CATALOG, part.id);
+      lines.push(`Interface: ${binding.interface}${binding.powered ? "" : " (not powered)"}`);
+      const lcd = simulationLive() ? state.lcds.get(part.id)?.snapshot() : null;
+      if (lcd) {
+        lines.push(`${lcd.mode.bits}-bit, ${lcd.mode.lines}-line, display ${lcd.displayOn ? "on" : "off"}, ${lcd.instructions} transfers`);
+      }
+      lines.push(...binding.errors, ...binding.notes);
+    }
+    return { kind: "part", title: `${part.id} · ${pin?.label ?? pinName}`, lines };
+  },
+  isInteractive(part, node) {
+    if (!simulationLive()) {
+      return false;
+    }
+    const kind = CATALOG[part.type].kind;
+    return kind === "pushbutton" || (kind === "board" && Boolean(node?.dataset.input));
+  },
+  onPress(part, pressed, target) {
+    const kind = CATALOG[part.type].kind;
+    const key = kind === "board" ? target : part.id;
+    if (pressed) {
+      state.pressed.add(key);
+    } else {
+      state.pressed.delete(key);
+    }
+    if (kind === "board" && target === "RESET") {
+      // Releasing the board's RESET switch resets the MCU.
+      if (!pressed) {
+        control("reset");
+      }
+    } else if (kind === "board") {
+      sendInput(target, pressed);
+    } else {
+      log(`${part.id} ${pressed ? "pressed" : "released"}`, "info", state.board.virtualTimeNs);
+      reevaluateCircuit();
+    }
+    workspace.refreshStates();
+  },
+});
+
+workspace.addEventListener("change", (event) => {
+  saveCircuitDraft();
+  syncLcds();
+  reevaluateCircuit();
+  renderToolbar();
+  renderPinTable();
+  workspaceMessage(event.detail.label);
+});
+workspace.addEventListener("clipboard", (event) => {
+  const { action, parts, wires, relocated, crowded } = event.detail;
+  const what = `${parts} part${parts === 1 ? "" : "s"}${wires ? ` and ${wires} wire${wires === 1 ? "" : "s"} between them` : ""}`;
+  if (relocated) {
+    // Short enough for one line at 1024 px.
+    const verb = { add: "Added", duplicate: "Duplicated" }[action] ?? "Pasted";
+    workspaceMessage(crowded ? `${verb} into view; no free space, so it overlaps.` : `${verb} into free space in view.`);
+    return;
+  }
+  workspaceMessage(`${action === "cut" ? "Cut" : "Copied"} ${what}. Ctrl+V pastes.`);
+});
+workspace.addEventListener("select", () => {
+  renderToolbar();
+  renderSelectionPanel();
+});
+workspace.addEventListener("view", () => {
+  elements.zoomValue.textContent = `${Math.round(workspace.zoomLevel * 100)}%`;
+  elements.gridToggle.setAttribute("aria-pressed", String(workspace.showGrid));
+  elements.snapToggle.setAttribute("aria-pressed", String(workspace.snapToGrid));
+});
+workspace.addEventListener("wire", (event) => {
+  const { detail } = event;
+  if (detail.state === "started") {
+    workspaceMessage(`Wiring from ${detail.from} — click a target pin (Esc cancels).`);
+  } else if (detail.state === "invalid") {
+    workspaceMessage(detail.error, "error");
+  } else if (detail.state === "created") {
+    workspaceMessage(`Connected ${detail.connection[0]} → ${detail.connection[1]}.`);
+  } else if (detail.state === "cancelled") {
+    workspaceMessage(detail.message);
+  }
+});
+
+/**
+ * Re-evaluates the wired circuit with the latest simulator pin states and
+ * pushes any changed external drives to the GPIO model.
+ */
+function reevaluateCircuit() {
+  state.circuit = evaluateCircuit(history.diagram, CATALOG, livePinStates(), { pressed: state.pressed });
+  state.analog = evaluateAnalog(history.diagram, CATALOG);
+  const errors = [...state.circuit.errors, ...state.analog.errors];
+  if (errors.length) {
+    workspaceMessage(errors[0], "error");
+  }
+  syncExternalDrives();
+  syncAnalogInputs();
+}
+
+/** Pushes potentiometer wiper voltages to the ADC model (only changes). */
+function syncAnalogInputs() {
+  if (!simulationLive() || !state.session.id) {
+    return;
+  }
+  for (const [gpio, volts] of Object.entries(state.analog.inputs)) {
+    if (state.appliedAnalog.get(gpio) !== volts) {
+      state.appliedAnalog.set(gpio, volts);
+      sendAnalog({ analog: gpio, volts });
+    }
+  }
+  for (const gpio of [...state.appliedAnalog.keys()]) {
+    if (state.analog.inputs[gpio] === undefined) {
+      state.appliedAnalog.delete(gpio);
+      sendAnalog({ analog: gpio, volts: null });
+    }
+  }
+}
+
+async function sendAnalog(body) {
+  if (!state.session.id) {
+    return;
+  }
+  try {
+    await api(`/api/sessions/${state.session.id}/input`, { body });
+  } catch (error) {
+    log(`Analog input ${JSON.stringify(body)} failed: ${error.message}`, "error");
+  }
+}
+
+/**
+ * Keeps one HD44780 simulation per LCD1602 part. Rewiring during a run
+ * re-binds the pins but keeps the controller state; a newly added LCD powers
+ * up at the current virtual time.
+ */
+function syncLcds({ restart = false } = {}) {
+  if (restart) {
+    state.lcds.clear();
+  }
+  const ids = new Set();
+  for (const part of history.diagram.parts) {
+    if (CATALOG[part.type]?.kind !== "lcd1602") {
+      continue;
+    }
+    ids.add(part.id);
+    const binding = bindLcd(history.diagram, CATALOG, part.id);
+    const existing = state.lcds.get(part.id);
+    if (existing) {
+      existing.binding = binding;
+    } else {
+      const powerOnNs = restart ? 0n : BigInt(state.board.virtualTimeNs ?? 0);
+      state.lcds.set(part.id, Object.assign(new LcdSimulation(binding, { powerOnNs }), { reportedWarnings: 0 }));
+    }
+  }
+  for (const id of [...state.lcds.keys()]) {
+    if (!ids.has(id)) {
+      state.lcds.delete(id);
+    }
+  }
+}
+
+function feedLcds(event) {
+  for (const [id, lcd] of state.lcds) {
+    lcd.handleEvent(event);
+    const { warnings } = lcd.controller;
+    while (lcd.reportedWarnings < warnings.length) {
+      const warning = warnings[lcd.reportedWarnings++];
+      log(`${id}: ${warning.detail}`, "warning", warning.virtualTimeNs);
+    }
+  }
+}
+
+function syncExternalDrives() {
+  if (!simulationLive() || !state.session.id) {
+    return;
+  }
+  const wanted = new Map();
+  for (const [gpio, input] of Object.entries(state.circuit.boardInputs)) {
+    if (input.level !== null) {
+      wanted.set(gpio, input.level ? "high" : "low");
+    }
+  }
+  for (const [gpio, level] of wanted) {
+    if (state.appliedDrives.get(gpio) !== level) {
+      state.appliedDrives.set(gpio, level);
+      drivePin(gpio, level);
+    }
+  }
+  for (const gpio of [...state.appliedDrives.keys()]) {
+    if (!wanted.has(gpio)) {
+      state.appliedDrives.delete(gpio);
+      drivePin(gpio, "release");
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Drafts of the student's work
+// ---------------------------------------------------------------------------
+
+const DRAFT_STATUS = {
+  saved: {
+    text: "Saved in this browser",
+    title: "Your main.c and circuit are kept in this browser's local storage and restored when the page reloads. " +
+      "This is not a backup: clearing site data or using another browser loses them. Save downloads the circuit as diagram.json.",
+  },
+  failed: {
+    text: "Not saved: browser storage full or blocked",
+    title: "Your latest changes are not stored and will be lost on reload. Keep a copy: Save downloads the circuit " +
+      "(diagram.json); copy main.c into a file.",
+  },
+  unavailable: {
+    text: "Not saved: browser storage unavailable",
+    title: "This browser does not allow local storage here, so your work will be lost on reload. Keep a copy: Save " +
+      "downloads the circuit (diagram.json); copy main.c into a file.",
+  },
+  idle: { text: "", title: "" },
+};
+
+function currentWork() {
+  return { source: elements.editor.value, diagramText: serializeDiagram(history.diagram) };
+}
+
+function saveCircuitDraft() {
+  drafts.saveDiagram(serializeDiagram(history.diagram));
+  renderDraftStatus();
+}
+
+function saveSourceDraft() {
+  const edited = elements.editor.value !== state.baseline.source;
+  // Before the examples arrive, keep the restored draft's example.
+  const exampleId = state.baseline.exampleId ?? restored.source?.exampleId ?? null;
+  drafts.saveSource({ exampleId, source: edited ? elements.editor.value : null });
+  renderDraftStatus();
+}
+
+let draftWarningShown = false;
+function renderDraftStatus() {
+  const status = drafts.status;
+  const { text, title } = DRAFT_STATUS[status];
+  elements.draftStatus.textContent = text;
+  elements.draftStatus.title = title;
+  elements.draftStatus.dataset.status = status;
+  if ((status === "failed" || status === "unavailable") && !draftWarningShown) {
+    draftWarningShown = true;
+    const reason = status === "failed" ? `Browser storage refused the draft (${drafts.lastError?.name ?? "error"})` : "Browser storage is unavailable";
+    log(`${reason}: your code and circuit are not saved and will be lost on reload. Save downloads the circuit; copy main.c into a file.`, "warning");
+  } else if (status === "saved") {
+    draftWarningShown = false;
+  }
+}
+
+function loadDiagramText(text, origin) {
+  const { diagram, errors } = parseDiagram(text, CATALOG);
+  if (!diagram) {
+    workspaceMessage(`Could not load ${origin}: ${errors[0]}`, "error");
+    log(`Diagram ${origin} rejected: ${errors.join(" ")}`, "error");
+    return false;
+  }
+  history.reset(diagram);
+  // A replaced circuit starts a new context: only importDiagramFile marks it as a loaded file again.
+  state.importedCircuit = null;
+  workspace.select(null);
+  workspace.render();
+  workspace.fit();
+  saveCircuitDraft();
+  reevaluateCircuit();
+  renderToolbar();
+  renderPinTable();
+  workspaceMessage(`Loaded ${origin}.`);
+  return true;
+}
+
+/**
+ * Whether replacing the circuit would lose the student's work: it differs
+ * from the example it started from and from the last diagram file loaded.
+ * A bare LaunchPad with nothing to undo has nothing to lose.
+ */
+function circuitAtRisk() {
+  const current = serializeDiagram(history.diagram);
+  if (current === state.baseline.diagramText || current === state.importedCircuit) {
+    return false;
+  }
+  const bare = history.diagram.connections.length === 0
+    && history.diagram.parts.every((part) => CATALOG[part.type].kind === "board");
+  return !bare || history.canUndo;
+}
+
+/**
+ * A diagram file chosen with Load. Invalid files are rejected without
+ * touching anything; a valid file that would replace circuit work is
+ * confirmed first, before the circuit, its undo history, or its draft
+ * change. The firmware source is never affected.
+ */
+function importDiagramFile(text, name) {
+  const { diagram } = parseDiagram(text, CATALOG);
+  if (!diagram) {
+    loadDiagramText(text, name); // reports the error; the circuit stays
+    return;
+  }
+  if (serializeDiagram(diagram) === serializeDiagram(history.diagram)) {
+    workspaceMessage(`${name} matches the current circuit; nothing changed.`);
+    return;
+  }
+  if (circuitAtRisk() && !window.confirm(
+    `Load "${name}"?\n\nThis replaces your current circuit and clears its undo history. Your main.c is not changed.` +
+      "\n\nChoose Cancel to keep your circuit (Save downloads it as diagram.json first).",
+  )) {
+    workspaceMessage(`Kept your circuit; ${name} was not loaded.`);
+    return;
+  }
+  if (loadDiagramText(text, name)) {
+    state.importedCircuit = serializeDiagram(history.diagram);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Rendering
+// ---------------------------------------------------------------------------
+
+const SESSION_LABELS = {
+  none: "No firmware running",
+  starting: "Starting Renode…",
+  paused: "Halted",
+  running: "Running",
+  stopped: "Stopped",
+  error: "Error",
+};
+
+function render() {
+  const sessionState = state.session.state;
+  const busy = state.busy !== null;
+  const live = simulationLive();
+
+  elements.compileButton.disabled = busy;
+  elements.runButton.disabled = busy || sessionState === "running" || sessionState === "starting";
+  elements.runButton.textContent = sessionState === "paused" ? "▶ Resume" : "▶ Run";
+  elements.pauseButton.disabled = sessionState !== "running";
+  elements.resetButton.disabled = !live;
+  elements.stopButton.disabled = !(live || sessionState === "starting");
+  elements.exampleSelect.disabled = busy;
+  elements.canvas.classList.toggle("is-live", live);
+
+  const label = state.busy === "compiling" ? "Compiling…" : SESSION_LABELS[sessionState];
+  elements.simulationStatus.textContent = label;
+  elements.footerStatus.textContent = label;
+  elements.stateIndicator.className = `state-indicator ${
+    sessionState === "running" ? "running" : state.busy || sessionState === "starting" ? "compiling" : sessionState === "error" ? "error" : "stopped"
+  }`;
+
+  elements.virtualTime.textContent = live || sessionState === "stopped"
+    ? formatVirtualTime(state.board.virtualTimeNs) + (state.realTimeFactor ? ` (${state.realTimeFactor.toFixed(2)}× real time)` : "")
+    : "—";
+
+  const fault = live ? state.board.fault : null;
+  elements.faultBadge.hidden = !fault;
+  if (fault) {
+    elements.faultBadge.textContent = `${fault.exception}${fault.bfar ? ` · BFAR ${fault.bfar}` : ""}`;
+  }
+
+  workspace.refreshStates();
+  renderPinTable();
+  updateEditorStatus();
+}
+
+function renderToolbar() {
+  const selection = workspace.selection;
+  const part = selection?.kind === "part" ? findPart(history.diagram, selection.id) : null;
+  const editable = part && CATALOG[part.type].kind !== "board";
+  const group = selection?.kind === "group";
+  elements.undoButton.disabled = !history.canUndo;
+  elements.redoButton.disabled = !history.canRedo;
+  elements.rotateButton.disabled = !editable;
+  elements.duplicateButton.disabled = !(editable || (group && selection.parts.length > 0));
+  elements.deleteButton.disabled = !(editable || selection?.kind === "wire" || group);
+}
+
+function componentLiveText(id) {
+  const livePins = COMPONENT_PINS[id] ?? [];
+  return simulationLive()
+    ? livePins.map((gpio) => `${gpio}: ${describePin(state.board, gpio).label}`).join(" · ")
+    : `Pins ${livePins.join(", ")} — run the simulation to see live values`;
+}
+
+/**
+ * Updates only the live pin values of a selected board component. The panel
+ * is not rebuilt, so its inputs (e.g. the die temperature) keep their value
+ * and focus while simulator events stream in.
+ */
+function refreshSelectionLive() {
+  const selection = workspace.selection;
+  const live = elements.selectionPanel.querySelector(".component-live");
+  if (selection?.kind === "component" && live) {
+    live.textContent = componentLiveText(selection.id);
+  }
+}
+
+function renderSelectionPanel() {
+  const panel = elements.selectionPanel;
+  panel.replaceChildren();
+  const selection = workspace.selection;
+  if (!selection) {
+    panel.textContent = "Select a part or wire. Click a pin to start a wire. Shift+click or Shift+drag selects several parts.";
+    return;
+  }
+  if (selection.kind === "group") {
+    const title = document.createElement("p");
+    const strong = document.createElement("strong");
+    const parts = selection.parts.length;
+    const wires = selection.wires.length;
+    strong.textContent = [parts && `${parts} part${parts === 1 ? "" : "s"}`, wires && `${wires} wire${wires === 1 ? "" : "s"}`].filter(Boolean).join(" and ") + " selected";
+    title.append(strong);
+    const list = document.createElement("p");
+    list.className = "muted";
+    list.textContent = selection.parts.join(", ");
+    const hint = document.createElement("p");
+    hint.className = "muted";
+    hint.id = "groupHint";
+    hint.textContent = "Drag a selected part to move them together · Arrows nudge 0.1 in (Shift: 1 in) · Ctrl+C / Ctrl+X / Ctrl+V · Ctrl+D duplicates · Delete removes · Shift+click adds or removes";
+    panel.append(title, ...(parts ? [list] : []), hint);
+    return;
+  }
+  if (selection.kind === "component") {
+    const info = BOARD_PART.components[selection.id];
+    if (!info) {
+      return;
+    }
+    const title = document.createElement("p");
+    title.innerHTML = `<strong></strong> <span class="status-chip"></span>`;
+    title.querySelector("strong").textContent = info.title;
+    const chip = title.querySelector(".status-chip");
+    chip.dataset.status = info.status === "visual" ? "editor" : info.status === "provisional" ? "provisional" : "simulated";
+    chip.textContent = { simulated: "simulated", visual: "visual only", provisional: "simulated · position provisional" }[info.status];
+    panel.append(title);
+    for (const line of info.lines) {
+      const row = document.createElement("p");
+      row.className = "muted";
+      row.textContent = line;
+      panel.append(row);
+    }
+    if (selection.id === "U1") {
+      panel.append(temperatureControl());
+    }
+    if ((COMPONENT_PINS[selection.id] ?? []).length) {
+      const live = document.createElement("p");
+      live.className = "component-live";
+      live.textContent = componentLiveText(selection.id);
+      panel.append(live);
+    }
+    return;
+  }
+  if (selection.kind === "wire") {
+    const connection = history.diagram.connections[selection.index];
+    if (!connection) {
+      return;
+    }
+    const title = document.createElement("p");
+    title.textContent = `Wire ${connection[0]} → ${connection[1]}`;
+    const label = document.createElement("label");
+    label.textContent = "Color ";
+    const select = document.createElement("select");
+    select.id = "wireColorSelect";
+    for (const color of WIRE_COLORS) {
+      const option = document.createElement("option");
+      option.value = color;
+      option.textContent = color;
+      option.selected = color === connection[2];
+      select.append(option);
+    }
+    select.addEventListener("change", () => workspace.setWireColor(select.value));
+    label.append(select);
+    const hint = document.createElement("p");
+    hint.className = "muted";
+    hint.textContent = "Drag any segment to reroute (the ends stay on their pins). Delete removes the wire.";
+    panel.append(title, label, hint);
+    return;
+  }
+  const part = findPart(history.diagram, selection.id);
+  if (!part) {
+    return;
+  }
+  const definition = CATALOG[part.type];
+  const title = document.createElement("p");
+  title.innerHTML = `<strong></strong> <span class="status-chip"></span>`;
+  title.querySelector("strong").textContent = `${part.id} · ${definition.title}`;
+  const chip = title.querySelector(".status-chip");
+  const MODEL_LABELS = { board: "simulated (Renode)", potentiometer: "simulated (analog)", lcd1602: "simulated (HD44780)" };
+  chip.textContent = MODEL_LABELS[definition.kind] ?? (definition.status === "simulated" ? "simulated (logic level)" : "editor only");
+  chip.dataset.status = definition.kind === "board" ? "simulated" : definition.status;
+  const description = document.createElement("p");
+  description.className = "muted";
+  description.textContent = definition.description ?? "";
+  panel.append(title, description);
+
+  if (definition.kind === "led") {
+    panel.append(attrSelect(part, "color", ["red", "green", "blue", "yellow", "white", "orange"]));
+    const led = state.circuit.leds[part.id];
+    if (led?.warning) {
+      const warning = document.createElement("p");
+      warning.className = "warning";
+      warning.textContent = led.warning;
+      panel.append(warning);
+    }
+  } else if (definition.kind === "resistor") {
+    panel.append(attrSelect(part, "value", ["220", "330", "470", "1k", "4.7k", "10k"]));
+  } else if (definition.kind === "potentiometer") {
+    panel.append(potentiometerControl(part));
+  }
+}
+
+/** Knob position slider; each released change is one undoable edit. */
+function potentiometerControl(part) {
+  const wrapper = document.createElement("div");
+  const label = document.createElement("label");
+  label.textContent = "Position ";
+  const slider = document.createElement("input");
+  slider.type = "range";
+  slider.id = "potPosition";
+  slider.min = "0";
+  slider.max = "100";
+  slider.step = "1";
+  slider.value = String(part.attrs.position ?? 50);
+  slider.setAttribute("aria-label", `${part.id} knob position (percent)`);
+  const readout = document.createElement("p");
+  readout.className = "component-live";
+  readout.id = "potReadout";
+  const show = () => {
+    const pot = state.analog.pots[part.id];
+    readout.textContent = pot ? `Wiper: ${pot.reason}${pot.pins.length ? ` → ${pot.pins.join(", ")}` : ""}` : "";
+  };
+  slider.addEventListener("change", () => {
+    const current = findPart(history.diagram, part.id);
+    workspace.execute(commands.setAttr(part.id, "position", current.attrs.position ?? 50, Number(slider.value)));
+    show();
+  });
+  label.append(slider);
+  wrapper.append(label, readout);
+  show();
+  return wrapper;
+}
+
+/** Die temperature seen by the ADC's internal temperature sensor. */
+function temperatureControl() {
+  const label = document.createElement("label");
+  label.textContent = "Die temperature (°C) ";
+  const input = document.createElement("input");
+  input.type = "number";
+  input.id = "dieTemperature";
+  input.min = "-40";
+  input.max = "150";
+  input.step = "0.5";
+  input.value = String(state.dieCelsius);
+  input.addEventListener("change", () => {
+    const celsius = Number(input.value);
+    if (!Number.isFinite(celsius) || celsius < -40 || celsius > 150) {
+      input.value = String(state.dieCelsius);
+      return;
+    }
+    state.dieCelsius = celsius;
+    if (simulationLive()) {
+      sendAnalog({ temperature: celsius });
+    }
+  });
+  label.append(input);
+  return label;
+}
+
+function attrSelect(part, key, values) {
+  const label = document.createElement("label");
+  label.textContent = `${key[0].toUpperCase()}${key.slice(1)} `;
+  const select = document.createElement("select");
+  select.dataset.attr = key;
+  for (const value of values) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    option.selected = value === part.attrs[key];
+    select.append(option);
+  }
+  select.addEventListener("change", () => {
+    workspace.execute(commands.setAttr(part.id, key, part.attrs[key], select.value));
+    renderSelectionPanel();
+  });
+  label.append(select);
+  return label;
+}
+
+/** Pin table: on-board pins plus every board GPIO that is wired in the diagram. */
+/** The analog source of an ADC-capable pin (see describeAnalogInput), or null. */
+function analogInputOf(gpio) {
+  const volts = state.analog.inputs[gpio];
+  const applied = simulationLive() && volts !== undefined && state.appliedAnalog.get(gpio) === volts;
+  return describeAnalogInput(gpio, state.analog, { applied });
+}
+
+function renderPinTable() {
+  const live = simulationLive();
+  const gpios = new Map([["PF0", "SW2"], ["PF1", "Red LED"], ["PF2", "Blue LED"], ["PF3", "Green LED"], ["PF4", "SW1"]]);
+  for (const [from, to] of history.diagram.connections) {
+    for (const endpoint of [from, to]) {
+      const parsed = splitEndpoint(endpoint);
+      const part = parsed && findPart(history.diagram, parsed.partId);
+      if (part && CATALOG[part.type].kind === "board") {
+        const role = BOARD_PART.role(parsed.pin);
+        if (role?.kind === "gpio" && !gpios.has(role.gpio)) {
+          gpios.set(role.gpio, `${parsed.pin} (wired)`);
+        }
+      }
+    }
+  }
+  const rows = [...gpios].map(([gpio, role]) => {
+    // An ADC input wired to a potentiometer shows its analog source, not the digital buffer state.
+    const analog = analogInputOf(gpio);
+    const { label, detail } = analog
+      ? { label: analog.level, detail: analog.detail }
+      : live ? describePin(state.board, gpio) : { label: "—", detail: "" };
+    const row = document.createElement("tr");
+    row.dataset.pin = gpio;
+    row.className = analog ? (analog.level === "CONFLICT" ? "pin-conflict" : "pin-analog") : `pin-${label.toLowerCase()}`;
+    for (const text of [gpio, role, label, detail]) {
+      const cell = document.createElement("td");
+      cell.textContent = text;
+      row.append(cell);
+    }
+    return row;
+  });
+  elements.pinTable.replaceChildren(...rows);
+}
+
+function renderElfInfo(elf) {
+  const hex = (value) => `0x${value.toString(16).toUpperCase().padStart(8, "0")}`;
+  const entries = [
+    ["Format", `${elf.class} ${elf.machine}`],
+    ["Entry", `${hex(elf.entry)} (Reset_Handler, Thumb)`],
+    ["Initial SP", elf.symbols._estack !== null ? hex(elf.symbols._estack) : "—"],
+    ...elf.sections.map((s) => [s.name, `${hex(s.address)} · ${s.size} B`]),
+    ["File size", `${elf.bytes} B`],
+  ];
+  elements.elfInfo.replaceChildren(
+    ...entries.flatMap(([term, value]) => {
+      const dt = document.createElement("dt");
+      dt.textContent = term;
+      const dd = document.createElement("dd");
+      dd.textContent = value;
+      return [dt, dd];
+    }),
+  );
+}
+
+function renderCapabilities() {
+  elements.capabilityList.replaceChildren(
+    ...CAPABILITIES.map(({ name, status }) => {
+      const item = document.createElement("li");
+      item.className = `capability ${status}`;
+      item.title = STATUS_LABELS[status];
+      const dot = document.createElement("span");
+      dot.className = "capability-dot";
+      dot.setAttribute("aria-hidden", "true");
+      const text = document.createElement("span");
+      text.textContent = name;
+      const tag = document.createElement("small");
+      tag.textContent = status === "verified" ? "tested" : status === "unverified" ? "unverified" : "not modeled";
+      item.append(dot, text, tag);
+      return item;
+    }),
+  );
+}
+
+function renderLibrary() {
+  elements.partLibrary.replaceChildren(
+    ...LIBRARY.map((type) => {
+      const definition = CATALOG[type];
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "library-item";
+      button.dataset.type = type;
+      button.setAttribute("role", "menuitem");
+      const name = document.createElement("strong");
+      name.textContent = definition.title;
+      const chip = document.createElement("span");
+      chip.className = "status-chip";
+      chip.dataset.status = definition.status;
+      chip.textContent = definition.status === "simulated" ? "simulated" : "editor only";
+      const description = document.createElement("small");
+      description.textContent = definition.description;
+      button.append(name, chip, description);
+      button.addEventListener("click", () => {
+        workspace.addPart(type);
+        elements.partLibrary.hidden = true;
+        elements.addPartButton.setAttribute("aria-expanded", "false");
+      });
+      return button;
+    }),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// API
+// ---------------------------------------------------------------------------
+
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    method: options.body === undefined ? "GET" : "POST",
+    headers: options.body === undefined ? {} : { "content-type": "application/json" },
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(body.error ?? `${response.status} ${response.statusText}`);
+  }
+  return body;
+}
+
+async function compile() {
+  const source = elements.editor.value;
+  state.busy = "compiling";
+  render();
+  log("Compiling main.c with arm-none-eabi-gcc…", "info");
+  try {
+    const result = await api("/api/build", { body: { source } });
+    showProblems(result.diagnostics ?? [], result.ok ? null : result.error);
+    if (!result.ok) {
+      state.build = null;
+      log(`Build failed: ${result.error}`, "error");
+      for (const line of (result.log ?? "").split(/\r?\n/).filter(Boolean).slice(0, 20)) {
+        log(line, "error");
+      }
+      selectConsoleTab("problems");
+      return false;
+    }
+    state.build = { id: result.buildId, source, elf: result.elf };
+    renderElfInfo(result.elf);
+    const warnings = (result.diagnostics ?? []).filter((d) => d.severity === "warning").length;
+    log(
+      `Build succeeded in ${result.durationMs} ms: ${result.elf.bytes}-byte ELF, entry 0x${result.elf.entry.toString(16)}` +
+        (warnings ? `, ${warnings} warning(s)` : ""),
+      warnings ? "warning" : "success",
+    );
+    return true;
+  } catch (error) {
+    log(`Build request failed: ${error.message}`, "error");
+    return false;
+  } finally {
+    state.busy = null;
+    render();
+  }
+}
+
+function closeStream() {
+  state.session.stream?.close();
+  state.session.stream = null;
+}
+
+async function startSession() {
+  closeStream();
+  state.board = createBoardState();
+  state.appliedDrives.clear();
+  state.appliedAnalog.clear();
+  syncLcds({ restart: true });
+  state.busy = "starting";
+  state.session = { id: null, state: "starting", stream: null };
+  render();
+  log("Starting Renode and loading the ELF…", "info");
+  try {
+    // Apply the circuit's inputs before the CPU runs (wired drives, potentiometers, die temperature).
+    reevaluateCircuit();
+    const drives = {};
+    for (const [gpio, input] of Object.entries(state.circuit.boardInputs)) {
+      if (input.level !== null) {
+        drives[gpio] = input.level ? "high" : "low";
+        state.appliedDrives.set(gpio, drives[gpio]);
+      }
+    }
+    const analog = { ...state.analog.inputs };
+    for (const [gpio, volts] of Object.entries(analog)) {
+      state.appliedAnalog.set(gpio, volts);
+    }
+    const inputs = { drives, analog, temperature: state.dieCelsius };
+    const { sessionId } = await api("/api/sessions", { body: { buildId: state.build.id, autoRun: true, inputs } });
+    state.session.id = sessionId;
+    const stream = new EventSource(`/api/sessions/${sessionId}/events`);
+    state.session.stream = stream;
+    stream.onmessage = (message) => handleMessage(sessionId, JSON.parse(message.data));
+    stream.onerror = () => {
+      if (state.session.id === sessionId && !["stopped", "error"].includes(state.session.state)) {
+        state.session.state = "error";
+        log("Lost the event stream from the simulator.", "error");
+        closeStream();
+        render();
+      }
+    };
+  } catch (error) {
+    state.session.state = "error";
+    log(`Could not start the simulation: ${error.message}`, "error");
+  } finally {
+    state.busy = null;
+    render();
+  }
+}
+
+async function run() {
+  if (state.session.state === "paused" && buildIsCurrent()) {
+    await control("run");
+    return;
+  }
+  if (!buildIsCurrent()) {
+    if (!(await compile())) {
+      return;
+    }
+  }
+  await startSession();
+}
+
+async function control(action) {
+  if (!state.session.id) {
+    return;
+  }
+  try {
+    await api(`/api/sessions/${state.session.id}/control`, { body: { action } });
+  } catch (error) {
+    log(`${action} failed: ${error.message}`, "error");
+  }
+}
+
+async function stop() {
+  await control("stop");
+  closeStream();
+  state.session.state = "stopped";
+  state.appliedDrives.clear();
+  render();
+}
+
+async function sendInput(name, pressed) {
+  if (!state.session.id) {
+    return;
+  }
+  try {
+    await api(`/api/sessions/${state.session.id}/input`, { body: { input: name, pressed } });
+  } catch (error) {
+    log(`Input ${name} failed: ${error.message}`, "error");
+  }
+}
+
+async function drivePin(pin, level) {
+  if (!state.session.id) {
+    return;
+  }
+  try {
+    await api(`/api/sessions/${state.session.id}/input`, { body: { pin, level } });
+  } catch (error) {
+    log(`External drive ${pin}=${level} failed: ${error.message}`, "error");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Event handling
+// ---------------------------------------------------------------------------
+
+function describeEvent(event) {
+  switch (event.type) {
+  case "clock-gate-changed":
+    return [`SYSCTL: ${event.peripheral} clock ${event.enabled ? "enabled" : "disabled"}`, "info"];
+  case "digital-pin-changed": {
+    if (event.state === "floating" && event.drive === "none") {
+      return null;
+    }
+    const { label, detail } = describePin({ pins: { x: event } }, "x");
+    return [`${event.pin.pinId} → ${label} (${detail})`, event.level === 1 ? "success" : "info"];
+  }
+  case "bus-fault":
+    return [`Bus fault: ${event.access} of ${event.address} — ${event.reason}`, "error"];
+  case "cpu-fault":
+    return [`CPU entered ${event.exception} (PC ${event.pc}, CFSR ${event.cfsr}, HFSR ${event.hfsr}${event.bfar ? `, BFAR ${event.bfar}` : ""})`, "error"];
+  case "unsupported-register-access":
+    return [`Unsupported ${event.peripheral} register ${event.access} at ${event.address}: ${event.reason}`, "warning"];
+  case "unimplemented-peripheral-access":
+    return [`${event.reason} (${event.access} at ${event.address})`, "warning"];
+  case "unsupported-feature":
+    return [`${event.peripheral}: ${event.detail}`, "warning"];
+  case "commit-protected-write-ignored":
+    return [`${event.peripheral} ${event.register}: bits ${event.bits} not committed — ${event.reason}`, "warning"];
+  case "locked-register-write-ignored":
+    return [`${event.peripheral} ${event.register} write ignored: GPIOLOCK is locked`, "warning"];
+  case "floating-input-read":
+    return [`${event.peripheral}: read of floating input bits ${event.bits} (${event.reason})`, "warning"];
+  case "adc-input-warning":
+    return [`${event.peripheral}: ${event.detail}`, "warning"];
+  case "interrupt-line-changed":
+    return [`${event.peripheral} interrupt ${event.asserted ? "asserted" : "cleared"}${event.asserted ? ` (MIS ${event.mis})` : ""}`, "info"];
+  default:
+    return null;
+  }
+}
+
+let refreshScheduled = false;
+function scheduleRefresh() {
+  if (refreshScheduled) {
+    return;
+  }
+  refreshScheduled = true;
+  requestAnimationFrame(() => {
+    refreshScheduled = false;
+    reevaluateCircuit();
+    render();
+    refreshSelectionLive();
+  });
+}
+
+function handleMessage(sessionId, message) {
+  if (state.session.id !== sessionId) {
+    return;
+  }
+  recordEvent(message);
+
+  switch (message.type) {
+  case "session-status": {
+    const previous = state.session.state;
+    state.session.state = message.state;
+    if (message.virtualTimeNs !== undefined && BigInt(message.virtualTimeNs) > BigInt(state.board.virtualTimeNs)) {
+      state.board.virtualTimeNs = message.virtualTimeNs;
+    }
+    state.realTimeFactor = message.state === "running" ? message.realTimeFactor ?? state.realTimeFactor : null;
+    if (message.message) {
+      log(message.message, message.state === "error" ? "error" : "info", message.virtualTimeNs);
+    } else if (previous !== message.state && message.state === "running") {
+      log("CPU running.", "success", message.virtualTimeNs);
+    } else if (previous !== message.state && message.state === "paused") {
+      log("CPU halted.", "info", message.virtualTimeNs);
+    }
+    if (message.state === "stopped" || message.state === "error") {
+      closeStream();
+      state.appliedDrives.clear();
+    }
+    break;
+  }
+  case "simulator-event": {
+    const event = message.event;
+    applyEvent(state.board, event);
+    feedLcds(event);
+    const described = describeEvent(event);
+    if (described) {
+      log(described[0], described[1], event.virtualTimeNs);
+    }
+    break;
+  }
+  case "mcu-reset":
+    log("MCU reset: peripherals at reset values, CPU restarts from the vector table.", "info", message.virtualTimeNs);
+    break;
+  case "board-input":
+    log(`${message.input} ${message.pressed ? "pressed" : "released"}`, "info", message.virtualTimeNs);
+    break;
+  case "analog-input":
+    log(`External circuit applies ${message.volts === null ? "nothing (disconnected)" : `${message.volts.toFixed(3)} V`} to ${message.pin}`, "info", message.virtualTimeNs);
+    break;
+  case "die-temperature":
+    log(`Die temperature set to ${message.celsius} °C`, "info", message.virtualTimeNs);
+    break;
+  case "external-drive":
+    log(`External circuit drives ${message.pin} ${message.level === "release" ? "released" : message.level.toUpperCase()}`, "info", message.virtualTimeNs);
+    break;
+  case "session-limit":
+    log(`Session limit reached (${message.kind}).`, "error");
+    break;
+  default:
+    break;
+  }
+  scheduleRefresh();
+}
+
+// ---------------------------------------------------------------------------
+// Examples and initialization
+// ---------------------------------------------------------------------------
+
+/** The circuit an example starts from: its diagram.json, or the bare LaunchPad. */
+function exampleCircuitText(example) {
+  const diagram = example.diagram ? parseDiagram(example.diagram, CATALOG).diagram : null;
+  return serializeDiagram(diagram ?? createDiagram({ author: "" }));
+}
+
+function showExample(example) {
+  elements.exampleSelect.value = example.id;
+  elements.exampleSummary.textContent = `${example.summary} Expected: ${example.expected}.`;
+}
+
+function setSource(text) {
+  elements.editor.value = text;
+  updateLineNumbers();
+  updateCursorPosition();
+}
+
+/** Replaces the code and circuit with the example's own (callers confirm first). */
+function loadExample(id) {
+  const example = state.examples.find((e) => e.id === id);
+  if (!example) {
+    return;
+  }
+  showExample(example);
+  setSource(example.source);
+  showProblems([], null);
+  loadDiagramText(exampleCircuitText(example), `the "${example.title}" circuit`);
+  state.baseline = { exampleId: example.id, source: example.source, diagramText: serializeDiagram(history.diagram) };
+  saveSourceDraft();
+  render();
+}
+
+/**
+ * First example load: work restored from this browser (or typed while the
+ * examples were loading) is kept, and the example it started from becomes
+ * the baseline again, so edits stay recognizable as edits.
+ */
+function restoreWork() {
+  const draft = restored.source;
+  const example = state.examples.find((e) => e.id === draft?.exampleId) ?? state.examples[0];
+  if (!example) {
+    return;
+  }
+  const keepSource = draft?.source != null || elements.editor.value !== "";
+  const keepCircuit = restored.diagram !== null;
+  if (!keepSource && !keepCircuit) {
+    loadExample(example.id);
+    return;
+  }
+  showExample(example);
+  if (!keepSource) {
+    setSource(example.source);
+  }
+  if (!keepCircuit) {
+    loadDiagramText(exampleCircuitText(example), `the "${example.title}" circuit`);
+  }
+  state.baseline = { exampleId: example.id, source: example.source, diagramText: exampleCircuitText(example) };
+  saveSourceDraft();
+  const changes = compareWork(currentWork(), state.baseline);
+  const what = [changes.source && "main.c", changes.circuit && "circuit"].filter(Boolean).join(" and ");
+  if (what) {
+    workspaceMessage(`Restored your ${what} from this browser (example "${example.title}").`);
+    log(`Restored your edited ${what} from this browser's local storage (started from example "${example.title}").`, "success");
+  }
+  render();
+}
+
+/** Asks before an example switch would replace edited code or circuit; true = go ahead. */
+function confirmExampleSwitch(id) {
+  const changes = compareWork(currentWork(), state.baseline);
+  if (!changes.source && !changes.circuit) {
+    return true;
+  }
+  const what = changes.source && changes.circuit ? "your edited main.c and circuit" : changes.source ? "your edited main.c" : "your circuit changes";
+  const title = state.examples.find((e) => e.id === id)?.title ?? id;
+  return window.confirm(
+    `Load example "${title}"?\n\nThis replaces ${what} with the example's code and circuit, and cannot be undone.` +
+      `\n\nChoose Cancel to keep working${changes.circuit ? " (Save downloads your circuit as diagram.json first)" : ""}.`,
+  );
+}
+
+async function initialize() {
+  renderCapabilities();
+  renderLibrary();
+  renderToolbar();
+  renderSelectionPanel();
+  workspace.fit();
+  render();
+  try {
+    const health = await api("/api/health");
+    const { toolchain } = health;
+    elements.toolchainInfo.textContent = toolchain.gcc
+      ? ` Toolchain: ${toolchain.gcc.replace(/^arm-none-eabi-gcc(\.exe)? /, "GCC ")}; Renode ${toolchain.renodePinned}.`
+      : " Toolchain missing — run `npm run setup:tools`.";
+    const { examples } = await api("/api/examples");
+    state.examples = examples;
+    elements.exampleSelect.replaceChildren(
+      ...examples.map((example) => {
+        const option = document.createElement("option");
+        option.value = example.id;
+        option.textContent = example.title;
+        return option;
+      }),
+    );
+    restoreWork();
+    log("Workspace ready. Choose an example, then Run (compiles automatically).", "success");
+  } catch (error) {
+    log(`Cannot reach the local orchestrator: ${error.message}. Start it with \`npm start\`.`, "error");
+    elements.compileButton.disabled = true;
+    elements.runButton.disabled = true;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Wiring of controls
+// ---------------------------------------------------------------------------
+
+elements.exampleSelect.addEventListener("change", () => {
+  const id = elements.exampleSelect.value;
+  if (confirmExampleSwitch(id)) {
+    loadExample(id);
+  } else {
+    elements.exampleSelect.value = state.baseline.exampleId; // Cancel: nothing changes
+  }
+});
+elements.editor.addEventListener("input", () => {
+  updateLineNumbers();
+  updateCursorPosition();
+  updateEditorStatus();
+  saveSourceDraft();
+});
+elements.editor.addEventListener("click", updateCursorPosition);
+elements.editor.addEventListener("keyup", updateCursorPosition);
+elements.editor.addEventListener("scroll", () => {
+  elements.lineNumbers.scrollTop = elements.editor.scrollTop;
+});
+elements.editor.addEventListener("keydown", (event) => {
+  if (event.key === "Tab") {
+    event.preventDefault();
+    elements.editor.setRangeText("    ", elements.editor.selectionStart, elements.editor.selectionEnd, "end");
+    elements.editor.dispatchEvent(new Event("input"));
+  }
+});
+
+elements.compileButton.addEventListener("click", compile);
+elements.runButton.addEventListener("click", run);
+elements.pauseButton.addEventListener("click", () => control("pause"));
+elements.resetButton.addEventListener("click", () => control("reset"));
+elements.stopButton.addEventListener("click", stop);
+
+elements.zoomInButton.addEventListener("click", () => workspace.zoom(1.25));
+elements.zoomOutButton.addEventListener("click", () => workspace.zoom(0.8));
+elements.fitButton.addEventListener("click", () => workspace.fit());
+elements.gridToggle.addEventListener("click", () => { workspace.showGrid = !workspace.showGrid; });
+elements.snapToggle.addEventListener("click", () => { workspace.snapToGrid = !workspace.snapToGrid; });
+elements.undoButton.addEventListener("click", () => workspace.undo());
+elements.redoButton.addEventListener("click", () => workspace.redo());
+elements.rotateButton.addEventListener("click", () => workspace.rotateSelection());
+elements.duplicateButton.addEventListener("click", () => workspace.duplicateSelection());
+elements.deleteButton.addEventListener("click", () => workspace.deleteSelection());
+elements.addPartButton.addEventListener("click", () => {
+  const open = elements.partLibrary.hidden;
+  elements.partLibrary.hidden = !open;
+  elements.addPartButton.setAttribute("aria-expanded", String(open));
+});
+elements.saveDiagramButton.addEventListener("click", () => {
+  const blob = new Blob([serializeDiagram(history.diagram)], { type: "application/json" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "diagram.json";
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1_000);
+  workspaceMessage("Saved diagram.json.");
+});
+// A real button (Tab, Enter, Space) opens the hidden file input's chooser.
+elements.loadDiagramButton.addEventListener("click", () => elements.loadDiagramInput.click());
+elements.loadDiagramInput.addEventListener("change", async () => {
+  const file = elements.loadDiagramInput.files?.[0];
+  if (file) {
+    importDiagramFile(await file.text(), file.name);
+  }
+  elements.loadDiagramInput.value = "";
+});
+
+elements.consoleTabs.forEach((tab) => tab.addEventListener("click", () => selectConsoleTab(tab.dataset.console)));
+elements.clearConsoleButton.addEventListener("click", () => {
+  elements.consoleOutput.replaceChildren();
+  elements.eventsOutput.replaceChildren();
+  state.eventCount = 0;
+  elements.eventCount.textContent = "0";
+});
+window.addEventListener("beforeunload", closeStream);
+
+// Expose read-only hooks for automated browser tests.
+window.__tm4c = Object.freeze({
+  workspace,
+  get diagram() {
+    return history.diagram;
+  },
+  serialize: () => serializeDiagram(history.diagram),
+  load: (text) => loadDiagramText(text, "test input"),
+});
+
+// Restore the student's source before anything else runs, so the asynchronous
+// example load can tell it apart from an empty editor and keep it.
+if (restored.source?.source != null) {
+  elements.editor.value = restored.source.source;
+}
+if (restored.unreadable.length) {
+  log(`A saved ${restored.unreadable.join(" and ")} draft could not be read; it was set aside and the example is shown instead.`, "warning");
+}
+renderDraftStatus();
+updateLineNumbers();
+initialize();

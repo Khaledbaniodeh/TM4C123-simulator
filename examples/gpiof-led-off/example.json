@@ -1,0 +1,8 @@
+{
+  "id": "gpiof-led-off",
+  "title": "B — Red LED off (PF1)",
+  "summary": "Same configuration as example A, but drives PF1 LOW.",
+  "experiment": 5,
+  "expected": "PF1 LOW (output) — red LED OFF",
+  "inputs": []
+}

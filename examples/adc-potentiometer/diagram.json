@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "author": "TM4C123 Simulator",
+  "editor": "tm4c123-simulator",
+  "parts": [
+    {"type": "tm4c123gxl-launchpad", "id": "board1", "top": 0, "left": 0, "rotate": 0, "attrs": {}},
+    {"type": "potentiometer", "id": "pot1", "top": 105.6, "left": -134.4, "rotate": 0, "attrs": {"value": "10k", "position": 50}}
+  ],
+  "connections": [
+    ["board1:J1.1", "pot1:VCC", "red", []],
+    ["board1:J3.9", "pot1:SIG", "green", []],
+    ["board1:J3.2", "pot1:GND", "black", []]
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "id": "switch-interrupts",
+  "title": "E — SW1/SW2 interrupts toggle LEDs",
+  "summary": "Unlocks PF0, configures falling-edge GPIO interrupts on SW1/SW2, enables NVIC IRQ 30; the ISR toggles red (SW1) and green (SW2).",
+  "experiment": 6,
+  "expected": "Each SW1 press toggles red; each SW2 press toggles green",
+  "inputs": ["SW1", "SW2"]
+}

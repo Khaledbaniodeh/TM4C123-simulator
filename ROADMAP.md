@@ -1,101 +1,73 @@
 # Project Roadmap
 
-This roadmap is organized around small, verifiable stage gates.
+Organized around small, verifiable stage gates. An item is checked only
+when its implementation and acceptance tests pass.
 
-## Phase 0 — Planning and Risk Reduction
+## Phase 0 — Planning and Risk Reduction ✅
 
-- [x] Define MVP scope.
-- [x] Define supported components.
-- [x] Define supported laboratory examples.
-- [x] Define required registers and peripherals.
-- [x] Define architecture.
-- [x] Define RISK-001 feasibility spike.
-- [ ] Provision a suitable implementation environment.
-- [ ] Pin compiler and execution-engine versions.
-- [ ] Complete the first end-to-end feasibility proof.
+- [x] Define MVP scope, components, laboratory examples, registers.
+- [x] Define architecture and the RISK-001 feasibility spike.
+- [x] Provision a working implementation environment (pinned project-local toolchains).
+- [x] Pin compiler and execution-engine versions (`tools.lock.json`).
+- [x] Complete the first end-to-end feasibility proof ([report](docs/RISK-001_Acceptance_Report.md)).
 
-## Phase 1 — Project Foundation
+## Phase 1 — Foundation
 
-- [ ] Create repository workspace structure.
-- [ ] Configure React and TypeScript.
-- [ ] Configure tests, linting, and type checking.
-- [ ] Define shared runtime contracts.
-- [ ] Define `diagram.json` schema.
-- [ ] Implement parser and validator.
-- [ ] Implement part registry.
+- [x] Repository workspace structure (`apps/`, `simulator/`, `examples/`, `tests/`, `e2e/`).
+- [x] Automated tests (Node test runner, Playwright).
+- [x] CI workflow (GitHub Actions, Linux).
+- [x] Runtime event protocol ([`RUNTIME_EVENTS.md`](docs/RUNTIME_EVENTS.md)).
+- [ ] Containerized compile/execute worker with validated isolation.
+- [x] `diagram.json` schema, parser, and part registry.
 
-## Phase 2 — Board and Workspace
+## Phase 2 — Core TM4C123 Behavior
 
-- [ ] Create TM4C123 LaunchPad board renderer.
-- [ ] Add J1, J2, J3, and J4 pin mappings.
-- [ ] Add interactive pin tooltips.
-- [ ] Add pan and zoom.
-- [ ] Add part movement and rotation.
+- [x] Memory map, Flash/SRAM, vector-table boot.
+- [x] SYSCTL GPIO clock gating.
+- [x] GPIO ports A–F (APB aperture).
+- [x] On-board RGB LED, SW1, SW2.
+- [x] PF0 lock and commit.
+- [x] Bus faults for unclocked and reserved accesses.
+- [ ] GPIO AHB aperture and alternate-function routing.
+- [ ] Hardware comparison on a physical LaunchPad.
 
-## Phase 3 — Components and Connections
+## Phase 3 — Interrupts and Timing (Experiments 6–7)
 
-- [ ] LED.
-- [ ] Pushbutton.
-- [ ] Resistor.
-- [ ] Potentiometer.
-- [ ] LCD1602 renderer.
-- [ ] Logic-analyzer renderer.
-- [ ] Wire renderer.
-- [ ] Digital net graph.
+- [x] NVIC integration and GPIO edge interrupts.
+- [x] Clock tree: RCC/RCC2/PLL, `SystemCoreClock` (D-030, D-031).
+- [x] SysTick verification: LOAD/VAL/CTRL, interrupt, COUNTFLAG polling.
+- [ ] SysTick `CLKSOURCE` = 0 (PIOSC/4) — not yet tested.
+- [x] GPTM TIMER0A, TIMER1A, TIMER2A (16/32-bit periodic, prescaler).
+- [x] CMSIS-compatible device header (original, license-compatible; D-031).
 
-## Phase 4 — Core TM4C123 Behavior
+## Phase 4 — LCD1602 (Experiment 8)
 
-- [ ] Memory and MMIO routing.
-- [ ] System Control clock gating.
-- [ ] GPIO Ports A–F.
-- [ ] Built-in RGB LED.
-- [ ] SW1 and SW2.
-- [ ] PF0 lock and commit behavior.
+- [x] HD44780 state model, 4-bit protocol, command set, DDRAM/cursor (D-032).
+- [x] Port B connection profile with RW tied low (D-024).
+- [x] Browser LCD rendering from firmware transactions only.
 
-## Phase 5 — Interrupts and Timing
+## Phase 5 — ADC (Experiment 9)
 
-- [ ] NVIC integration.
-- [ ] GPIO interrupts.
-- [ ] SysTick.
-- [ ] TIMER0A.
-- [ ] TIMER1A.
-- [ ] TIMER2A.
+- [x] ADC0 SS3, PE3/AIN0, polling path; SS3 interrupt path (verified on ADC1) (D-033).
+- [x] Virtual potentiometer driving AIN pins; inputs applied between run steps and logged with virtual time.
+- [ ] ADC SS0–SS2, continuous trigger, hardware averaging — implemented, not yet tested.
 
-## Phase 6 — LCD1602
+## Phase 6 — UART (Experiment 10)
 
-- [ ] HD44780 state model.
-- [ ] 4-bit protocol.
-- [ ] Command processing.
-- [ ] DDRAM and cursor.
-- [ ] Browser rendering.
+- [ ] UART0 on PA0/PA1, baud generation from the system clock.
+- [ ] Virtual serial terminal with input injection.
 
-## Phase 7 — ADC
+## Phase 7 — Workspace and Presentation
 
-- [ ] ADC0 Sample Sequencer 3.
-- [ ] PE3/AIN0 input.
-- [ ] Potentiometer integration.
-- [ ] Polling conversions.
-- [ ] Interrupt-driven conversions.
-
-## Phase 8 — Logic Analyzer
-
-- [ ] Pin subscriptions.
-- [ ] Virtual timestamps.
-- [ ] Digital waveform rendering.
-- [ ] Capture controls.
-- [ ] Bounded buffering.
-
-## Phase 9 — Complete User Workflow
-
-- [ ] C code editor.
-- [ ] Compile.
-- [ ] Run.
-- [ ] Pause.
-- [ ] Reset.
-- [ ] Error console.
-- [ ] Save and load project.
-- [ ] Automated end-to-end examples.
+- [x] Editor, compile/run/pause/reset/stop, diagnostics, pin inspector.
+- [ ] Logic analyzer (virtual-time waveforms).
+- [x] Component wiring editor (external LED, pushbutton, potentiometer, LCD1602).
+- [x] Workspace editing: multi-selection, copy/paste, smart placement, drag-to-connect, pan while wiring.
+- [x] Work safety: browser drafts of source and circuit, confirmation before an example or file replaces edits.
+- [ ] Keil ARMASM → GNU assembler conversion helper.
 
 ## MVP Completion Condition
 
-The MVP is complete only when real compiled user C code drives simulated TM4C123 register behavior and visible components.
+The MVP is complete only when real compiled user C code drives simulated
+TM4C123 register behavior and visible components for Experiments 5–10,
+with each experiment's acceptance tests passing.

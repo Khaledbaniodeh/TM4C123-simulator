@@ -1,0 +1,78 @@
+name: Hardware reference
+
+# Extracts EK-TM4C123GXL facts from TI's official documents on the runner:
+#   - SPMR240 (Rev A PADS design package): ASCII PCB export (parts, outline),
+#     Gerber drill file (exact through-hole positions), schematic PDF
+#   - SPMU296 (User's Guide): BoosterPack header tables, checked against our pin map
+# TI files are downloaded only on the runner and never committed.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "tools/hwref/**"
+      - "apps/web/board/ek-tm4c123gxl.pins.json"
+      - ".github/workflows/hardware-reference.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  reference:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pdftotext
+        run: sudo apt-get update -q && sudo apt-get install -y -q poppler-utils
+
+      - name: Download TI documents (runner only)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ti"
+          ua="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+          curl -fsSL -A "$ua" -o "$RUNNER_TEMP/ti/spmu296.pdf" https://www.ti.com/lit/ug/spmu296/spmu296.pdf
+          curl -fsSL -A "$ua" -o "$RUNNER_TEMP/ti/spmr240.zip" https://www.ti.com/lit/zip/spmr240
+          sha256sum "$RUNNER_TEMP/ti"/*
+
+      - name: Verify pin map against SPMU296
+        run: |
+          pdftotext -layout "$RUNNER_TEMP/ti/spmu296.pdf" "$RUNNER_TEMP/ti/spmu296.txt"
+          python3 tools/hwref/check_pinmap.py "$RUNNER_TEMP/ti/spmu296.txt" apps/web/board/ek-tm4c123gxl.pins.json
+
+      - name: PADS design discovery
+        if: always()
+        run: python3 tools/hwref/inspect_pads.py "$RUNNER_TEMP/ti/spmr240.zip" discover
+
+      - name: PADS parts
+        if: always()
+        run: python3 tools/hwref/inspect_pads.py "$RUNNER_TEMP/ti/spmr240.zip" parts
+
+      - name: PADS board outline
+        if: always()
+        run: python3 tools/hwref/inspect_pads.py "$RUNNER_TEMP/ti/spmr240.zip" outline
+
+      - name: Drill files
+        if: always()
+        run: python3 tools/hwref/inspect_pads.py "$RUNNER_TEMP/ti/spmr240.zip" drill
+
+      - name: Reset switch evidence (user guide and BOM)
+        if: always()
+        run: |
+          cd "$RUNNER_TEMP/ti" && unzip -q -o spmr240.zip
+          {
+            echo "SPMU296 lines mentioning reset/switch:"
+            grep -n -i -E "reset|switch" spmu296.txt | head -25
+            bom="$(find . -name '*Bill Of Materials*.xls' | head -1)"
+            echo "BOM strings mentioning switch/reset/EVQ (8-bit and UTF-16):"
+            { strings "$bom"; strings -el "$bom"; } | grep -i -E "switch|reset|EVQ|SW[0-9]|button" | sort -u | head -30
+          } | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}' | sed 's/^/::notice title=Reset switch evidence::/'; echo
+
+      - name: Schematic nets for LEDs, switches, R9/R10
+        if: always()
+        run: |
+          cd "$RUNNER_TEMP/ti" && unzip -q -o spmr240.zip
+          pdftotext -layout "$(find . -name '*Schematic.pdf' | head -1)" schematic.txt
+          grep -n -E "PF[0-4]|R9|R10|LED|SW1|SW2|USR_SW|RESET" schematic.txt | head -60 \
+            | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}' | sed 's/^/::notice title=Schematic lines::/' ; echo

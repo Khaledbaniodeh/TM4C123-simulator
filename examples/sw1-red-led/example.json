@@ -1,0 +1,8 @@
+{
+  "id": "sw1-red-led",
+  "title": "D — SW1 controls red LED (polling)",
+  "summary": "Polls SW1 on PF4 (active-low, internal pull-up) and mirrors it on PF1.",
+  "experiment": 6,
+  "expected": "Red LED ON while SW1 is held, OFF when released",
+  "inputs": ["SW1"]
+}

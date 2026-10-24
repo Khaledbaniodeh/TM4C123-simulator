@@ -2,9 +2,28 @@
 
 ## Project Status
 
-This project is currently in the planning and feasibility stage.
+This project is an early technical prototype. There is no stable release,
+hosted simulator, or production service.
 
-There is no stable release, hosted simulator, or production service available yet.
+## Current Execution Model — Local Trusted Mode
+
+The orchestrator (`npm start`) is a **single-user development tool**:
+
+| Control | Implemented |
+|---|---|
+| Binds to `127.0.0.1` only; refuses other `HOST` values | ✅ |
+| Same-origin / Host-header check on the API (DNS-rebinding defense) | ✅ |
+| Compiler: fixed argument vector, no shell, user text never in argv | ✅ |
+| Source-size limit (64 KB), compile timeout (30 s), ELF-size limit (1 MB) | ✅ |
+| Private temporary build/session directories, removed afterwards | ✅ |
+| Execution: virtual-time limit (600 s) and wall-time limit (30 min) per session | ✅ |
+| Network isolation for compiler and Renode | ❌ Not implemented |
+| CPU / memory / process-count limits | ❌ Not implemented |
+| Filesystem isolation (`#include` can read any file the user can read) | ❌ Not implemented |
+
+Because of the missing rows, **do not expose the server to a network or
+accept code from other people**. A containerized worker that provides those
+controls (D-003, D-021) is required before any shared or public deployment.
 
 ---
 

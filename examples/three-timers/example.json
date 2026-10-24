@@ -1,0 +1,8 @@
+{
+  "id": "three-timers",
+  "title": "I — TIMER0A/1A/2A at 250/500/1000 ms",
+  "summary": "Three 32-bit periodic timers at a 50 MHz PLL clock toggle red (250 ms), blue (500 ms), and green (1000 ms) from their ISRs.",
+  "experiment": 7,
+  "expected": "Red, blue, and green toggle every 250, 500, and 1000 ms of virtual time",
+  "inputs": []
+}

@@ -1,0 +1,8 @@
+{
+  "id": "lcd1602-hello",
+  "title": "L — Exp 8: LCD1602 4-bit on Port B",
+  "summary": "HD44780 LCD1602 driven in 4-bit mode (RS=PB0, RW=PB1 tied to GND, E=PB2, D4–D7=PB4–PB7) with SysTick COUNTFLAG delays at 50 MHz. Shows a greeting, a custom CGRAM heart, and a counter.",
+  "experiment": 8,
+  "expected": "LCD line 1 shows \"Hello, TM4C123!\"; line 2 shows \"LCD1602 ♥ n=X\" with X counting every 200 ms",
+  "inputs": []
+}

@@ -1,6 +1,6 @@
 # Project Glossary
 
-This glossary explains the main technical terms used throughout the TM4C123 Educational Web Simulator documentation.
+This glossary explains the main technical terms used throughout the TM4C123 Simulator documentation.
 
 ---
 

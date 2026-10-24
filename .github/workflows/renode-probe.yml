@@ -1,0 +1,31 @@
+name: Renode API probe
+
+# Prints Renode API facts (constructors, properties) as annotations so
+# peripheral models can be written against the exact pinned Renode version.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "tools/probe/**"
+      - ".github/workflows/renode-probe.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Cache pinned toolchains
+        uses: actions/cache@v4
+        with:
+          path: .tools
+          key: tools-${{ runner.os }}-${{ hashFiles('tools.lock.json') }}
+      - run: npm run setup:tools
+      - run: bash tools/probe/renode_api.sh

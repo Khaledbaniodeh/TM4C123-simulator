@@ -1,0 +1,422 @@
+/* Circuit workspace: canvas, parts, wires, pins, tooltips, library. */
+
+.simulation-canvas {
+  display: grid;
+  grid-template-columns: minmax(360px, 1fr) minmax(240px, 280px);
+  background: none;
+}
+
+.canvas-stage {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 40%, #1d2632, #10151c 75%);
+}
+
+.circuit-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: default;
+  outline: none;
+  touch-action: none;
+  user-select: none;
+}
+
+.circuit-canvas:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--primary);
+}
+
+.circuit-canvas.is-panning {
+  cursor: grabbing;
+}
+
+.grid-dot {
+  fill: rgba(255, 255, 255, 0.14);
+}
+
+.grid-line {
+  stroke: rgba(255, 255, 255, 0.06);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Parts */
+
+.part {
+  cursor: grab;
+}
+
+.part-hitbox {
+  fill: transparent;
+}
+
+.part.is-selected > .part-hitbox {
+  stroke: #58a6ff;
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.lead {
+  stroke: #b8bec8;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  fill: none;
+}
+
+.part-value {
+  fill: #c9d1d9;
+  font: 600 6px "Inter", "Segoe UI", sans-serif;
+  text-anchor: middle;
+}
+
+.pin-silk {
+  fill: #e8f0e8;
+  font: 600 4.2px "Inter", "Segoe UI", sans-serif;
+  text-anchor: middle;
+}
+
+.pin-silk.left {
+  text-anchor: start;
+}
+
+.part-title {
+  fill: #9fb0c3;
+  font: 700 7px "Inter", "Segoe UI", sans-serif;
+  text-anchor: middle;
+  letter-spacing: 0.08em;
+}
+
+.lcd-cell {
+  fill: rgba(0, 40, 0, 0.12);
+}
+
+.lcd-screen {
+  fill: #7da24a;
+}
+
+.lcd-screen.backlit {
+  fill: #9ccc5a;
+}
+
+.lcd-screen.off {
+  fill: #4f6634;
+}
+
+.lcd-char {
+  fill: #13240b;
+  font: 600 16px "Consolas", "DejaVu Sans Mono", "Menlo", monospace;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.lcd-dot {
+  fill: #13240b;
+}
+
+.lcd-underline {
+  fill: #13240b;
+}
+
+.lcd-blink {
+  fill: #13240b;
+  opacity: 0.55;
+  animation: lcd-blink 1.06s steps(1, end) infinite;
+}
+
+@keyframes lcd-blink {
+  50% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lcd-blink { animation: none; }
+}
+
+.led-glow {
+  opacity: 0.38;
+  filter: blur(4px);
+}
+
+.button-cap {
+  fill: #1c1f24;
+  stroke: #0b0d10;
+  stroke-width: 0.8;
+}
+
+.part-pushbutton.pressed .button-cap,
+.is-live .part-pushbutton:active .button-cap {
+  fill: #3a414c;
+}
+
+.is-live .part-pushbutton,
+.is-live [data-input] {
+  cursor: pointer;
+}
+
+/* Pins */
+
+.pin-anchor {
+  fill: transparent;
+  stroke: transparent;
+  stroke-width: 1;
+  cursor: crosshair;
+  vector-effect: non-scaling-stroke;
+}
+
+.pin-anchor:hover {
+  fill: rgba(88, 166, 255, 0.45);
+  stroke: #58a6ff;
+}
+
+.pin-anchor.invalid {
+  fill: rgba(248, 81, 73, 0.6);
+  stroke: #f85149;
+}
+
+/* Wires */
+
+.wire {
+  cursor: pointer;
+}
+
+.wire path {
+  fill: none;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.wire-hit {
+  stroke: transparent;
+  stroke-width: 8;
+}
+
+.wire-casing {
+  stroke: rgba(0, 0, 0, 0.45);
+  stroke-width: 3.2;
+}
+
+.wire-core {
+  stroke-width: 2;
+}
+
+.wire-end {
+  pointer-events: none;
+}
+
+.wire.is-selected .wire-casing {
+  stroke: #58a6ff;
+  stroke-width: 4.4;
+}
+
+.selection-box {
+  fill: rgba(79, 155, 255, 0.08);
+  stroke: #4f9bff;
+  stroke-width: calc(1px / var(--zoom, 1));
+  stroke-dasharray: calc(4px / var(--zoom, 1)) calc(3px / var(--zoom, 1));
+  pointer-events: none;
+}
+
+.wire-draft {
+  fill: none;
+  stroke: #58a6ff;
+  stroke-width: 2;
+  stroke-dasharray: 5 3;
+  pointer-events: none;
+}
+
+.wire-draft.invalid {
+  stroke: #f85149;
+}
+
+/* Overlays */
+
+.pin-tooltip {
+  position: absolute;
+  z-index: 5;
+  display: grid;
+  gap: 2px;
+  max-width: 280px;
+  padding: 7px 9px;
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.4;
+  background: rgba(13, 17, 23, 0.96);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-small);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+.pin-tooltip .muted,
+.selection-panel .muted {
+  color: var(--text-muted);
+}
+
+.workspace-message {
+  position: absolute;
+  left: 10px;
+  bottom: 8px;
+  margin: 0;
+  max-width: calc(100% - 20px);
+  padding: 3px 8px;
+  color: var(--text-soft);
+  font-size: 11px;
+  background: rgba(13, 17, 23, 0.8);
+  border-radius: var(--radius-small);
+}
+
+.workspace-message:empty {
+  display: none;
+}
+
+.workspace-message[data-level="error"] {
+  color: #ffb3ad;
+  border: 1px solid rgba(248, 81, 73, 0.5);
+}
+
+.canvas-stage .fault-badge {
+  top: 10px;
+  right: 10px;
+  bottom: auto;
+  left: auto;
+}
+
+/* Toolbar extras */
+
+.library-anchor {
+  position: relative;
+}
+
+.part-library {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 10;
+  display: grid;
+  gap: 4px;
+  width: 300px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-medium);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45);
+}
+
+.library-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  padding: 7px 9px;
+  text-align: left;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  cursor: pointer;
+}
+
+.library-item:hover,
+.library-item:focus-visible {
+  border-color: var(--primary);
+  outline: none;
+}
+
+.library-item strong {
+  font-size: 12px;
+}
+
+.library-item small {
+  grid-column: 1 / -1;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
+.status-chip {
+  align-self: center;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 999px;
+}
+
+.status-chip[data-status="simulated"] {
+  color: #7ee2a0;
+  background: rgba(63, 185, 80, 0.14);
+  border: 1px solid rgba(63, 185, 80, 0.35);
+}
+
+.status-chip[data-status="provisional"] {
+  color: #9ecbff;
+  background: rgba(47, 129, 247, 0.12);
+  border: 1px solid rgba(47, 129, 247, 0.4);
+}
+
+.selection-panel .component-live {
+  color: var(--text);
+  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  font-size: 11px;
+}
+
+.status-chip[data-status="editor"] {
+  color: #e3c06a;
+  background: rgba(210, 153, 34, 0.12);
+  border: 1px solid rgba(210, 153, 34, 0.35);
+}
+
+.zoom-value {
+  min-width: 44px;
+  text-align: center;
+}
+
+.icon-button[aria-pressed="true"] {
+  color: #fff;
+  background: rgba(47, 129, 247, 0.25);
+  border-color: var(--primary);
+}
+
+.icon-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.selection-panel {
+  display: grid;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-soft);
+}
+
+.selection-panel p {
+  margin: 0;
+}
+
+.selection-panel select {
+  margin-left: 6px;
+  padding: 2px 4px;
+  color: var(--text);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-bright);
+  border-radius: 4px;
+}
+
+.selection-panel .warning {
+  color: #e3b341;
+}
+
+@media (max-width: 1050px) {
+  .simulation-canvas {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(420px, 1fr) auto;
+  }
+}
+
+/* Stacked inspector on desktop widths: the canvas row is exactly the
+   visible height (not at least 420 px), so Fit shows the whole circuit;
+   the inspector scrolls into view below it. */
+@media (min-width: 781px) and (max-width: 1050px) {
+  .simulation-canvas {
+    grid-template-rows: 100% auto;
+  }
+}

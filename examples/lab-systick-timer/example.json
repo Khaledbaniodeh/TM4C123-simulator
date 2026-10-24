@@ -1,0 +1,8 @@
+{
+  "id": "lab-systick-timer",
+  "title": "K — Exp 7 style: SystemCoreClock, SysTick_Config, TIMER1A",
+  "summary": "Lab-style code using TM4C123.h: SystemInit() sets 50 MHz before main(); SysTick_Config(SystemCoreClock / 10) toggles green every 100 ms and TIMER1A toggles blue every 500 ms.",
+  "experiment": 7,
+  "expected": "Green toggles every 100 ms and blue every 500 ms of virtual time",
+  "inputs": []
+}
