@@ -24,6 +24,10 @@ The orchestrator (`npm start`) is a **single-user development tool**:
 Because of the missing rows, **do not expose the server to a network or
 accept code from other people**. A containerized worker that provides those
 controls (D-003, D-021) is required before any shared or public deployment.
+The threat model, the target worker design, the isolation acceptance tests,
+and the current readiness status are in
+[`docs/DEPLOYMENT_SECURITY.md`](docs/DEPLOYMENT_SECURITY.md); no deployment
+is approved.
 
 ---
 
