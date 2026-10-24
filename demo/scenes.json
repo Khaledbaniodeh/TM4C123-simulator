@@ -53,7 +53,7 @@
       "id": "lcd",
       "title": "LCD1602 driven by firmware",
       "example": "lcd1602-hello",
-      "caption": "An LCD1602 in 4-bit mode. The display shows only what the firmware's GPIO writes tell the HD44780 model: a greeting, a custom CGRAM heart, and a counter.",
+      "caption": "An LCD1602 in 4-bit mode. The display shows only what the firmware's GPIO writes tell the HD44780 model: a greeting, a CGRAM heart, and a counter.",
       "sync": {
         "a greeting": "text"
       }
@@ -81,7 +81,7 @@
       "id": "console",
       "title": "Console and limits",
       "example": "adc-potentiometer",
-      "caption": "The console groups every simulator message by severity and source. This runs locally in trusted mode; timing is approximate and not yet validated against physical hardware.",
+      "caption": "The console lists every message with its severity and source. This runs locally in trusted mode; timing is approximate and not yet validated against physical hardware.",
       "sync": {
         "This runs locally": "notice"
       }

@@ -80,14 +80,14 @@ listed), so captions never run ahead of the picture.
 6. **Button.** Here the firmware polls an external pushbutton on PA6. Hold
    it: PA6 reads low, and the firmware lights the external LED on PA7.
 7. **LCD.** An LCD1602 in 4-bit mode. The display shows only what the
-   firmware's GPIO writes tell the HD44780 model: a greeting, a custom CGRAM
-   heart, and a counter.
+   firmware's GPIO writes tell the HD44780 model: a greeting, a CGRAM heart,
+   and a counter.
 8. **ADC.** A potentiometer feeds ADC0 on PE3. Turn the knob: the voltage on
    PE3 changes, and the firmware switches the LED from green to red.
 9. **Diagnostics.** Mistakes are reported as GCC reports them. The Problems
    list shows GCC's error and its suggestion, and jumps to the line. The fix
    rebuilds cleanly.
-10. **Close.** The console groups every simulator message by severity and
+10. **Close.** The console lists every message with its severity and
     source. This runs locally in trusted mode; timing is approximate and not
     yet validated against physical hardware.
 

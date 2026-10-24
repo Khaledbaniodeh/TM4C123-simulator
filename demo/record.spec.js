@@ -252,7 +252,7 @@ test("company demo: one take of the real simulator", async ({ page }) => {
   recording.event("text");
   await moveTo(lcd, 24);
   await expect(lcd).toHaveAttribute("data-row1", /LCD1602 . n=\d/);
-  await pause(2000);
+  await pause(2900);
 
   // 8. ADC (example M): the knob sets the voltage on PE3; the firmware picks the LED colour.
   recording.scene("adc");
@@ -319,15 +319,15 @@ test("company demo: one take of the real simulator", async ({ page }) => {
   await click("#compileButton");
   await expect(page.locator("#editorStatus")).toHaveText("Built");
   await expect(page.locator("#problemCount")).toHaveText("0");
-  await pause(1500);
+  await pause(900);
 
   // 10. Console: every message with its severity and source; then the honest limits in the notice bar.
   recording.scene("console");
   await click(page.getByRole("tab", { name: /Console/ }));
-  await pause(2400);
+  await pause(3200);
   recording.event("notice");
   await moveTo("#modeNotice", 30);
-  await pause(4600);
+  await pause(5400);
 
   const result = await recording.stop();
   console.log(`::notice title=demo recording::${result.frames} frames, ${result.seconds.toFixed(1)} s`);
