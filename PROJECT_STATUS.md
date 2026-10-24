@@ -1,9 +1,9 @@
 # Project Status
 
-**Last updated:** 2026-10-24 (showcase release candidate `release/showcase-rc1`)
+**Last updated:** 2026-10-24 (`main`, showcase demo build)
 **Stage:** Technical preview. Real firmware execution, the interactive
 LaunchPad and the circuit workspace are implemented and covered by
-automated tests (135 Node + 98 browser tests in CI).
+automated tests (164 Node + 124 browser tests in CI).
 **Public hosted simulator:** No. Local, trusted, single-user mode only.
 **Hardware equivalence:** Not verified (no physical LaunchPad comparison yet).
 
@@ -24,9 +24,13 @@ automated tests (135 Node + 98 browser tests in CI).
 | Bus faults and unsupported-access reporting | ✅ Implemented and verified |
 | Board model from TI CAD (SPMR240) + pinout check (SPMU296) | ✅ Verified in CI |
 | Interactive board (pins, tooltips, SW1/SW2, RESET, RGB LED, components) | ✅ Implemented and verified (Playwright) |
+| Live pin and wire tooltips (follow the running simulation), wiring hints | ✅ Implemented and verified (Playwright) |
 | Workspace parts: LED, resistor, pushbutton, potentiometer, LCD1602 | ✅ Implemented and verified (logic level / ideal divider / HD44780) |
 | Editing: multi-selection, copy/paste, smart placement, undo/redo | ✅ Implemented and verified (Playwright) |
 | Wiring: click-to-click, drag-to-connect, pan while wiring, rerouting | ✅ Implemented and verified (Playwright) |
+| Automatic routes for new wires: clear of unrelated pads, parts, and the board's switches and their labels | ✅ Implemented and verified (D-035) |
+| Compile problems: GCC and linker diagnostics listed, each goes to its line (F8 / Shift+F8) | ✅ Implemented and verified (Playwright) |
+| Console: severity and source per message, compact/detailed views, filters | ✅ Implemented and verified (Playwright) |
 | Persistence and safe loading (browser drafts, confirm before replacing) | ✅ Implemented and verified (Playwright) |
 | Logic analyzer part | 🟡 Editor only, no electrical behavior |
 | UART0 + virtual terminal | 📋 Planned (Experiment 10) |
@@ -55,7 +59,7 @@ the first one blocks any *public* deployment.
 |---|---|---|
 | Compile/execute backend is not isolated | **Blocker for public hosting** (not for local use) | Local trusted mode only; a validated container worker is required first |
 | Older saved circuits keep their wire routes, which can pass over unrelated header pads | Minor | New wires are routed clear of unrelated pads (D-035) and the shipped examples cross none; existing wires are never re-routed automatically. Drag a segment to reroute one. Dense circuits get longer routes with more bends |
-| Pause stays enabled while halted; some status chips wrap; two-line trust notice on narrow screens | Deferred | Cosmetic |
+| Below 1280 px wide, the trust notice can take two lines and the circuit toolbar can wrap onto a second row | Minor | Cosmetic; every control stays on screen (layout test at 1024×768) |
 
 ## Current blockers (engineering)
 

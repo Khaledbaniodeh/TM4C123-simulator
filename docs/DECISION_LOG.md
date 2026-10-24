@@ -738,12 +738,13 @@ outward from the part edge, turned with the part), with a stub of 0–4 grid,
 and join through an L or a detour lane up to 12 grid away. The route that
 crosses the fewest pads wins, then the one through the fewest part bodies
 (for the board, whose headers sit inside it, only its RESET, SW1, and SW2
-switches; a wire over a part or a switch would cover it and take its
-clicks), then the one that runs least along existing wires and along the
-approach to other pins (the 2 grid in front of each pin, so a later wire to
-that pin never has to run along this one; two wires drawn on top of each
-other look joined), then the fewest bends, then the shortest; the plain L
-wins every tie.
+switches, each with its silkscreen label; a wire over a part or a switch
+would cover it and take its clicks, and one along a label hides it), then
+the one that runs least along existing wires and along the approach to
+other pins (the 2 grid in front of each pin, so a later wire to that pin
+never has to run along this one; two wires drawn on top of each other look
+joined), then the fewest bends, then the shortest; the plain L wins every
+tie.
 
 The route is stored as ordinary routing instructions: source-side steps plus
 a zero-length step that sets the axis of the closing L, so the target end is

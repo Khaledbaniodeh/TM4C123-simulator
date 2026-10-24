@@ -170,9 +170,9 @@ npm test           # Node: compiler, Renode integration, API, peripherals, works
 npm run test:e2e   # Playwright: real UI against the real toolchain and Renode
 ```
 
-On this release candidate, CI ([`ci.yml`](.github/workflows/ci.yml)) runs
-**135 Node tests and 98 browser tests** with the pinned toolchains; every
-browser test compiles and executes real firmware where it needs to. Browser
+CI ([`ci.yml`](.github/workflows/ci.yml)) runs **164 Node tests and 124
+browser tests** with the pinned toolchains; every browser test compiles and
+executes real firmware where it needs to. Browser
 screenshots from each run are published to the
 [`ci-artifacts`](https://github.com/Khaledbaniodeh/TM4C123-simulator/tree/ci-artifacts)
 branch. [`hardware-reference.yml`](.github/workflows/hardware-reference.yml)
