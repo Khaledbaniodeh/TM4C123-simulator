@@ -8,7 +8,7 @@ import { describe, it } from "node:test";
 import { BOARD_INPUTS, BOARD_LEDS } from "../apps/web/board-state.js";
 import { BOARD_PART, GEOMETRY } from "../apps/web/board/launchpad.js";
 import { readFile } from "node:fs/promises";
-import { GRID, autoRoute, bodyCrossings, padCrossings, partBounds, partToWorld, pinEscape, routeWire } from "../apps/web/workspace/geometry.js";
+import { GRID, autoRoute, bodyCrossings, padCrossings, partBounds, partToWorld, pinEscape, routeWire, wireOverlap } from "../apps/web/workspace/geometry.js";
 import { CATALOG, LIBRARY } from "../apps/web/workspace/parts.js";
 import { createDiagram, parseDiagram, validateDiagram } from "../apps/web/workspace/diagram.js";
 import { evaluateCircuit } from "../apps/web/workspace/netlist.js";
@@ -138,17 +138,40 @@ describe("board geometry", () => {
     assert.equal(route.bodies, 0);
   });
 
-  it("ships example circuits whose wires cross no unrelated pin pad and no part body", async () => {
+  it("ships example circuits whose wires cross no unrelated pad, no part body, and no wire of another net", async () => {
+    const ground = new Set(BOARD_PART.pins.filter((p) => BOARD_PART.role(p.name)?.kind === "ground").map((p) => `board1:${p.name}`));
     for (const id of ["lcd1602-hello", "external-led-button", "adc-potentiometer"]) {
       const { diagram, errors } = parseDiagram(await readFile(new URL(`../examples/${id}/diagram.json`, import.meta.url), "utf8"), CATALOG);
       assert.deepEqual(errors, [], id);
       const pads = diagram.parts.flatMap((part) => CATALOG[part.type].pins.map((p) => ({ id: `${part.id}:${p.name}`, ...partToWorld(p, part, CATALOG[part.type].size) })));
       const at = (endpoint) => pads.find((p) => p.id === endpoint);
       const bodies = diagram.parts.filter((part) => CATALOG[part.type].kind !== "board").map((part) => partBounds(part, CATALOG[part.type].size));
+      const wires = [];
       for (const [from, to, , routing] of diagram.connections) {
         const points = routeWire(at(from), at(to), routing);
         assert.equal(padCrossings(points, pads.filter((p) => p.id !== from && p.id !== to)), 0, `${id} ${from}→${to}`);
         assert.equal(bodyCrossings(points, bodies), 0, `${id} ${from}→${to} passes over a part`);
+        wires.push({ from, to, points });
+      }
+      // Nets: wires sharing a pin, and the board's GND pins, are one net. Wires of different nets
+      // drawn on top of each other would look joined.
+      const net = new Map();
+      const find = (x) => (net.get(x) === x || !net.has(x) ? x : find(net.get(x)));
+      const join = (a, b) => net.set(find(a), find(b));
+      for (const w of wires) {
+        join(w.from, w.to);
+        for (const end of [w.from, w.to]) {
+          if (ground.has(end)) {
+            join(end, "GND");
+          }
+        }
+      }
+      for (const [i, a] of wires.entries()) {
+        for (const b of wires.slice(i + 1)) {
+          if (find(a.from) !== find(b.from)) {
+            assert.equal(wireOverlap(a.points, [b.points]), 0, `${id}: ${a.from}→${a.to} runs along ${b.from}→${b.to}`);
+          }
+        }
       }
     }
   });

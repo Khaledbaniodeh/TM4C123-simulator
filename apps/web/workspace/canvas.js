@@ -19,6 +19,7 @@ import {
   partToWorld,
   partTransform,
   pathData,
+  pinApproach,
   pinEscape,
   placeInView,
   placementKey,
@@ -1097,7 +1098,10 @@ export class Workspace extends EventTarget {
     this.#routeObstacles ??= {
       pads: this.diagram.parts.flatMap((part) => {
         const definition = this.#catalog[part.type];
-        return definition.pins.map((pin) => ({ id: `${part.id}:${pin.name}`, ...partToWorld(pin, part, definition.size) }));
+        return definition.pins.map((pin) => {
+          const at = partToWorld(pin, part, definition.size);
+          return { id: `${part.id}:${pin.name}`, ...at, approach: pinApproach(at, pinEscape(pin, part, definition.size)) };
+        });
       }),
       // A part keeps wires off its whole body; the board, whose headers sit inside it, only off its switches.
       bodies: this.diagram.parts.flatMap((part) => {
@@ -1110,12 +1114,14 @@ export class Workspace extends EventTarget {
     };
     const key = `${from} ${to} ${end.x} ${end.y}`;
     if (this.#lastRoute?.key !== key || this.#lastRoute.obstacles !== this.#routeObstacles) {
+      const others = this.#routeObstacles.pads.filter((pad) => pad.id !== from && pad.id !== to);
       const route = autoRoute(this.pinPosition(from), end, {
         fromEscape: this.#pinEscape(from),
         toEscape: to ? this.#pinEscape(to) : null,
-        pads: this.#routeObstacles.pads.filter((pad) => pad.id !== from && pad.id !== to),
+        pads: others,
         bodies: this.#routeObstacles.bodies,
         wires: this.#routeObstacles.wires,
+        approaches: others.map((pad) => pad.approach).filter(Boolean),
       });
       this.#lastRoute = { key, obstacles: this.#routeObstacles, route };
     }

@@ -200,6 +200,17 @@ export function pinEscape(pin, part, size) {
   return { x: Math.round(turned.x) || 0, y: Math.round(turned.y) || 0 };
 }
 
+/** Grid length of a pin's approach (pinApproach) that automatic routes keep free. */
+export const APPROACH_GRID = 2;
+
+/**
+ * The stretch a wire to `at` arrives along: from the pin, `length` grid out
+ * along its escape direction ([at, end]), or null without an escape.
+ */
+export function pinApproach(at, escape, length = APPROACH_GRID * GRID) {
+  return escape ? [at, { x: at.x + escape.x * length, y: at.y + escape.y * length }] : null;
+}
+
 /**
  * Routing instructions that make routeWire() draw a simplified orthogonal
  * polyline: every segment from the source as a step, except the last two,
@@ -310,14 +321,15 @@ function lanesAround(first, second, count, grid) {
  * Automatic route for a new wire (smart routing at creation time): routing
  * instructions plus the polyline routeWire() draws for them.
  *
- * Candidates leave each pin along its escape direction (a stub of 0, 1, or 2
+ * Candidates leave each pin along its escape direction (a stub of 0 to 4
  * grid) and join the stubs with an L, or with a detour through a horizontal
  * or vertical lane up to `lanes` grid from either stub. The winner crosses the
  * fewest unrelated pin pads, then passes through the fewest part bodies (a
  * wire over a part would also cover its controls, such as a button cap), then
- * runs along existing wires the least, then has the fewest bends, then is the
- * shortest; the default L (routing [], as in older diagrams) wins every tie.
- * The winner becomes instructions with routingFor(), and `points` is what
+ * runs along existing wires and other pins' approaches the least (two wires
+ * drawn on top of each other look joined), then has the fewest bends, then is
+ * the shortest; the default L (routing [], as in older diagrams) wins every
+ * tie. The winner becomes instructions with routingFor(), and `points` is what
  * routeWire() draws for them, so the preview, the created wire, and the wire
  * after saving and reloading are the same polyline.
  *
@@ -328,11 +340,14 @@ function lanesAround(first, second, count, grid) {
  *           board, whose headers sit inside it); a band along each edge,
  *           where pins sit, does not count
  *   wires   [[{ x, y }, ...]] polylines of the existing wires
+ *   approaches  [[{ x, y }, { x, y }]] the stretch in front of each other pin
+ *           along its escape direction (pinApproach), kept free like a wire, so
+ *           a later wire to that pin can reach it without running along this one
  *
  * Returns { routing, points, crossings, bodies, overlap }.
  */
-export function autoRoute(from, to, { fromEscape = null, toEscape = null, pads = [], bodies = [], wires = [], grid = GRID, lanes = 12 } = {}) {
-  const stubs = (point, escape) => (escape ? [0, 1, 2] : [0]).map((k) => (k ? { x: point.x + escape.x * k * grid, y: point.y + escape.y * k * grid } : point));
+export function autoRoute(from, to, { fromEscape = null, toEscape = null, pads = [], bodies = [], wires = [], approaches = [], grid = GRID, lanes = 12 } = {}) {
+  const stubs = (point, escape) => (escape ? [0, 1, 2, 3, 4] : [0]).map((k) => (k ? { x: point.x + escape.x * k * grid, y: point.y + escape.y * k * grid } : point));
   const clearance = grid * 0.45;
   const inset = grid / 4;
   const candidates = [];
@@ -353,7 +368,7 @@ export function autoRoute(from, to, { fromEscape = null, toEscape = null, pads =
     }
   }
   candidates.sort((p, q) => p.bends - q.bends || p.length - q.length || p.order - q.order);
-  const segments = wireSegments(wires);
+  const segments = wireSegments([...wires, ...approaches]);
   let best = null;
   for (const candidate of candidates) {
     const crossings = padCrossings(candidate.points, pads, clearance, best?.crossings);

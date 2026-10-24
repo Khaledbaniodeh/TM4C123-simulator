@@ -734,13 +734,15 @@ A new wire's automatic route keeps clear of unrelated pin pads and, where
 it can, of existing wires (`geometry.js` `autoRoute`). Candidate routes leave
 each pin along its escape direction (header columns away from the
 neighbouring column, since J1|J3 and J4|J2 stand 0.1 in apart; part pins
-outward from the part edge, turned with the part), with a stub of 0–2 grid,
+outward from the part edge, turned with the part), with a stub of 0–4 grid,
 and join through an L or a detour lane up to 12 grid away. The route that
 crosses the fewest pads wins, then the one through the fewest part bodies
 (for the board, whose headers sit inside it, only its RESET, SW1, and SW2
 switches; a wire over a part or a switch would cover it and take its
-clicks), then the one that overlaps
-existing wires least, then the fewest bends, then the shortest; the plain L
+clicks), then the one that runs least along existing wires and along the
+approach to other pins (the 2 grid in front of each pin, so a later wire to
+that pin never has to run along this one; two wires drawn on top of each
+other look joined), then the fewest bends, then the shortest; the plain L
 wins every tie.
 
 The route is stored as ordinary routing instructions: source-side steps plus
