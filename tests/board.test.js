@@ -8,7 +8,7 @@ import { describe, it } from "node:test";
 import { BOARD_INPUTS, BOARD_LEDS } from "../apps/web/board-state.js";
 import { BOARD_PART, GEOMETRY } from "../apps/web/board/launchpad.js";
 import { readFile } from "node:fs/promises";
-import { GRID, autoRoute, bodyCrossings, padCrossings, partBounds, partToWorld, pinEscape, routeWire, wireOverlap } from "../apps/web/workspace/geometry.js";
+import { GRID, areaBounds, autoRoute, bodyCrossings, padCrossings, partBounds, partToWorld, pinEscape, routeWire, wireOverlap } from "../apps/web/workspace/geometry.js";
 import { CATALOG, LIBRARY } from "../apps/web/workspace/parts.js";
 import { createDiagram, parseDiagram, validateDiagram } from "../apps/web/workspace/diagram.js";
 import { evaluateCircuit } from "../apps/web/workspace/netlist.js";
@@ -138,6 +138,20 @@ describe("board geometry", () => {
     assert.equal(route.bodies, 0);
   });
 
+  it("keeps automatic routes off the switches' silkscreen labels too", () => {
+    const labels = [...BOARD_PART.render({}).matchAll(/<text x="([\d.]+)" y="([\d.]+)" class="lp-silk">(RESET|SW1|SW2)<\/text>/g)];
+    assert.equal(labels.length, 3);
+    for (const [, x, y, name] of labels) {
+      const baseline = Number(y);
+      // Capitals of the 5.2px silkscreen type (launchpad.css .lp-silk), widened by a wire's 1.6 half-width
+      // (.wire-casing): a horizontal wire anywhere in this band would be drawn over the label.
+      for (let wireY = baseline - 0.75 * 5.2 - 1.6; wireY <= baseline + 1.6; wireY += 0.2) {
+        const across = [{ x: Number(x) - 20, y: wireY }, { x: Number(x) + 20, y: wireY }];
+        assert.equal(bodyCrossings(across, BOARD_PART.keepOut), 1, `${name} label, wire at y ${wireY.toFixed(1)}`);
+      }
+    }
+  });
+
   it("ships example circuits whose wires cross no unrelated pad, no part body, and no wire of another net", async () => {
     const ground = new Set(BOARD_PART.pins.filter((p) => BOARD_PART.role(p.name)?.kind === "ground").map((p) => `board1:${p.name}`));
     for (const id of ["lcd1602-hello", "external-led-button", "adc-potentiometer"]) {
@@ -145,7 +159,10 @@ describe("board geometry", () => {
       assert.deepEqual(errors, [], id);
       const pads = diagram.parts.flatMap((part) => CATALOG[part.type].pins.map((p) => ({ id: `${part.id}:${p.name}`, ...partToWorld(p, part, CATALOG[part.type].size) })));
       const at = (endpoint) => pads.find((p) => p.id === endpoint);
-      const bodies = diagram.parts.filter((part) => CATALOG[part.type].kind !== "board").map((part) => partBounds(part, CATALOG[part.type].size));
+      // Every part body, and on the board its switches with their labels.
+      const bodies = diagram.parts.flatMap((part) => (CATALOG[part.type].kind === "board"
+        ? CATALOG[part.type].keepOut.map((area) => areaBounds(area, part, CATALOG[part.type].size))
+        : [partBounds(part, CATALOG[part.type].size)]));
       const wires = [];
       for (const [from, to, , routing] of diagram.connections) {
         const points = routeWire(at(from), at(to), routing);
