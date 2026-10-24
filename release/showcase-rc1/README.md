@@ -1,1 +1,1 @@
-Screenshots from release/showcase-rc1 @ 8cefc40705fd49600784d0957184b6ea7d390b4c (run 40031066369, test result: success)
+Screenshots from release/showcase-rc1 @ 7337a63f1480e92f348e9b552a0a8580ea236c35 (run 40068788048, test result: success)
