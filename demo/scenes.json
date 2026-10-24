@@ -1,0 +1,65 @@
+{
+  "title": "TM4C123 Simulator — real firmware on a simulated LaunchPad",
+  "scenes": [
+    {
+      "id": "workspace",
+      "title": "The LaunchPad workspace",
+      "example": "three-timers",
+      "caption": "This is the TM4C123 Simulator: TI's EK-TM4C123GXL LaunchPad, placed from TI's CAD data, in an interactive circuit workspace. Every header pin shows its live role."
+    },
+    {
+      "id": "code",
+      "title": "Real C source",
+      "example": "three-timers",
+      "caption": "The firmware is plain C written against the TM4C123 registers. This example sets up three hardware timers, each with its own interrupt handler."
+    },
+    {
+      "id": "compile",
+      "title": "GCC compilation",
+      "example": "three-timers",
+      "caption": "Compile runs the real arm-none-eabi-gcc toolchain. The result is a Cortex-M4 ELF, and the inspector lists its sections."
+    },
+    {
+      "id": "run",
+      "title": "ELF execution in Renode, RGB LED",
+      "example": "three-timers",
+      "caption": "Run loads that ELF into Renode, which executes it on an emulated Cortex-M4 with the project's TM4C123 peripheral models. Three timer interrupts toggle the RGB LED. Every pin change is an event from the simulator."
+    },
+    {
+      "id": "wiring",
+      "title": "Interactive wiring",
+      "example": "three-timers",
+      "caption": "Circuits are built by dragging, here from a header pin to an LED. The wire is checked, routed clear of the other pins, and can be undone."
+    },
+    {
+      "id": "button",
+      "title": "External button",
+      "example": "external-led-button",
+      "caption": "Here the firmware polls an external pushbutton on PA6. Hold it: the pin reads low, and the firmware drives PA7 high to light the external LED."
+    },
+    {
+      "id": "lcd",
+      "title": "LCD1602 driven by firmware",
+      "example": "lcd1602-hello",
+      "caption": "An LCD1602 in 4-bit mode. The display shows only what the firmware's GPIO writes tell the HD44780 model."
+    },
+    {
+      "id": "adc",
+      "title": "ADC potentiometer",
+      "example": "adc-potentiometer",
+      "caption": "A potentiometer feeds ADC0 on PE3. Turn the knob: the pin table shows the voltage, and the firmware's 12-bit reading switches the LED from green to red."
+    },
+    {
+      "id": "diagnostics",
+      "title": "Compiler diagnostics",
+      "example": "adc-potentiometer",
+      "caption": "Mistakes are reported as GCC reports them. The Problems list shows the error with GCC's own suggestion and jumps to its line. The fix rebuilds cleanly."
+    },
+    {
+      "id": "console",
+      "title": "Console and limits",
+      "example": "adc-potentiometer",
+      "caption": "The console groups every simulator message by severity and source. This runs locally in trusted mode; timing is approximate and not yet validated against physical hardware."
+    }
+  ]
+}
