@@ -221,9 +221,11 @@ for (const size of SIZES) {
     await page.locator("#problemsOutput button.problem-row").first().click();
     const state = await editorState(page);
     expect(state.bandOnLine).toBe(true);
-    // The marked line stays on its line while the editor scrolls.
+    // The marked line stays on its line while the editor scrolls. Setting scrollTop fires "scroll"
+    // asynchronously (before the next paint), so wait for the handler rather than reading in the same instant.
     await page.evaluate(() => { document.querySelector("#codeEditor").scrollTop = 40; });
-    expect((await editorState(page)).bandOnLine).toBe(true);
+    expect(await page.evaluate(() => document.querySelector("#codeEditor").scrollTop)).toBeGreaterThan(0);
+    await expect.poll(async () => (await editorState(page)).bandOnLine).toBe(true);
     await page.evaluate(() => { document.querySelector("#codeEditor").scrollTop = 0; });
     await page.screenshot({ path: `test-results/diagnostics-${size.width}x${size.height}.png` });
     expect(errors).toEqual([]);
