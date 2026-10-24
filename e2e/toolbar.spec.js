@@ -15,10 +15,11 @@ const SIZES = [
 ];
 
 // Measured on e57faf4 (Unicode glyph icons), CI Linux Chromium. Load was a <label> then;
-// it is now the loadDiagramButton <button>, at the same position and size.
+// it is now the loadDiagramButton <button>, at the same position and size. At 1280x720 the
+// whole page sits 18 px higher (y 186 -> 168, as at 1920) since the trust notice fits one line.
 const BASELINE = {
   "1024x768": "addPartButton:452,185,52x27 undoButton:532,185,27x27 redoButton:567,185,27x27 rotateButton:602,185,27x27 duplicateButton:637,185,27x27 deleteButton:672,185,27x27 zoomOutButton:726,185,27x27 zoomInButton:813,185,27x27 fitButton:848,185,40x27 gridToggle:896,185,40x27 snapToggle:944,185,44x27 saveDiagramButton:452,216,43x27 loadDiagramButton:503,216,42x27",
-  "1280x720": "addPartButton:447,186,52x27 undoButton:526,186,27x27 redoButton:561,186,27x27 rotateButton:596,186,27x27 duplicateButton:631,186,27x27 deleteButton:666,186,27x27 zoomOutButton:720,186,27x27 zoomInButton:807,186,27x27 fitButton:842,186,40x27 gridToggle:890,186,40x27 snapToggle:938,186,44x27 saveDiagramButton:1009,186,43x27 loadDiagramButton:1060,186,42x27",
+  "1280x720": "addPartButton:447,168,52x27 undoButton:526,168,27x27 redoButton:561,168,27x27 rotateButton:596,168,27x27 duplicateButton:631,168,27x27 deleteButton:666,168,27x27 zoomOutButton:720,168,27x27 zoomInButton:807,168,27x27 fitButton:842,168,40x27 gridToggle:890,168,40x27 snapToggle:938,168,44x27 saveDiagramButton:1009,168,43x27 loadDiagramButton:1060,168,42x27",
   "1920x1080": "addPartButton:665,168,52x27 undoButton:744,168,27x27 redoButton:779,168,27x27 rotateButton:814,168,27x27 duplicateButton:849,168,27x27 deleteButton:884,168,27x27 zoomOutButton:938,168,27x27 zoomInButton:1025,168,27x27 fitButton:1060,168,40x27 gridToggle:1108,168,40x27 snapToggle:1156,168,44x27 saveDiagramButton:1227,168,43x27 loadDiagramButton:1278,168,42x27",
 };
 
