@@ -56,14 +56,23 @@ async function load(page, text) {
 }
 
 const serialize = (page) => page.evaluate(() => window.__tm4c.serialize());
+/** Moves the pointer off the canvas, so no pin tooltip covers a screenshot. */
+const pointerAway = (page) => page.mouse.move(4, 4);
 const routings = (page) => page.evaluate(() => window.__tm4c.diagram.connections.map((c) => c[3]));
 
-/** Screen centre of a pin. */
-const pinCenter = (page, endpoint) => page.evaluate((id) => {
-  const [part, pin] = id.split(":");
-  const r = document.querySelector(`.pin-anchor[data-part="${CSS.escape(part)}"][data-pin="${CSS.escape(pin)}"]`).getBoundingClientRect();
-  return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-}, endpoint);
+/** Screen centre of a pin, checked to be the element a click there reaches (not covered by anything). */
+async function pinCenter(page, endpoint) {
+  const hit = await page.evaluate((id) => {
+    const [part, pin] = id.split(":");
+    const node = document.querySelector(`.pin-anchor[data-part="${CSS.escape(part)}"][data-pin="${CSS.escape(pin)}"]`);
+    const r = node.getBoundingClientRect();
+    const point = { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    const top = document.elementFromPoint(point.x, point.y);
+    return { ...point, reachable: top === node, top: top ? `${top.tagName}#${top.id}.${top.getAttribute("class")}` : null };
+  }, endpoint);
+  expect(hit.reachable, `${endpoint} is clickable (topmost element: ${hit.top})`).toBe(true);
+  return { x: hit.x, y: hit.y };
+}
 
 /** Draws a wire through the UI; returns the preview over the target pin and the created wire's path. */
 async function connect(page, from, to) {
@@ -73,7 +82,7 @@ async function connect(page, from, to) {
   await page.mouse.move(b.x, b.y, { steps: 4 });
   const preview = await page.locator(".wire-draft").getAttribute("d");
   await page.mouse.click(b.x, b.y);
-  const drawn = await page.locator(`.wire[data-from="${from}"][data-to="${to}"] .wire-core`).getAttribute("d");
+  const drawn = await page.locator(`.wire[data-from="${from}"][data-to="${to}"] .wire-core`).getAttribute("d", { timeout: 10_000 });
   return { preview, drawn };
 }
 
@@ -116,6 +125,7 @@ for (const size of SIZES) {
     // Before: the same wires as older diagrams store them (routing []), drawn with the default L.
     await load(page, diagram(parts, wires.map(([a, b]) => [a, b, "green", []])));
     const before = await measure(page);
+    await pointerAway(page);
     await page.screenshot({ path: `test-results/routing-crowded-before-${tag}.png` });
 
     // After: the same wires drawn through the UI, one by one.
@@ -130,6 +140,7 @@ for (const size of SIZES) {
     await expect(page.locator(".wire")).toHaveCount(wires.length);
     await page.locator("#circuitCanvas").press("Escape");
     const after = await measure(page);
+    await pointerAway(page);
     await page.screenshot({ path: `test-results/routing-crowded-after-${tag}.png` });
     const summary = {
       wires: wires.length,
@@ -180,6 +191,7 @@ test("older diagrams (routing []) and routes a user drew are drawn exactly as be
   await connect(page, "board1:J3.10", "ledR5:C");
   expect((await routings(page)).slice(0, saved.length)).toEqual(saved);
   expect((await measure(page)).slice(0, saved.length).map((w) => w.d)).toEqual(expected);
+  await pointerAway(page);
   await page.screenshot({ path: "test-results/routing-legacy-kept-1280x720.png" });
 
   // Load, serialize, load again: routing arrays unchanged, including [] and the user's route.
@@ -201,6 +213,7 @@ test("a detour wire: preview equals the result, undo and redo restore it exactly
   expect(wire.routing.length, "a detour is stored as routing steps").toBeGreaterThan(0);
   expect(wire.crossed).toEqual([]);
   expect(wire.aligned && wire.attached).toBe(true);
+  await pointerAway(page);
   await page.screenshot({ path: "test-results/routing-detour-1280x720.png" });
   const created = await serialize(page);
 
@@ -229,6 +242,7 @@ test("rotated parts get clean routes, and moving or rotating a part never recomp
   const wires = await measure(page);
   expect(crossings(wires)).toEqual([]);
   expect(wires.every((w) => w.aligned && w.attached)).toBe(true);
+  await pointerAway(page);
   await page.screenshot({ path: "test-results/routing-rotated-1280x720.png" });
   const saved = await routings(page);
 
@@ -297,7 +311,7 @@ test("the preview follows the pointer deterministically and cheaply", async ({ p
   expect(errors).toEqual([]);
 });
 
-test("shipped examples: their wires drawn through the UI cross no unrelated pad (before/after evidence)", async ({ page }) => {
+test("shipped examples store the routes the editor draws: clean, and the same when redrawn through the UI", async ({ page }) => {
   const errors = await open(page);
   const report = {};
   for (const example of ["lcd1602-hello", "external-led-button", "adc-potentiometer"]) {
@@ -305,20 +319,24 @@ test("shipped examples: their wires drawn through the UI cross no unrelated pad 
     await expect(page.locator(".wire").first()).toBeVisible();
     await page.evaluate(() => window.__tm4c.workspace.fit());
     const shipped = JSON.parse(await serialize(page));
-    const before = await measure(page);
-    await page.screenshot({ path: `test-results/routing-example-${example}-shipped-1280x720.png` });
+    const asShipped = await measure(page);
+    await pointerAway(page);
+    await page.screenshot({ path: `test-results/routing-example-${example}-1280x720.png` });
+    await page.locator("#circuitCanvas").screenshot({ path: `test-results/routing-example-${example}-canvas.png` });
+    // The same parts, every wire drawn again through the UI in file order.
     await load(page, JSON.stringify({ ...shipped, connections: [] }));
     for (const [from, to] of shipped.connections) {
       const { preview, drawn } = await connect(page, from, to);
       expect(norm(drawn), `${example} ${from}→${to}`).toBe(norm(preview));
     }
     await page.locator("#circuitCanvas").press("Escape");
-    const after = await measure(page);
-    await page.screenshot({ path: `test-results/routing-example-${example}-redrawn-1280x720.png` });
-    report[example] = { wires: after.length, padsCrossed: { shipped: padsCrossed(before), redrawn: padsCrossed(after) }, routing: after.map((w) => `${w.wire} ${JSON.stringify(w.routing)}`) };
-    expect(crossings(after), example).toEqual([]);
-    // The same connections as shipped, in the same order; only the drawing differs.
+    const redrawn = await measure(page);
+    report[example] = { wires: redrawn.length, padsCrossed: { shipped: padsCrossed(asShipped), redrawn: padsCrossed(redrawn) }, routing: redrawn.map((w) => `${w.wire} ${JSON.stringify(w.routing)}`) };
+    expect(crossings(asShipped), `${example} as shipped`).toEqual([]);
+    expect(crossings(redrawn), `${example} redrawn`).toEqual([]);
+    // The same connections in the same order, and exactly the stored routes.
     expect(JSON.parse(await serialize(page)).connections.map((c) => c.slice(0, 2))).toEqual(shipped.connections.map((c) => c.slice(0, 2)));
+    expect(redrawn.map((w) => w.routing), `${example}: shipped routes are the editor's own`).toEqual(shipped.connections.map((c) => c[3]));
   }
   console.log(`::notice title=routing examples::${JSON.stringify(Object.fromEntries(Object.entries(report).map(([k, v]) => [k, v.padsCrossed])))}`);
   await writeFile("test-results/routing-examples.json", JSON.stringify(report, null, 2));
