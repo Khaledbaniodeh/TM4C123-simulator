@@ -146,9 +146,18 @@ test("company demo: one take of the real simulator", async ({ page }) => {
   // 2. Real C source: scroll through the timer setup to the three interrupt handlers.
   recording.scene("code");
   await moveTo("#codeEditor", 26);
-  for (let i = 0; i < 6; i++) {
-    await page.mouse.wheel(0, 200);
-    await pause(650);
+  // Wheel down in steps until line 72 (the middle handler) is in the middle of the editor.
+  const scrollTarget = await page.evaluate(() => {
+    const editor = document.querySelector("#codeEditor");
+    return 71 * parseFloat(getComputedStyle(editor).lineHeight) - editor.clientHeight / 2;
+  });
+  for (let i = 0; i < 12; i++) {
+    const left = scrollTarget - await page.evaluate(() => document.querySelector("#codeEditor").scrollTop);
+    if (left < 10) {
+      break;
+    }
+    await page.mouse.wheel(0, Math.min(190, left));
+    await pause(600);
   }
   // The handlers (lines 71-73) are in view.
   await expect.poll(() => page.evaluate(() => {
