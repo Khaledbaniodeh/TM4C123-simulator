@@ -1,1 +1,1 @@
-Screenshots from feat/live-tooltips @ f7736796e2649c54362aaa4b70ca1a65bb92a474 (run 40092504120, test result: success)
+Screenshots from feat/live-tooltips @ 089d3649e05ab9b105aee84dd86bc07d30400df2 (run 40099187251, test result: success)
