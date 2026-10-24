@@ -14,19 +14,21 @@ const SIZES = [
   { width: 1920, height: 1080 },
 ];
 
+// Two independent errors (in different functions, so GCC reports both: after a syntax error it skips to
+// the next ';'), a note under the first, and a warning.
 const BROKEN = [
   "#include <stdint.h>",
   "",
   "static int helper(int a)",
   "{",
   "    int unused = 3;",
-  "    return a;",
+  "    return a + missing_one;",
   "}",
   "",
   "int main(void)",
   "{",
   "    uint32_t value = 1u",
-  "    value = undeclared_identifier;",
+  "    value = 2u;",
   "    helper((int)value);",
   "    for (;;)",
   "    {",
