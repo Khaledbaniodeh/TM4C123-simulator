@@ -95,25 +95,69 @@ export function run(command, args, { cwd, timeoutMs, maxOutputBytes = LIMITS.max
 }
 
 /**
- * Parses GCC diagnostics ("file:line:col: severity: message").
- * @returns {{file: string, line: number, column: number, severity: string, message: string}[]}
+ * Parses compiler, assembler, and linker diagnostics from GCC's stderr:
+ *   main.c:12:5: error: …                       compiler (line and column)
+ *   startup.s:7: Error: …                       assembler (line only)
+ *   main.c:15:(.text.main+0x8): undefined …     linker, with a line from debug info
+ *   main.c:(.text+0x8): undefined …             linker, no line
+ *   ld: region `FLASH' overflowed …             linker or driver, no location
+ * `line` and `column` are null when the tool gives none: a location is never
+ * guessed. Notes stay in order after the diagnostic they belong to. The build
+ * directory is removed from messages.
+ * @returns {{file: string|null, line: number|null, column: number|null,
+ *   severity: "error"|"warning"|"note", message: string, origin: "compiler"|"assembler"|"linker"}[]}
  */
-export function parseDiagnostics(stderr, sourceName = "main.c") {
+export function parseDiagnostics(stderr, sourceName = "main.c", workDir = null) {
   const diagnostics = [];
-  const pattern = /^(.*?):(\d+):(\d+): (error|warning|note|fatal error): (.*)$/;
+  const clean = (text) => (workDir ? text.split(workDir + path.sep).join("").split(`${workDir}/`).join("") : text);
+  const fileName = (raw) => (path.basename(raw) === sourceName ? sourceName : path.basename(raw));
+  let inFunction = null; // the linker names the function on the line before its errors
   for (const raw of stderr.split(/\r?\n/)) {
-    const match = pattern.exec(raw);
-    if (!match) {
+    let match = /^(.*?):(\d+):(\d+): (error|warning|note|fatal error): (.*)$/.exec(raw);
+    if (match) {
+      diagnostics.push({
+        file: fileName(match[1]),
+        line: Number(match[2]),
+        column: Number(match[3]),
+        severity: match[4] === "fatal error" ? "error" : match[4],
+        message: clean(match[5]),
+        origin: "compiler",
+      });
       continue;
     }
-    const file = path.basename(match[1]) === sourceName ? sourceName : path.basename(match[1]);
-    diagnostics.push({
-      file,
-      line: Number(match[2]),
-      column: Number(match[3]),
-      severity: match[4] === "fatal error" ? "error" : match[4],
-      message: match[5],
-    });
+    match = /^(.*?):(\d+): (Error|Warning): (.*)$/.exec(raw);
+    if (match) {
+      diagnostics.push({ file: fileName(match[1]), line: Number(match[2]), column: null, severity: match[3].toLowerCase(), message: clean(match[4]), origin: "assembler" });
+      continue;
+    }
+    match = /^(?:.*[\\/])?ld(?:\.exe)?: (?:.*?: )?in function [`'](.*?)'?:$/.exec(raw);
+    if (match) {
+      inFunction = match[1];
+      continue;
+    }
+    match = /^(.*?\.(?:c|s|S|o)):(?:(\d+):)?\(([^)]*)\): (.*)$/.exec(raw);
+    if (match) {
+      diagnostics.push({
+        file: fileName(match[1]),
+        line: match[2] ? Number(match[2]) : null,
+        column: null,
+        severity: "error",
+        message: clean(match[4]) + (inFunction ? ` (in function ${inFunction})` : ""),
+        origin: "linker",
+      });
+      continue;
+    }
+    match = /^(?:.*[\\/])?(ld|collect2|arm-none-eabi-gcc|cc1|as)(?:\.exe)?: (?:(error|warning|fatal error): )?(.*)$/.exec(raw);
+    if (match) {
+      diagnostics.push({
+        file: null,
+        line: null,
+        column: null,
+        severity: match[2] === "warning" ? "warning" : "error",
+        message: clean(match[3]),
+        origin: match[1] === "ld" || match[1] === "collect2" ? "linker" : "compiler",
+      });
+    }
   }
   return diagnostics;
 }
@@ -172,7 +216,7 @@ export async function compileFirmware(source) {
   }
 
   const log = (result.stdout + result.stderr).split(workDir + path.sep).join("");
-  const diagnostics = parseDiagnostics(result.stderr);
+  const diagnostics = parseDiagnostics(result.stderr, "main.c", workDir);
 
   if (result.timedOut) {
     return { ok: false, workDir, diagnostics, log, error: `Compilation exceeded ${LIMITS.compileTimeoutMs} ms and was stopped.` };

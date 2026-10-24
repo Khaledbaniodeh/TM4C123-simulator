@@ -327,6 +327,7 @@ button {
 /* Editor */
 
 .editor-container {
+  position: relative;
   display: grid;
   grid-template-columns: 52px minmax(0, 1fr);
   flex: 1;
@@ -376,6 +377,52 @@ button {
 
 .code-editor::selection {
   background: rgba(47, 129, 247, 0.36);
+}
+
+/* Compiler problems in the editor: the line last navigated to, and gutter marks. */
+.editor-highlight {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(248, 81, 73, 0.13);
+  box-shadow: inset 2px 0 0 #f85149;
+}
+
+.editor-highlight[data-severity="warning"] {
+  background: rgba(227, 179, 65, 0.12);
+  box-shadow: inset 2px 0 0 #e3b341;
+}
+
+.editor-highlight[data-severity="note"] {
+  background: rgba(88, 166, 255, 0.1);
+  box-shadow: inset 2px 0 0 #58a6ff;
+}
+
+.line-numbers .gutter-mark {
+  font-weight: 600;
+  cursor: help;
+}
+
+.line-numbers .gutter-mark::before {
+  margin-right: 3px;
+  font-size: 8px;
+  vertical-align: 2px;
+  content: "\25CF";
+}
+
+.line-numbers .gutter-mark.error {
+  color: #ff7b72;
+}
+
+.line-numbers .gutter-mark.warning {
+  color: #e3b341;
+}
+
+.line-numbers .gutter-mark.note {
+  color: #79b8ff;
+}
+
+.line-numbers .gutter-mark.stale {
+  opacity: 0.5;
 }
 
 .editor-footer {
@@ -870,12 +917,41 @@ button {
   cursor: pointer;
 }
 
-.problem-row.error {
+.problem-row.error .problem-severity {
   color: #ff7b72;
 }
 
-.problem-row.warning {
+.problem-row.warning .problem-severity {
   color: #e3b341;
+}
+
+.problem-row.note .problem-severity {
+  color: #79b8ff;
+}
+
+.problem-row .problem-location {
+  color: var(--text-muted);
+}
+
+.problem-row .problem-severity {
+  font-weight: 600;
+}
+
+.problem-row .problem-message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.problem-row.note {
+  padding-left: 18px;
+}
+
+.problem-row.no-location {
+  cursor: default;
+}
+
+button.problem-row:hover .problem-message {
+  text-decoration: underline;
 }
 
 .events-output .event-line {
