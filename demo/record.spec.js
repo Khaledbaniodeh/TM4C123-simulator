@@ -94,7 +94,7 @@ test("company demo: one take of the real simulator", async ({ page }) => {
     const box = await (typeof target === "string" ? page.locator(target) : target).boundingBox();
     return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
   };
-  const moveTo = async (target, steps = 22) => {
+  const moveTo = async (target, steps = 18) => {
     const point = target.x !== undefined && target.boundingBox === undefined ? target : await center(target);
     await page.mouse.move(point.x, point.y, { steps });
     return point;
@@ -136,12 +136,12 @@ test("company demo: one take of the real simulator", async ({ page }) => {
 
   // 1. The LaunchPad workspace: the board from TI's CAD data; a header pin's live role.
   recording.scene("workspace");
-  await pause(1500);
+  await pause(1000);
   await moveTo(page.locator('.part[data-type="tm4c123gxl-launchpad"]'), 30);
-  await pause(1200);
+  await pause(900);
   await moveTo(pin("board1", "J3.10"), 26);
   await expect(page.locator("#pinTooltip")).toContainText("J3 pin 10");
-  await pause(3500);
+  await pause(3200);
 
   // 2. Real C source: scroll through the timer setup to the three interrupt handlers.
   recording.scene("code");
@@ -172,24 +172,31 @@ test("company demo: one take of the real simulator", async ({ page }) => {
   await click("#compileButton");
   await expect(page.locator("#editorStatus")).toHaveText("Built");
   await pause(1200);
-  await moveTo(".inspector", 20);
-  for (let i = 0; i < 3; i++) {
-    await page.mouse.wheel(0, 160);
+  // Wheel the inspector until its "Firmware image" section (the ELF) is at the top.
+  const firmware = page.locator(".inspector-section", { hasText: "Firmware image" });
+  await expect(firmware).toContainText(".isr_vector");
+  await moveTo(".inspector", 18);
+  const inspectorTop = (await page.locator(".inspector").boundingBox()).y;
+  let scrolled = 0;
+  for (let i = 0; i < 8; i++) {
+    const left = (await firmware.boundingBox()).y - inspectorTop - 8;
+    if (left < 10) {
+      break;
+    }
+    const step = Math.min(160, left);
+    await page.mouse.wheel(0, step);
+    scrolled += step;
     await pause(350);
   }
-  await expect(page.locator(".inspector")).toContainText(".isr_vector");
-  await pause(2800);
-  for (let i = 0; i < 3; i++) {
-    await page.mouse.wheel(0, -160);
-    await pause(200);
-  }
+  await pause(2600);
+  await page.mouse.wheel(0, -scrolled);
 
   // 4. Execution in Renode: three timer interrupts toggle the RGB LED.
   recording.scene("run");
   await run();
   await expect(row("PF1")).toContainText("GPIO output");
   await moveTo(page.locator('.part[data-type="tm4c123gxl-launchpad"]'), 24);
-  await pause(9500);
+  await pause(6500);
 
   // 5. Wiring: add an LED and drag a wire from header pin J2.3 to its anode.
   recording.scene("wiring");
@@ -217,14 +224,14 @@ test("company demo: one take of the real simulator", async ({ page }) => {
   await run();
   await expect(row("PA7")).toContainText("LOW");
   await moveTo(page.locator('.part[data-part="btn1"] .button-cap'), 30);
-  await pause(800);
+  await pause(500);
   await page.mouse.down();
   await expect(row("PA7")).toContainText("HIGH");
   await expect(page.locator('.part[data-part="led1"] .part-led')).toHaveClass(/lit/);
-  await pause(3000);
+  await pause(2400);
   await page.mouse.up();
   await expect(row("PA7")).toContainText("LOW");
-  await pause(1500);
+  await pause(700);
 
   // 7. LCD1602 (example L): the HD44780 model shows what the firmware wrote over Port B.
   recording.scene("lcd");
@@ -235,7 +242,7 @@ test("company demo: one take of the real simulator", async ({ page }) => {
   await expect(lcd).toHaveAttribute("data-row0", "Hello, TM4C123! ");
   await moveTo(lcd, 24);
   await expect(lcd).toHaveAttribute("data-row1", /LCD1602 . n=\d/);
-  await pause(5500);
+  await pause(2800);
 
   // 8. ADC (example M): the knob sets the voltage on PE3; the firmware picks the LED colour.
   recording.scene("adc");
@@ -253,14 +260,14 @@ test("company demo: one take of the real simulator", async ({ page }) => {
   await moveTo(at(15), 30);
   await page.mouse.up();
   await expect(row("PF3")).toContainText("HIGH");
-  await pause(2200);
+  await pause(1700);
   await moveTo(at(15), 6);
   await page.mouse.down();
   await moveTo(at(95), 40);
   await page.mouse.up();
   await expect(row("PF1")).toContainText("HIGH");
   await expect(row("PE3")).toContainText("pot1 → AIN0");
-  await pause(2800);
+  await pause(2300);
 
   // 9. Diagnostics: a typo, GCC's error with its suggestion, jump to the line, fix, clean build.
   recording.scene("diagnostics");

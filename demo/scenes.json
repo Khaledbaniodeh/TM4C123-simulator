@@ -5,31 +5,31 @@
       "id": "workspace",
       "title": "The LaunchPad workspace",
       "example": "three-timers",
-      "caption": "This is the TM4C123 Simulator: TI's EK-TM4C123GXL LaunchPad, placed from TI's CAD data, in an interactive circuit workspace. Every header pin shows its live role."
+      "caption": "This is the TM4C123 Simulator: TI's EK-TM4C123GXL LaunchPad, placed from TI's CAD data, in an interactive circuit workspace."
     },
     {
       "id": "code",
       "title": "Real C source",
       "example": "three-timers",
-      "caption": "The firmware is plain C written against the TM4C123 registers. This example sets up three hardware timers, each with its own interrupt handler."
+      "caption": "The firmware is plain C written against the TM4C123 registers: three hardware timers, each with its own interrupt handler."
     },
     {
       "id": "compile",
       "title": "GCC compilation",
       "example": "three-timers",
-      "caption": "Compile runs the real arm-none-eabi-gcc toolchain. The result is a Cortex-M4 ELF, and the inspector lists its sections."
+      "caption": "Compile runs the real arm-none-eabi-gcc toolchain. The inspector shows the resulting Cortex-M4 ELF and its sections."
     },
     {
       "id": "run",
       "title": "ELF execution in Renode, RGB LED",
       "example": "three-timers",
-      "caption": "Run loads that ELF into Renode, which executes it on an emulated Cortex-M4 with the project's TM4C123 peripheral models. Three timer interrupts toggle the RGB LED. Every pin change is an event from the simulator."
+      "caption": "Run loads that ELF into Renode, which executes it on an emulated Cortex-M4 with the project's TM4C123 peripheral models. Three timer interrupts toggle the RGB LED; every pin change is a simulator event."
     },
     {
       "id": "wiring",
       "title": "Interactive wiring",
       "example": "three-timers",
-      "caption": "Circuits are built by dragging, here from a header pin to an LED. The wire is checked, routed clear of the other pins, and can be undone."
+      "caption": "Circuits are built by dragging from a header pin to a part. The wire is checked, routed clear of other pins, and can be undone."
     },
     {
       "id": "button",
@@ -41,7 +41,7 @@
       "id": "lcd",
       "title": "LCD1602 driven by firmware",
       "example": "lcd1602-hello",
-      "caption": "An LCD1602 in 4-bit mode. The display shows only what the firmware's GPIO writes tell the HD44780 model."
+      "caption": "An LCD1602 in 4-bit mode. The display shows only what the firmware's GPIO writes tell the HD44780 model: a greeting, a custom CGRAM heart, and a counter."
     },
     {
       "id": "adc",
