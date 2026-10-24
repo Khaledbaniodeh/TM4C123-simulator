@@ -58,6 +58,22 @@ const padCrossings = (page) => page.evaluate((grid) => {
   });
 }, G);
 
+/** Wires whose drawn path crosses a clickable control (on-board switch or external button cap), in screen space. */
+const coveredControls = (page) => page.evaluate(() => {
+  const controls = [...document.querySelectorAll(".part [data-input], .part .button-cap")].map((node) => {
+    const r = node.getBoundingClientRect();
+    return { name: node.dataset.input ?? node.closest(".part").dataset.part, left: r.left + 2, right: r.right - 2, top: r.top + 2, bottom: r.bottom - 2 };
+  });
+  return [...document.querySelectorAll(".wire .wire-core")].flatMap((path) => {
+    const matrix = path.getScreenCTM();
+    const points = [...path.getAttribute("d").matchAll(/(-?[\d.]+)[ ,](-?[\d.]+)/g)].map((m) => new DOMPoint(Number(m[1]), Number(m[2])).matrixTransform(matrix));
+    const wire = path.closest(".wire");
+    return controls.filter((c) => points.some((q, i) => i > 0
+      && Math.max(q.x, points[i - 1].x) > c.left && Math.min(q.x, points[i - 1].x) < c.right
+      && Math.max(q.y, points[i - 1].y) > c.top && Math.min(q.y, points[i - 1].y) < c.bottom)).map((c) => `${wire.dataset.from}→${wire.dataset.to} over ${c.name}`);
+  });
+});
+
 const shot = (page, tag, name) => page.screenshot({ path: `test-results/student-${tag}-${name}.png` });
 const coreD = (page, from, to) => page.locator(`.wire[data-from="${from}"][data-to="${to}"] .wire-core`).getAttribute("d");
 
@@ -106,6 +122,7 @@ for (const size of SIZES) {
     await expect(page.locator("#pinTooltip")).toContainText("Wired to");
     await expect(page.locator(".wire")).toHaveCount(7);
     expect(await padCrossings(page)).toEqual([]);
+    expect(await coveredControls(page), "no wire covers SW1, SW2, RESET, or the external button").toEqual([]);
     await page.mouse.move(2, 2);
     await shot(page, tag, "2-wired");
 
