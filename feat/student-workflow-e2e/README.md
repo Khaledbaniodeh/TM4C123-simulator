@@ -1,1 +1,1 @@
-Screenshots from feat/student-workflow-e2e @ 1da8420c9af0c37d8d8020669798ff520ab81a2b (run 40089619147, test result: failure)
+Screenshots from feat/student-workflow-e2e @ 7b1f39b4dbcaa6988327829f101d448846fa9190 (run 40090951700, test result: success)
