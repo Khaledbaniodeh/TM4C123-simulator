@@ -165,6 +165,204 @@ export function pointsToRouting(points) {
   return routing;
 }
 
+/** A route closer than this to a pin centre is drawn over its pad (pins are 0.1 in apart). */
+export const PAD_CLEARANCE = GRID * 0.45;
+
+/**
+ * Direction (a unit vector in world axes) a wire should leave or enter a pin:
+ * the pin's own `escape` (the board's header columns), otherwise outward from
+ * the part edge the pin sits on, turned with the part. null for a pin inside
+ * the part outline.
+ */
+export function pinEscape(pin, part, size) {
+  const edge = 1e-6;
+  let local = pin.escape ?? null;
+  if (!local) {
+    if (pin.x <= edge) {
+      local = { x: -1, y: 0 };
+    } else if (pin.x >= size.width - edge) {
+      local = { x: 1, y: 0 };
+    } else if (pin.y <= edge) {
+      local = { x: 0, y: -1 };
+    } else if (pin.y >= size.height - edge) {
+      local = { x: 0, y: 1 };
+    }
+  }
+  if (!local) {
+    return null;
+  }
+  const turned = rotateQuarter(local, part.rotate ?? 0);
+  return { x: Math.round(turned.x) || 0, y: Math.round(turned.y) || 0 };
+}
+
+/**
+ * Routing instructions that make routeWire() draw a simplified orthogonal
+ * polyline: every segment from the source as a step, except the last two,
+ * which the closing L draws to the exact target. A zero-length step ("v0" or
+ * "h0") sets the axis the closing L starts on, so no rounding of a step can
+ * add a jog at the target. [] for a straight wire or the default L.
+ */
+export function routingFor(points) {
+  if (points.length <= 2) {
+    return [];
+  }
+  const routing = [];
+  for (let i = 1; i < points.length - 2; i++) {
+    const a = points[i - 1];
+    const b = points[i];
+    routing.push(a.x === b.x ? `v${round(b.y - a.y)}` : `h${round(b.x - a.x)}`);
+  }
+  const closing = points.at(-3).x === points.at(-2).x ? "v" : "h";
+  if (closing !== (routing.at(-1)?.[0] ?? "h")) {
+    routing.push(`${closing}0`);
+  }
+  return routing;
+}
+
+function pathLength(points) {
+  let length = 0;
+  for (let i = 1; i < points.length; i++) {
+    length += Math.abs(points[i].x - points[i - 1].x) + Math.abs(points[i].y - points[i - 1].y);
+  }
+  return round(length);
+}
+
+/** Pads (pin centres) that a polyline passes over; counting stops once it exceeds `limit`. */
+export function padCrossings(points, pads, clearance = PAD_CLEARANCE, limit = Infinity) {
+  const reach = clearance * clearance;
+  let count = 0;
+  for (const pad of pads) {
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i - 1];
+      const b = points[i];
+      const dx = Math.max(Math.min(a.x, b.x) - pad.x, 0, pad.x - Math.max(a.x, b.x));
+      const dy = Math.max(Math.min(a.y, b.y) - pad.y, 0, pad.y - Math.max(a.y, b.y));
+      if (dx * dx + dy * dy < reach) {
+        if (++count > limit) {
+          return count;
+        }
+        break;
+      }
+    }
+  }
+  return count;
+}
+
+/** Horizontal and vertical segments of wire polylines, as { at, lo, hi } (y or x, then the span). */
+function wireSegments(wires) {
+  const segments = { h: [], v: [] };
+  for (const wire of wires) {
+    for (let j = 1; j < wire.length; j++) {
+      const c = wire[j - 1];
+      const d = wire[j];
+      if (c.y === d.y && c.x !== d.x) {
+        segments.h.push({ at: c.y, lo: Math.min(c.x, d.x), hi: Math.max(c.x, d.x) });
+      } else if (c.x === d.x && c.y !== d.y) {
+        segments.v.push({ at: c.x, lo: Math.min(c.y, d.y), hi: Math.max(c.y, d.y) });
+      }
+    }
+  }
+  return segments;
+}
+
+function segmentOverlap(points, segments, clearance) {
+  let overlap = 0;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1];
+    const b = points[i];
+    const vertical = a.x === b.x;
+    const at = vertical ? a.x : a.y;
+    const lo = vertical ? Math.min(a.y, b.y) : Math.min(a.x, b.x);
+    const hi = vertical ? Math.max(a.y, b.y) : Math.max(a.x, b.x);
+    for (const segment of vertical ? segments.v : segments.h) {
+      if (Math.abs(segment.at - at) < clearance) {
+        overlap += Math.max(0, Math.min(hi, segment.hi) - Math.max(lo, segment.lo));
+      }
+    }
+  }
+  return round(overlap);
+}
+
+/** Length a polyline runs along (on top of, or too close to tell apart) other wires. */
+export function wireOverlap(points, wires, clearance = PAD_CLEARANCE) {
+  return segmentOverlap(points, wireSegments(wires), clearance);
+}
+
+/** Lane positions 1…count grid either side of two coordinates, nearest first, without repeats. */
+function lanesAround(first, second, count, grid) {
+  const lanes = new Map([[round(first), null], [round(second), null]]);
+  for (let k = 1; k <= count; k++) {
+    for (const lane of [first + k * grid, first - k * grid, second + k * grid, second - k * grid]) {
+      if (!lanes.has(round(lane))) {
+        lanes.set(round(lane), lane);
+      }
+    }
+  }
+  return [...lanes.values()].filter((lane) => lane !== null);
+}
+
+/**
+ * Automatic route for a new wire (smart routing at creation time): routing
+ * instructions plus the polyline routeWire() draws for them.
+ *
+ * Candidates leave each pin along its escape direction (a stub of 0, 1, or 2
+ * grid) and join the stubs with an L, or with a detour through a horizontal
+ * or vertical lane up to `lanes` grid from either stub. The winner crosses the
+ * fewest unrelated pin pads, then runs along existing wires the least, then
+ * has the fewest bends, then is the shortest; the default L (routing [], as
+ * in older diagrams) wins every tie. The winner becomes instructions with
+ * routingFor(), and `points` is what routeWire() draws for them, so the
+ * preview, the created wire, and the wire after saving and reloading are the
+ * same polyline.
+ *
+ * Options:
+ *   fromEscape, toEscape  unit vectors from pinEscape(), or null (a free end)
+ *   pads   [{ x, y }] pin centres to keep clear of (not the wire's own pins)
+ *   wires  [[{ x, y }, ...]] polylines of the existing wires
+ *
+ * Returns { routing, points, crossings, overlap }.
+ */
+export function autoRoute(from, to, { fromEscape = null, toEscape = null, pads = [], wires = [], grid = GRID, lanes = 12 } = {}) {
+  const stubs = (point, escape) => (escape ? [0, 1, 2] : [0]).map((k) => (k ? { x: point.x + escape.x * k * grid, y: point.y + escape.y * k * grid } : point));
+  const clearance = grid * 0.45;
+  const candidates = [];
+  const add = (inner) => {
+    const points = simplify([from, ...inner, to]);
+    candidates.push({ points, bends: Math.max(0, points.length - 2), length: pathLength(points), order: candidates.length });
+  };
+  for (const a of stubs(from, fromEscape)) {
+    for (const b of stubs(to, toEscape)) {
+      add([a, { x: b.x, y: a.y }, b]);
+      add([a, { x: a.x, y: b.y }, b]);
+      for (const y of lanesAround(a.y, b.y, lanes, grid)) {
+        add([a, { x: a.x, y }, { x: b.x, y }, b]);
+      }
+      for (const x of lanesAround(a.x, b.x, lanes, grid)) {
+        add([a, { x, y: a.y }, { x, y: b.y }, b]);
+      }
+    }
+  }
+  candidates.sort((p, q) => p.bends - q.bends || p.length - q.length || p.order - q.order);
+  const segments = wireSegments(wires);
+  let best = null;
+  for (const candidate of candidates) {
+    const crossings = padCrossings(candidate.points, pads, clearance, best?.crossings);
+    if (best && crossings > best.crossings) {
+      continue;
+    }
+    const overlap = segmentOverlap(candidate.points, segments, clearance);
+    if (!best || crossings < best.crossings || overlap < best.overlap) {
+      best = { candidate, crossings, overlap };
+      if (!crossings && !overlap) {
+        break;
+      }
+    }
+  }
+  const routing = routingFor(best.candidate.points);
+  const points = routeWire(from, to, routing);
+  return { routing, points, crossings: padCrossings(points, pads, clearance), overlap: segmentOverlap(points, segments, clearance) };
+}
+
 /**
  * Makes any segment of a routed wire draggable without moving its pins.
  * Dragging moves both ends of the chosen segment perpendicular to it, which

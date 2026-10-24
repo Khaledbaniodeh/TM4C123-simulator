@@ -536,9 +536,11 @@ test("a freshly drawn wire can be rerouted by dragging any segment; undo restore
   const errors = await openWorkspace(page);
   await page.getByRole("button", { name: /Part/ }).click();
   await page.locator('.library-item[data-type="led"]').click();
-  await anchor(page, "board1", "J1.10").click();
+  // J2 is the outer right-hand column, so the default L to the LED (right of the board) crosses no other pad
+  // and the automatic route stays the plain L with routing [] (J1.10 now gets a detour around J3, J4, and J2).
+  await anchor(page, "board1", "J2.10").click();
   await anchor(page, "led1", "A").click();
-  const wire = page.locator('.wire[data-from="board1:J1.10"][data-to="led1:A"]');
+  const wire = page.locator('.wire[data-from="board1:J2.10"][data-to="led1:A"]');
   await expect(wire).toHaveCount(1);
   expect(await page.evaluate(() => window.__tm4c.diagram.connections[0][3])).toEqual([]);
 
@@ -573,7 +575,7 @@ test("a freshly drawn wire can be rerouted by dragging any segment; undo restore
     const d = document.querySelector('.wire[data-to="led1:A"] .wire-core').getAttribute("d");
     const points = [...d.matchAll(/[ML]([-\d.]+) ([-\d.]+)/g)].map((m) => [Number(m[1]), Number(m[2])]);
     const aligned = points.every((p, i) => i === 0 || p[0] === points[i - 1][0] || p[1] === points[i - 1][1]);
-    return { attached: close(ends[0], workspace.pinPosition("board1:J1.10")) && close(ends[1], workspace.pinPosition("led1:A")), aligned, count: points.length };
+    return { attached: close(ends[0], workspace.pinPosition("board1:J2.10")) && close(ends[1], workspace.pinPosition("led1:A")), aligned, count: points.length };
   });
   expect(check).toEqual({ attached: true, aligned: true, count: expect.any(Number) });
   expect(check.count).toBeGreaterThan(3);

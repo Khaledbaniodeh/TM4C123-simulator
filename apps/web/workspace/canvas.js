@@ -8,6 +8,7 @@
  */
 import {
   GRID,
+  autoRoute,
   clientToWorld,
   editableSegment,
   fitViewBox,
@@ -17,6 +18,7 @@ import {
   partToWorld,
   partTransform,
   pathData,
+  pinEscape,
   placeInView,
   placementKey,
   pointsToRouting,
@@ -76,7 +78,9 @@ export class Workspace extends EventTarget {
   #placedPositions = new Set(); // placementKey()s used by pastes and duplicates (no exact stacking)
   #pastedIds = new Set(); // ids created by pastes of this clipboard (the cascade may overlap them)
   #gesture = null;
-  #wireDraft = null; // { from, fromPoint, pointer }
+  #wireDraft = null; // { from }: the pin the wire in progress starts at
+  #routeObstacles = null; // { pads, wires } that automatic routes keep clear of; rebuilt after the wires change
+  #lastRoute = null; // { key, obstacles, route }: the preview route, reused while the wire end stays put
   #tooltip;
   #showGrid = true;
   #snapToGrid = true;
@@ -517,6 +521,7 @@ export class Workspace extends EventTarget {
   }
 
   #renderWires() {
+    this.#routeObstacles = null;
     const layer = this.#layers.wires;
     layer.replaceChildren();
     this.diagram.connections.forEach((connection, index) => {
@@ -552,13 +557,13 @@ export class Workspace extends EventTarget {
     }
   }
 
-  #renderDraft(pointerWorld, valid = null) {
+  #renderDraft(pointerWorld, valid = null, target = null) {
     const overlay = this.#layers.overlay;
     overlay.replaceChildren();
     if (!this.#wireDraft) {
       return;
     }
-    const points = routeWire(this.#wireDraft.fromPoint, pointerWorld);
+    const { points } = this.#routeNewWire(this.#wireDraft.from, target, pointerWorld);
     element("path", {
       class: `wire-draft${valid === false ? " invalid" : ""}`,
       d: pathData(points),
@@ -1003,7 +1008,7 @@ export class Workspace extends EventTarget {
 
   #onPinClick(endpoint, event) {
     if (!this.#wireDraft) {
-      this.#wireDraft = { from: endpoint, fromPoint: this.pinPosition(endpoint) };
+      this.#wireDraft = { from: endpoint };
       this.#renderDraft(this.#world(event));
       this.#emit("wire", { state: "started", from: endpoint });
       return;
@@ -1014,7 +1019,8 @@ export class Workspace extends EventTarget {
       this.#flashInvalid(endpoint);
       return;
     }
-    const connection = [this.#wireDraft.from, endpoint, this.#defaultColor(this.#wireDraft.from, endpoint), []];
+    const { routing } = this.#routeNewWire(this.#wireDraft.from, endpoint); // the route the preview showed
+    const connection = [this.#wireDraft.from, endpoint, this.#defaultColor(this.#wireDraft.from, endpoint), routing];
     this.#wireDraft = null;
     this.#layers.overlay.replaceChildren();
     this.execute(commands.addConnection(connection));
@@ -1068,7 +1074,43 @@ export class Workspace extends EventTarget {
     const target = pinNode ? `${pinNode.dataset.part}:${pinNode.dataset.pin}` : null;
     const valid = target ? this.#validateWire(this.#wireDraft.from, target) === null : null;
     const end = target ? this.pinPosition(target) : (this.#snapToGrid ? { x: snap(world.x), y: snap(world.y) } : world);
-    this.#renderDraft(end, valid);
+    this.#renderDraft(end, valid, target);
+  }
+
+  /** Direction a wire leaves or enters the pin `endpoint` ("part:pin"), or null. */
+  #pinEscape(endpoint) {
+    const parsed = splitEndpoint(endpoint);
+    const part = parsed && findPart(this.diagram, parsed.partId);
+    const definition = part && this.#catalog[part.type];
+    const pin = definition?.pins.find((p) => p.name === parsed.pin);
+    return pin ? pinEscape(pin, part, definition.size) : null;
+  }
+
+  /**
+   * The automatic route of a new wire from pin `from` to pin `to`, or to the
+   * free point `end` while it is drawn (smart routing, geometry.js autoRoute):
+   * clear of unrelated pin pads and existing wires where possible. The
+   * preview and the created wire both come from here, so they are the same.
+   */
+  #routeNewWire(from, to, end = this.pinPosition(to)) {
+    this.#routeObstacles ??= {
+      pads: this.diagram.parts.flatMap((part) => {
+        const definition = this.#catalog[part.type];
+        return definition.pins.map((pin) => ({ id: `${part.id}:${pin.name}`, ...partToWorld(pin, part, definition.size) }));
+      }),
+      wires: this.diagram.connections.map((connection) => this.#wirePoints(connection)).filter(Boolean),
+    };
+    const key = `${from} ${to} ${end.x} ${end.y}`;
+    if (this.#lastRoute?.key !== key || this.#lastRoute.obstacles !== this.#routeObstacles) {
+      const route = autoRoute(this.pinPosition(from), end, {
+        fromEscape: this.#pinEscape(from),
+        toEscape: to ? this.#pinEscape(to) : null,
+        pads: this.#routeObstacles.pads.filter((pad) => pad.id !== from && pad.id !== to),
+        wires: this.#routeObstacles.wires,
+      });
+      this.#lastRoute = { key, obstacles: this.#routeObstacles, route };
+    }
+    return this.#lastRoute.route;
   }
 
   /** The pin under the pointer, by position (touch and pen pointers stay targeted at the pin they pressed). */

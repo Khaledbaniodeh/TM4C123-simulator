@@ -122,13 +122,19 @@ function headerPinPosition(header, pin) {
   return { x: mm(origin.x), y: mm(origin.y + (pin - 1) * PITCH) };
 }
 
+/**
+ * Direction a wire leaves each header column for automatic routing: away from
+ * its neighbour, since J1|J3 and J4|J2 stand only 0.1 in apart.
+ */
+const ESCAPE = { J1: { x: -1, y: 0 }, J3: { x: 1, y: 0 }, J4: { x: -1, y: 0 }, J2: { x: 1, y: 0 } };
+
 const PIN_INDEX = new Map();
 const PINS = [];
 for (const [header, entries] of Object.entries(pinMap.headers)) {
   for (const entry of entries) {
     const name = `${header}.${entry.pin}`;
     const position = headerPinPosition(header, entry.pin);
-    const pin = { name, x: position.x, y: position.y, header, number: entry.pin, ...entry };
+    const pin = { name, x: position.x, y: position.y, header, number: entry.pin, escape: ESCAPE[header], ...entry };
     PINS.push(pin);
     PIN_INDEX.set(name, pin);
   }

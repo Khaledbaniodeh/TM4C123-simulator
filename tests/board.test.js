@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { BOARD_INPUTS, BOARD_LEDS } from "../apps/web/board-state.js";
 import { BOARD_PART, GEOMETRY } from "../apps/web/board/launchpad.js";
-import { GRID } from "../apps/web/workspace/geometry.js";
+import { GRID, autoRoute, padCrossings, pinEscape, routeWire } from "../apps/web/workspace/geometry.js";
 import { CATALOG, LIBRARY } from "../apps/web/workspace/parts.js";
 import { createDiagram, validateDiagram } from "../apps/web/workspace/diagram.js";
 import { evaluateCircuit } from "../apps/web/workspace/netlist.js";
@@ -97,6 +97,26 @@ describe("board geometry", () => {
       assert.ok(Math.abs(pin.x / GRID - Math.round(pin.x / GRID)) < 1e-6, `${pin.name} x`);
       assert.ok(Math.abs(pin.y / GRID - Math.round(pin.y / GRID)) < 1e-6, `${pin.name} y`);
     }
+  });
+
+  it("routes new wires from a header pin away from its neighbouring column and clear of every other pad", () => {
+    const away = { J1: { x: -1, y: 0 }, J3: { x: 1, y: 0 }, J4: { x: -1, y: 0 }, J2: { x: 1, y: 0 } };
+    for (const pin of BOARD_PART.pins) {
+      assert.deepEqual(pinEscape(pin, { rotate: 0 }, BOARD_PART.size), away[pin.header], pin.name);
+    }
+    const pin = (name) => BOARD_PART.pins.find((p) => p.name === name);
+    const others = (...names) => BOARD_PART.pins.filter((p) => !names.includes(p.name));
+    // From the inner column J3 to a point level with it beyond J1: the default L runs over J1.5.
+    const from = pin("J3.5");
+    const to = { x: -96, y: from.y };
+    assert.equal(padCrossings(routeWire(from, to), others("J3.5")), 1);
+    const route = autoRoute(from, to, { fromEscape: pinEscape(from, {}, BOARD_PART.size), pads: others("J3.5") });
+    assert.equal(route.crossings, 0);
+    assert.ok(route.points[1].x > from.x && route.points[1].y === from.y, "leaves J3 towards the board, away from J1");
+    // Between pins of the two left columns (J1.10 to J3.1): no pad of either column on the way.
+    const across = autoRoute(pin("J1.10"), pin("J3.1"), { fromEscape: away.J1, toEscape: away.J3, pads: others("J1.10", "J3.1") });
+    assert.equal(across.crossings, 0);
+    assert.deepEqual(routeWire(pin("J1.10"), pin("J3.1"), across.routing), across.points);
   });
 });
 

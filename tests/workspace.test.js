@@ -6,17 +6,22 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   GRID,
+  autoRoute,
   clientToWorld,
   editableSegment,
   fitViewBox,
   partBounds,
+  padCrossings,
   partToWorld,
+  pinEscape,
   placeInView,
   placementKey,
   pointsToRouting,
   routeWire,
+  routingFor,
   rotateQuarter,
   snap,
+  wireOverlap,
   zoomViewBox,
 } from "../apps/web/workspace/geometry.js";
 import {
@@ -125,6 +130,83 @@ describe("geometry", () => {
     assert.deepEqual(editableSegment(inner, 1), { points: inner, segment: 1 });
     assert.equal(editableSegment(inner, 3), null);
     assert.equal(editableSegment(inner, -1), null);
+  });
+
+  it("routes a new wire clear of unrelated pads, keeping the default L when it is clean", () => {
+    const a = { x: 0, y: 0 };
+    const b = { x: 48, y: 28.8 };
+    const clean = autoRoute(a, b);
+    assert.deepEqual(clean.routing, [], "nothing in the way: the default L, stored as older diagrams store it");
+    assert.deepEqual(clean.points, routeWire(a, b));
+
+    // A pad on the default L's horizontal run: the vertical-first L, stored as a zero-length step.
+    const blocked = autoRoute(a, b, { pads: [{ x: 19.2, y: 0 }] });
+    assert.deepEqual(blocked.routing, ["v0"]);
+    assert.deepEqual(blocked.points, [a, { x: 0, y: 28.8 }, b]);
+    assert.equal(blocked.crossings, 0);
+
+    // Both Ls blocked: the shortest detour through a lane, clear of every pad.
+    const pads = [{ x: 19.2, y: 0 }, { x: 0, y: 19.2 }];
+    assert.equal(padCrossings(routeWire(a, b), pads), 1);
+    const detour = autoRoute(a, b, { pads });
+    assert.deepEqual(detour.routing, ["v9.6", "h0"]);
+    assert.deepEqual(detour.points, [a, { x: 0, y: 9.6 }, { x: 48, y: 9.6 }, b]);
+    assert.equal(detour.crossings, 0);
+    assert.deepEqual(routeWire(a, b, detour.routing), detour.points, "the stored instructions draw exactly the chosen route");
+  });
+
+  it("encodes a route as instructions that redraw it exactly, ending exactly on the target", () => {
+    assert.deepEqual(routingFor([{ x: 0, y: 0 }, { x: 5, y: 0 }]), []);
+    assert.deepEqual(routingFor([{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 5 }]), []);
+    assert.deepEqual(routingFor([{ x: 0, y: 0 }, { x: 0, y: 5 }, { x: 5, y: 5 }]), ["v0"]);
+    assert.deepEqual(routingFor([{ x: 0, y: 0 }, { x: 9.6, y: 0 }, { x: 9.6, y: 20 }, { x: 30, y: 20 }]), ["h9.6", "v0"]);
+    // Board pins are not exact multiples of 9.6 in floating point (J1.6 and an LED pin here).
+    const from = { x: 9.599999999999994, y: 163.20000000000002 };
+    const to = { x: 259.2, y: 153.6 };
+    const intended = [from, { x: 0, y: from.y }, { x: 0, y: 105.6 }, { x: 259.2, y: 105.6 }, to];
+    const routing = routingFor(intended);
+    assert.deepEqual(routing, ["h-9.6", "v-57.6", "h0"]);
+    const drawn = routeWire(from, to, routing);
+    assert.equal(drawn.length, intended.length, "no extra jog from rounding");
+    assert.deepEqual(drawn.at(-1), to);
+    drawn.forEach((point, i) => {
+      assert.ok(Math.abs(point.x - intended[i].x) < 1e-9 && Math.abs(point.y - intended[i].y) < 1e-9, `point ${i}`);
+      assert.ok(i === 0 || point.x === drawn[i - 1].x || point.y === drawn[i - 1].y, `segment ${i} axis-aligned`);
+    });
+  });
+
+  it("keeps new wires off existing wires when a clean alternative exists", () => {
+    const a = { x: 0, y: 0 };
+    const b = { x: 48, y: 28.8 };
+    const wire = [{ x: -20, y: 0 }, { x: 80, y: 0 }]; // along the default L's first run
+    assert.equal(wireOverlap(routeWire(a, b), [wire]), 48);
+    const route = autoRoute(a, b, { wires: [wire] });
+    assert.deepEqual(route.routing, ["v0"]);
+    assert.equal(route.overlap, 0);
+    // A wire one grid away is a separate wire, not an overlap.
+    assert.equal(wireOverlap(routeWire(a, b), [[{ x: -20, y: 9.6 }, { x: 80, y: 9.6 }]]), 0);
+  });
+
+  it("returns the route crossing the fewest pads when none is clean, deterministically", () => {
+    const a = { x: 0, y: 0 };
+    const b = { x: 96, y: 0 };
+    const wall = Array.from({ length: 81 }, (_, i) => ({ x: 48, y: (i - 40) * GRID })); // farther than any lane
+    const route = autoRoute(a, b, { pads: wall });
+    assert.equal(route.crossings, 1);
+    assert.deepEqual(route.routing, [], "the straight wire: nothing shorter crosses fewer pads");
+    assert.deepEqual(autoRoute(a, b, { pads: wall }), route);
+  });
+
+  it("leaves pins along their escape direction, turned with the part", () => {
+    const size = { width: 28.8, height: 57.6 };
+    const bottom = { x: 9.6, y: 57.6 };
+    assert.deepEqual(pinEscape(bottom, { rotate: 0 }, size), { x: 0, y: 1 });
+    assert.deepEqual(pinEscape(bottom, { rotate: 90 }, size), { x: -1, y: 0 });
+    assert.deepEqual(pinEscape({ x: 0, y: 9.6 }, { rotate: 0 }, size), { x: -1, y: 0 });
+    assert.deepEqual(pinEscape({ x: 28.8, y: 9.6 }, {}, size), { x: 1, y: 0 });
+    assert.deepEqual(pinEscape({ x: 9.6, y: 0 }, { rotate: 180 }, size), { x: 0, y: 1 });
+    assert.equal(pinEscape({ x: 9.6, y: 9.6 }, { rotate: 0 }, size), null, "inside the outline");
+    assert.deepEqual(pinEscape({ x: 9.6, y: 9.6, escape: { x: 1, y: 0 } }, { rotate: 270 }, size), { x: 0, y: -1 });
   });
 
   it("smart paste keeps the cascade position when visible, otherwise centers in the view", () => {
