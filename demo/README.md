@@ -43,20 +43,21 @@ video → **Run workflow** on `main` (it also runs when `demo/` changes).
 
 ## Storyboard
 
-Times are from the recorded take and vary by a few seconds between takes:
-compiling and Renode start-up run at real speed.
+Times are from the take recorded for PR #34 (1:56 in all). They vary by a
+second or two between takes, since compiling and Renode start-up run at real
+speed.
 
 | # | Time | Scene | Example (ID) | On screen |
 |---|---|---|---|---|
 | 1 | 0:00 | LaunchPad workspace | I `three-timers` | Pointer over the board; hover J3 pin 10: PF1, on-board red LED, simulation state |
 | 2 | 0:07 | Real C source | I `three-timers` | Scroll `main.c` to the three timer interrupt handlers |
-| 3 | 0:15 | GCC compilation | I `three-timers` | **Compile** → `Built`; inspector **Firmware image**: ELF entry, `.isr_vector`, `.text` |
-| 4 | 0:22 | Execution in Renode | I `three-timers` | **Run**: RGB LED toggled by TIMER0A/1A/2A interrupts; pin table and console update |
-| 5 | 0:37 | Wiring | (I's board) | **Stop**; **+ Part → LED**; drag from J2.3 to the LED anode; wire created and routed |
-| 6 | 0:47 | External button | F `external-led-button` | **Run**; hold the pushbutton: PA6 LOW, PA7 HIGH, external LED lit; release |
+| 3 | 0:14 | GCC compilation | I `three-timers` | **Compile** → `Built`; inspector **Firmware image**: ELF entry, `.isr_vector`, `.text` |
+| 4 | 0:20 | Execution in Renode | I `three-timers` | **Run**: RGB LED toggled by TIMER0A/1A/2A interrupts; pin table and console update |
+| 5 | 0:34 | Wiring | (I's board) | **Stop**; **+ Part → LED**; drag from J2.3 to the LED anode; wire created and routed |
+| 6 | 0:44 | External button | F `external-led-button` | **Run**; hold the pushbutton: PA6 LOW, PA7 HIGH, external LED lit; release |
 | 7 | 1:01 | LCD1602 | L `lcd1602-hello` | **Run**: `Hello, TM4C123!`, CGRAM heart, counter |
 | 8 | 1:18 | ADC potentiometer | M `adc-potentiometer` | **Run**; select pot1; slider to 15 % (green), then 95 % (3.135 V on PE3, red) |
-| 9 | 1:36 | Compiler diagnostics | M `adc-potentiometer` | Type a typo (`GREEN_LEDS`); **Compile** → Problems with GCC's "did you mean 'GREEN_LED'?"; click it → line 84; fix; `Built` |
+| 9 | 1:35 | Compiler diagnostics | M `adc-potentiometer` | Type a typo (`GREEN_LEDS`); **Compile** → Problems with GCC's "did you mean 'GREEN_LED'?"; click it → line 84; fix; `Built` |
 | 10 | 1:47 | Console and limits | M `adc-potentiometer` | Console tab (severity, source, the build history); the trust notice |
 
 ## Voice-over script
