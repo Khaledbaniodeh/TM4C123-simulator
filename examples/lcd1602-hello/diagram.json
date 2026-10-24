@@ -9,16 +9,16 @@
   "connections": [
     ["board1:J2.1", "lcd1:VSS", "black", ["v-9.6", "h0"]],
     ["board1:J3.1", "lcd1:VDD", "red", ["v-19.2", "h0"]],
-    ["board1:J3.2", "lcd1:V0", "black", ["h9.6", "v163.2", "h0"]],
+    ["board1:J3.2", "lcd1:V0", "black", ["h9.6", "v86.4", "h0"]],
     ["board1:J1.3", "lcd1:RS", "orange", []],
     ["board1:J1.4", "lcd1:RW", "gray", []],
-    ["board1:J3.2", "lcd1:RW", "black", ["h19.2", "v153.6", "h0"]],
-    ["board1:J2.2", "lcd1:E", "yellow", ["h9.6", "v144", "h0"]],
-    ["board1:J1.7", "lcd1:D4", "green", ["h-9.6", "v38.4", "h0"]],
-    ["board1:J1.2", "lcd1:D5", "green", ["h-9.6", "v-38.4", "h0"]],
+    ["board1:J3.2", "lcd1:RW", "black", ["h38.4", "v163.2", "h0"]],
+    ["board1:J2.2", "lcd1:E", "yellow", ["h9.6", "v153.6", "h0"]],
+    ["board1:J1.7", "lcd1:D4", "green", ["h-9.6", "v96", "h0"]],
+    ["board1:J1.2", "lcd1:D5", "green", ["h-67.2", "v163.2", "h0"]],
     ["board1:J2.7", "lcd1:D6", "blue", ["h19.2", "v115.2", "h0"]],
-    ["board1:J2.6", "lcd1:D7", "blue", ["h28.8", "v115.2", "h0"]],
+    ["board1:J2.6", "lcd1:D7", "blue", ["h19.2", "v-67.2", "h0"]],
     ["board1:J3.1", "lcd1:A", "red", []],
-    ["board1:J2.1", "lcd1:K", "black", ["h38.4", "v0"]]
+    ["board1:J2.1", "lcd1:K", "black", ["h28.8", "v0"]]
   ]
 }

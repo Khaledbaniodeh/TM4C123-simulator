@@ -128,6 +128,17 @@ function headerPinPosition(header, pin) {
  */
 const ESCAPE = { J1: { x: -1, y: 0 }, J3: { x: 1, y: 0 }, J4: { x: -1, y: 0 }, J2: { x: 1, y: 0 } };
 
+/**
+ * On-board controls that automatic wire routes keep out of (the rest of the
+ * board stays routable: its headers sit inside it). A wire drawn over a
+ * switch would cover it and take its clicks. The 7.4 mm squares match the
+ * switches' selectable outlines.
+ */
+const KEEP_OUT = ["reset", "sw1", "sw2"].map((key) => {
+  const center = GEOMETRY[key];
+  return { x: mm(center.x - 3.7), y: mm(center.y - 3.7), width: mm(7.4), height: mm(7.4) };
+});
+
 const PIN_INDEX = new Map();
 const PINS = [];
 for (const [header, entries] of Object.entries(pinMap.headers)) {
@@ -502,6 +513,7 @@ export const BOARD_PART = Object.freeze({
   size: SIZE,
   defaultAttrs: {},
   pins: PINS,
+  keepOut: KEEP_OUT,
   role,
   pinInfo,
   links,
