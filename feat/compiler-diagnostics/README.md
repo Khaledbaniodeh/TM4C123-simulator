@@ -1,1 +1,1 @@
-Screenshots from feat/compiler-diagnostics @ 93971fdef6a272a3548f795c5997ac9c9d7a45cc (run 40084036402, test result: failure)
+Screenshots from feat/compiler-diagnostics @ 71c450aad7152fd3b19e9df8d1ad4a6296f9faf3 (run 40088415275, test result: success)
