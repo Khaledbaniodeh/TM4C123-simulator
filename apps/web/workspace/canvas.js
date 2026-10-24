@@ -79,6 +79,7 @@ export class Workspace extends EventTarget {
   #pastedIds = new Set(); // ids created by pastes of this clipboard (the cascade may overlap them)
   #gesture = null;
   #wireDraft = null; // { from }: the pin the wire in progress starts at
+  #pointer = null; // { clientX, clientY } of the pointer over the canvas, to keep hover feedback current
   #routeObstacles = null; // { pads, wires } that automatic routes keep clear of; rebuilt after the wires change
   #lastRoute = null; // { key, obstacles, route }: the preview route, reused while the wire end stays put
   #tooltip;
@@ -125,7 +126,10 @@ export class Workspace extends EventTarget {
     svg.addEventListener("pointercancel", (event) => this.#onPointerUp(event));
     svg.addEventListener("wheel", (event) => this.#onWheel(event), { passive: false });
     svg.addEventListener("keydown", (event) => this.#onKeyDown(event));
-    svg.addEventListener("pointerleave", () => this.#hideTooltip());
+    svg.addEventListener("pointerleave", () => {
+      this.#pointer = null;
+      this.#hideTooltip();
+    });
     // Fit once the canvas has a real size (it may be 0×0 while the layout
     // settles); afterwards keep the user's view and only re-apply it.
     new ResizeObserver(() => {
@@ -426,6 +430,7 @@ export class Workspace extends EventTarget {
     this.#renderParts();
     this.#renderWires();
     this.#renderSelection();
+    this.#refreshPointer();
   }
 
   /**
@@ -448,6 +453,7 @@ export class Workspace extends EventTarget {
         body.innerHTML = definition.render(part, state);
       }
     }
+    this.#refreshPointer();
   }
 
   // ---------------------------------------------------------------------------
@@ -460,6 +466,7 @@ export class Workspace extends EventTarget {
     this.#svg.style.setProperty("--zoom", String(this.zoomLevel));
     this.#updateHitTargets();
     this.#emit("view");
+    this.#refreshPointer();
   }
 
   #renderParts() {
@@ -806,11 +813,14 @@ export class Workspace extends EventTarget {
   }
 
   #onPointerMove(event) {
+    this.#pointer = { clientX: event.clientX, clientY: event.clientY };
     const world = this.#world(event);
     const gesture = this.#gesture;
 
-    if (gesture?.type === "wire-press" && event.pointerId === gesture.pointerId) {
-      gesture.dragged ||= Math.hypot(event.clientX - gesture.client.x, event.clientY - gesture.client.y) > WIRE_DRAG_PX;
+    if (gesture?.type === "wire-press" && event.pointerId === gesture.pointerId && !gesture.dragged
+      && Math.hypot(event.clientX - gesture.client.x, event.clientY - gesture.client.y) > WIRE_DRAG_PX) {
+      gesture.dragged = true;
+      this.#emit("wire", { state: "dragging", from: gesture.from });
     }
     if (!gesture || gesture.type === "wire-press") {
       this.#updateDraft(event, world);
@@ -1044,6 +1054,7 @@ export class Workspace extends EventTarget {
       window.removeEventListener("pointercancel", end);
       if (this.#gesture === gesture) {
         this.#gesture = null; // released outside the canvas, or cancelled: never connects
+        this.#emitWaiting(gesture);
       }
     };
     window.addEventListener("pointerup", end);
@@ -1058,6 +1069,15 @@ export class Workspace extends EventTarget {
     const target = pinNode ? `${pinNode.dataset.part}:${pinNode.dataset.pin}` : null;
     if (target && target !== gesture.from) {
       this.#onPinClick(target, event); // same validation, feedback, creation, and undo step as clicking the pin
+    } else {
+      this.#emitWaiting(gesture);
+    }
+  }
+
+  /** A drag that started a wire ended without connecting it: the wire now waits for a click on its target. */
+  #emitWaiting(gesture) {
+    if (gesture.dragged && this.#wireDraft?.from === gesture.from) {
+      this.#emit("wire", { state: "waiting", from: gesture.from });
     }
   }
 
@@ -1199,11 +1219,10 @@ export class Workspace extends EventTarget {
       return;
     }
     const endpoint = `${part.id}:${pinNode.dataset.pin}`;
-    const wires = this.diagram.connections.filter(([a, b]) => a === endpoint || b === endpoint).length;
     const rows = [
       `<strong>${escapeHtml(info.title)}</strong>`,
       ...info.lines.map((line) => `<span>${escapeHtml(line)}</span>`),
-      `<span class="muted">${wires ? `${wires} wire${wires === 1 ? "" : "s"} connected` : "Not connected"}</span>`,
+      `<span class="muted">${escapeHtml(this.#describeWires(endpoint))}</span>`,
     ];
     this.#tooltip.innerHTML = rows.join("");
     this.#tooltip.hidden = false;
@@ -1226,6 +1245,39 @@ export class Workspace extends EventTarget {
   #hideTooltip() {
     this.#tooltip.hidden = true;
     delete this.#tooltip.dataset.pin;
+  }
+
+  /** "Not connected", "Wired to led1:A", or "Wired to led1:A, r1:2 (2 wires)": the pin's wires as drawn now. */
+  #describeWires(endpoint) {
+    const others = this.diagram.connections.filter(([a, b]) => a === endpoint || b === endpoint).map(([a, b]) => (a === endpoint ? b : a));
+    if (!others.length) {
+      return "Not connected";
+    }
+    const listed = others.length > 4 ? [...others.slice(0, 3), "…"] : others;
+    return `Wired to ${listed.join(", ")}${others.length > 1 ? ` (${others.length} wires)` : ""}`;
+  }
+
+  /**
+   * Re-applies hover feedback at the last pointer position, for changes under
+   * a pointer that did not move: a wire made, deleted, undone, or redone; a
+   * zoom, Fit, or resize; new simulator state. The pin tooltip shows the
+   * current wires and state, and a wire in progress ends under the pointer.
+   */
+  #refreshPointer() {
+    if (!this.#pointer) {
+      return;
+    }
+    const { clientX, clientY } = this.#pointer;
+    const target = document.elementFromPoint?.(clientX, clientY);
+    if (!target || !this.#svg.contains(target)) {
+      this.#hideTooltip();
+      return;
+    }
+    const event = { clientX, clientY, target };
+    this.#updateDraft(event);
+    if (!this.#gesture || this.#gesture.type === "wire-press") {
+      this.#updateTooltip(event);
+    }
   }
 }
 
