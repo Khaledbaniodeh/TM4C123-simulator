@@ -44,7 +44,8 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Layout and interface tests
-        run: npx playwright test e2e/run-stop.spec.js e2e/showcase.spec.js -g "Run right after Stop|6: SW1" --repeat-each=10
+        run: |
+          npx playwright test e2e/run-stop.spec.js e2e/showcase.spec.js -g "Run right after Stop|6: SW1" --repeat-each=10
 
       - name: Upload screenshots
         if: always()
