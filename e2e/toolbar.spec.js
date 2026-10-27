@@ -42,7 +42,7 @@ for (const size of SIZES) {
     console.log(`::notice title=toolbar ${size.width}x${size.height} (nothing selected)::${disabled}`);
     expect(disabled, "no toolbar button shifted, resized, or wrapped").toBe(BASELINE[`${size.width}x${size.height}`]);
 
-    // SVG icons: no text glyph, decorative, 11 px, stroked in the button's text color.
+    // SVG icons: no text glyph, decorative, 16 px (11 px before the shell redesign's 30 px tool buttons), stroked in the button's text color.
     const iconOf = (id) => page.evaluate((buttonId) => {
       const button = document.querySelector(`#${buttonId}`);
       const svg = button.querySelector("svg.toolbar-icon");
@@ -78,7 +78,7 @@ for (const size of SIZES) {
         svg: true,
         hidden: "true",
         focusable: "false",
-        size: "11x11",
+        size: "16x16",
         stroke: icons[id].color,
         strokeStyle: icons[id].strokeStyle,
         fill: "none",

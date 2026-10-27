@@ -17,7 +17,7 @@ const SPLIT_MAX = 65;
 
 /** Default share of the width for the code pane (percent). */
 export function defaultSplit(viewportWidth) {
-  return viewportWidth >= 1280 ? 34 : 38;
+  return viewportWidth >= 1280 ? 34 : 36;
 }
 
 /** The split clamped to its range; anything that is not a finite number gives the default. */

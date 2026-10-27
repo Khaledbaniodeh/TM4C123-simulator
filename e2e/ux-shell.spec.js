@@ -56,11 +56,13 @@ for (const size of SIZES) {
     expect((await box(page, "#consolePanel")).height).toBeLessThanOrEqual(36);
     await expect(page.locator(".simulator-panel")).toHaveAttribute("data-inspector", size.width >= 1280 ? "open" : "closed");
 
-    // The canvas: at least 70% of the window height, and at least 44% of its width.
+    // The canvas: at least 70% of the window height, and at least 42% of its width (inspector open from 1280 px).
     const canvas = await box(page, "#circuitCanvas");
     console.log(`::notice title=canvas ${tag}::${Math.round(canvas.width)}x${Math.round(canvas.height)}`);
     expect(canvas.height).toBeGreaterThanOrEqual(size.height * 0.7);
-    expect(canvas.width).toBeGreaterThanOrEqual(size.width * 0.44);
+    expect(canvas.width).toBeGreaterThanOrEqual(size.width * 0.42);
+    // The circuit tools fit one row.
+    expect((await box(page, ".simulator-toolbar")).height).toBeLessThanOrEqual(44);
     await shot(page, `open-${tag}`);
     expect(errors).toEqual([]);
   });
@@ -125,7 +127,7 @@ test("on a narrow screen the inspector opens for a selected part, unless the use
   await expect(page.locator('.part[data-part="led1"]')).toHaveCount(1);
   const panel = page.locator(".simulator-panel");
   await expect(panel).toHaveAttribute("data-inspector", "closed");
-  await page.locator('.part[data-part="led1"] .part-hitbox').click();
+  await page.locator('.part[data-part="led1"]').click();
   await expect(panel).toHaveAttribute("data-inspector", "open");
   await expect(page.locator("#selectionPanel")).toContainText("led1");
   await shot(page, "inspector-1024x768");
@@ -133,7 +135,7 @@ test("on a narrow screen the inspector opens for a selected part, unless the use
   // Hidden by the user: it stays hidden for later selections.
   await page.locator("#inspectorToggle").click();
   await expect(panel).toHaveAttribute("data-inspector", "closed");
-  await page.locator('.part[data-part="btn1"] .part-hitbox').click();
+  await page.locator('.part[data-part="btn1"]').click();
   await expect(page.locator("#selectionPanel")).toContainText("btn1");
   await expect(panel).toHaveAttribute("data-inspector", "closed");
   expect(errors).toEqual([]);

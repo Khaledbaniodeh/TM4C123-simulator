@@ -738,7 +738,7 @@ body.is-resizing {
   flex: none;
   width: 1px;
   height: 20px;
-  margin: 0 6px;
+  margin: 0 5px;
   background: var(--border);
 }
 
@@ -1493,10 +1493,23 @@ button.problem-row:hover .problem-message {
   .editor-footer span:nth-child(2) {
     display: none;
   }
+
+  /* The circuit tools stay on one row in a narrow circuit pane. */
+  .simulator-toolbar .icon-button {
+    width: 28px;
+  }
+
+  .toolbar-divider {
+    margin: 0 3px;
+  }
 }
 
 @media (max-width: 1100px) {
   .brand-text {
+    display: none;
+  }
+
+  .zoom-value {
     display: none;
   }
 }

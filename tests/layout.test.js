@@ -11,7 +11,7 @@ describe("application shell layout", () => {
   it("gives the code pane a third of wide screens and a little more on narrow ones", () => {
     assert.equal(defaultSplit(1920), 34);
     assert.equal(defaultSplit(1280), 34);
-    assert.equal(defaultSplit(1024), 38);
+    assert.equal(defaultSplit(1024), 36);
   });
 
   it("keeps the split within 25-65 % and ignores a stored value that is not a number", () => {
@@ -19,7 +19,7 @@ describe("application shell layout", () => {
     assert.equal(clampSplit(90, 1280), 65);
     assert.equal(clampSplit(41.5, 1280), 41.5);
     assert.equal(clampSplit(undefined, 1280), 34);
-    assert.equal(clampSplit(Number.NaN, 1024), 38);
+    assert.equal(clampSplit(Number.NaN, 1024), 36);
     assert.equal(clampSplit("50", 1280), 34);
   });
 
