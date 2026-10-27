@@ -1,1 +1,1 @@
-Screenshots from main @ 04291e7b0b0dc8f9caf937c1a51fb3b35aa36612 (run 40501797570, test result: success)
+Screenshots from main @ 6e4f6842933f707a64fd1d7e183b5f332ecd9ef2 (run 40504325822, test result: failure)
