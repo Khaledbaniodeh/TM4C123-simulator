@@ -536,8 +536,26 @@ test("a freshly drawn wire can be rerouted by dragging any segment; undo restore
   const errors = await openWorkspace(page);
   await page.getByRole("button", { name: /Part/ }).click();
   await page.locator('.library-item[data-type="led"]').click();
-  // J2 is the outer right-hand column, so the default L to the LED (right of the board) crosses no other pad
-  // and the automatic route stays the plain L with routing [] (J1.10 now gets a detour around J3, J4, and J2).
+  // J2 is the outer right-hand column, so the default L to an LED right of the board, with its pins above
+  // J2.10, crosses no pad and no part, and the automatic route stays the plain L with routing [] (J1.10 gets
+  // a detour around J3, J4, and J2). Where a new part lands depends on the view, so the LED is nudged
+  // there with the arrow keys (it is selected after it is added).
+  const pins = () => page.evaluate(() => ({
+    a: window.__tm4c.workspace.pinPosition("led1:A"),
+    j: window.__tm4c.workspace.pinPosition("board1:J2.10"),
+  }));
+  const { a, j } = await pins();
+  const up = Math.max(0, Math.ceil((a.y - (j.y - 2 * 9.6)) / 9.6 - 1e-6));
+  const right = Math.max(0, Math.ceil((j.x + 4 * 9.6 - a.x) / 9.6 - 1e-6));
+  for (let i = 0; i < up; i++) {
+    await page.locator("#circuitCanvas").press("ArrowUp");
+  }
+  for (let i = 0; i < right; i++) {
+    await page.locator("#circuitCanvas").press("ArrowRight");
+  }
+  const moved = await pins();
+  expect(moved.a.y).toBeLessThan(moved.j.y);
+  expect(moved.a.x).toBeGreaterThan(moved.j.x);
   await anchor(page, "board1", "J2.10").click();
   await anchor(page, "led1", "A").click();
   const wire = page.locator('.wire[data-from="board1:J2.10"][data-to="led1:A"]');

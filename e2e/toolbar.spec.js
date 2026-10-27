@@ -266,13 +266,17 @@ for (const size of SIZES) {
     await expect(undo).toBeEnabled();
     expect(await geometry(), "Redo disabled again: no toolbar button moved").toBe(disabled);
 
-    // Load is a Tab stop right after Save, with a visible focus ring; Tab then moves on to the canvas.
+    // Load is a Tab stop right after Save, with a visible focus ring; Tab then moves on to the
+    // Inspector toggle (the toolbar's last tool since the shell redesign), then to the canvas.
     await page.locator("#saveDiagramButton").focus();
     await page.keyboard.press("Tab");
     expect(await page.evaluate(() => document.activeElement.id)).toBe("loadDiagramButton");
     expect(await page.evaluate(() => document.activeElement.matches(":focus-visible"))).toBe(true);
     expect(await page.evaluate(() => getComputedStyle(document.activeElement).outlineStyle)).not.toBe("none");
     await page.locator(".simulator-toolbar").screenshot({ path: `test-results/toolbar-${size.width}x${size.height}-load-focus.png` });
+    await page.keyboard.press("Tab");
+    expect(await page.evaluate(() => document.activeElement.id)).toBe("inspectorToggle");
+    expect(await page.evaluate(() => getComputedStyle(document.activeElement).outlineStyle)).not.toBe("none");
     await page.keyboard.press("Tab");
     expect(await page.evaluate(() => document.activeElement.id)).toBe("circuitCanvas");
     expect(await geometry(), "focus does not move toolbar buttons").toBe(disabled);
