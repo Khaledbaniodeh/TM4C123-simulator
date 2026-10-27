@@ -24,6 +24,7 @@ import { DraftStore, browserStorage, compareWork } from "./draft-store.js";
 import { describeLocation, groupDiagnostics, isNavigable, lineMarks, nextProblem, problemRange, summarize } from "./diagnostics.js";
 import { CATEGORIES, ConsoleLog, DEFAULT_FILTER, consoleRows } from "./console-log.js";
 import { createShell, isTyping } from "./layout.js";
+import { highlightHtml } from "./c-highlight.js";
 
 const CAPABILITIES = [
   { name: "ARM GCC build → Cortex-M4 ELF", status: "verified" },
@@ -74,6 +75,7 @@ const elements = {
   editor: $("#codeEditor"),
   lineNumbers: $("#lineNumbers"),
   editorHighlight: $("#editorHighlight"),
+  codeHighlight: $("#codeHighlight"),
   cursorPosition: $("#cursorPosition"),
   editorStatus: $("#editorStatus"),
   draftStatus: $("#draftStatus"),
@@ -480,6 +482,7 @@ function workspaceMessage(text, level = "info") {
  * moved since that build.
  */
 function updateLineNumbers() {
+  renderCodeColours();
   const count = elements.editor.value.split("\n").length;
   const marks = lineMarks(state.problems.list);
   const stale = state.problems.source !== null && state.problems.source !== elements.editor.value;
@@ -498,6 +501,20 @@ function updateLineNumbers() {
     fragment.append(span, separator);
   }
   elements.lineNumbers.replaceChildren(fragment);
+}
+
+/**
+ * The coloured copy of the code drawn under the editor's transparent text
+ * (c-highlight.js), kept at the same scroll position.
+ */
+function renderCodeColours() {
+  elements.codeHighlight.innerHTML = highlightHtml(elements.editor.value);
+  syncCodeColours();
+}
+
+function syncCodeColours() {
+  elements.codeHighlight.scrollTop = elements.editor.scrollTop;
+  elements.codeHighlight.scrollLeft = elements.editor.scrollLeft;
 }
 
 function updateCursorPosition() {
@@ -1844,6 +1861,7 @@ elements.editor.addEventListener("click", updateCursorPosition);
 elements.editor.addEventListener("keyup", updateCursorPosition);
 elements.editor.addEventListener("scroll", () => {
   elements.lineNumbers.scrollTop = elements.editor.scrollTop;
+  syncCodeColours();
   positionProblemLine();
 });
 new ResizeObserver(positionProblemLine).observe(elements.editor);
