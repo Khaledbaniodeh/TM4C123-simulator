@@ -1,8 +1,8 @@
 /*
  * Circuit toolbar geometry and appearance at three viewport sizes: every
  * button's position and size is recorded (GitHub notice) and must match the
- * layout measured before the toolbar icons changed (no button may shift or
- * wrap); the toolbar is captured in disabled, hover, and focus states.
+ * measured baseline (no button may shift or wrap, nor move when another is
+ * enabled); the toolbar is captured in disabled, hover, and focus states.
  * Undo, Redo, Rotate, Duplicate, and Delete use monochrome SVG icons in the button's text color,
  * drawn with the same size and stroke so they read as one icon set.
  */
@@ -14,13 +14,16 @@ const SIZES = [
   { width: 1920, height: 1080 },
 ];
 
-// Measured on e57faf4 (Unicode glyph icons), CI Linux Chromium. Load was a <label> then;
-// it is now the loadDiagramButton <button>, at the same position and size. At 1280x720 the
-// whole page sits 18 px higher (y 186 -> 168, as at 1920) since the trust notice fits one line.
+// Measured in CI (Linux Chromium) after the shell redesign: the circuit tools are one row
+// directly under the 52 px top bar (y 57-58; the 64 px simulator header above them is gone),
+// Add Part is the labelled primary action (112x32), the tools are 30 px icon buttons (28 px
+// below 1200 px wide, so the row fits a 1024 px screen) with zoom percentage, Grid, Snap,
+// Save, Load and the new Inspector toggle as icons. Before the redesign (e57faf4 lineage) the
+// row sat at y 168-185 with 27 px buttons and wrapped Save/Load onto a second row at 1024 px.
 const BASELINE = {
-  "1024x768": "addPartButton:452,185,52x27 undoButton:532,185,27x27 redoButton:567,185,27x27 rotateButton:602,185,27x27 duplicateButton:637,185,27x27 deleteButton:672,185,27x27 zoomOutButton:726,185,27x27 zoomInButton:813,185,27x27 fitButton:848,185,40x27 gridToggle:896,185,40x27 snapToggle:944,185,44x27 saveDiagramButton:452,216,43x27 loadDiagramButton:503,216,42x27",
-  "1280x720": "addPartButton:447,168,52x27 undoButton:526,168,27x27 redoButton:561,168,27x27 rotateButton:596,168,27x27 duplicateButton:631,168,27x27 deleteButton:666,168,27x27 zoomOutButton:720,168,27x27 zoomInButton:807,168,27x27 fitButton:842,168,40x27 gridToggle:890,168,40x27 snapToggle:938,168,44x27 saveDiagramButton:1009,168,43x27 loadDiagramButton:1060,168,42x27",
-  "1920x1080": "addPartButton:665,168,52x27 undoButton:744,168,27x27 redoButton:779,168,27x27 rotateButton:814,168,27x27 duplicateButton:849,168,27x27 deleteButton:884,168,27x27 zoomOutButton:938,168,27x27 zoomInButton:1025,168,27x27 fitButton:1060,168,40x27 gridToggle:1108,168,40x27 snapToggle:1156,168,44x27 saveDiagramButton:1227,168,43x27 loadDiagramButton:1278,168,42x27",
+  "1024x768": "addPartButton:384,57,112x32 undoButton:506,58,28x30 redoButton:536,58,28x30 rotateButton:575,58,28x30 duplicateButton:605,58,28x30 deleteButton:635,58,28x30 zoomOutButton:674,58,28x30 zoomInButton:704,58,28x30 fitButton:734,58,28x30 gridToggle:764,58,28x30 snapToggle:794,58,28x30 saveDiagramButton:919,58,28x30 loadDiagramButton:949,58,28x30 inspectorToggle:988,58,28x30",
+  "1280x720": "addPartButton:450,57,112x32 undoButton:577,58,30x30 redoButton:609,58,30x30 rotateButton:654,58,30x30 duplicateButton:686,58,30x30 deleteButton:718,58,30x30 zoomOutButton:763,58,30x30 zoomInButton:841,58,30x30 fitButton:873,58,30x30 gridToggle:905,58,30x30 snapToggle:937,58,30x30 saveDiagramButton:1165,58,30x30 loadDiagramButton:1197,58,30x30 inspectorToggle:1242,58,30x30",
+  "1920x1080": "addPartButton:668,57,112x32 undoButton:795,58,30x30 redoButton:827,58,30x30 rotateButton:872,58,30x30 duplicateButton:904,58,30x30 deleteButton:936,58,30x30 zoomOutButton:981,58,30x30 zoomInButton:1059,58,30x30 fitButton:1091,58,30x30 gridToggle:1123,58,30x30 snapToggle:1155,58,30x30 saveDiagramButton:1805,58,30x30 loadDiagramButton:1837,58,30x30 inspectorToggle:1882,58,30x30",
 };
 
 for (const size of SIZES) {
