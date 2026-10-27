@@ -101,6 +101,10 @@ test("after a reload the restored circuit shows its analog source at once", asyn
 for (const size of SIZES) {
   test(`analog pin row fits the pin table at ${size.width}x${size.height}`, async ({ page }) => {
     const errors = await open(page, size);
+    // The pin table is in the inspector, which starts closed below 1280 px wide.
+    if ((await page.locator(".simulator-panel").getAttribute("data-inspector")) === "closed") {
+      await page.locator("#inspectorToggle").click();
+    }
     await page.click("#runButton");
     await expect(page.locator("#simulationStatus")).toHaveText("Running", { timeout: 60_000 });
     await expect(row(page, "PE3")).toContainText("pot1 → AIN0");
