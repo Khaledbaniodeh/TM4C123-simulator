@@ -1,1 +1,1 @@
-Screenshots from feat/ux-editor @ 855cd8e22668997897895dd3200c94f39bb37564 (run 40494043484, test result: failure)
+Screenshots from feat/ux-editor @ 270a5be082a00c17868a0293a74ea904ef8d6326 (run 40496729965, test result: success)
