@@ -1,0 +1,95 @@
+name: Interaction video
+
+# Evidence for the redesigned interface: one take of the real app (pinned GCC + Renode, Playwright
+# Chromium) building a circuit by pointer (add, drag, wire), zooming, panning, and running firmware,
+# with frame timing per interaction. Runs only on its evidence branch; gates nothing.
+on:
+  push:
+    branches: ["evidence/new-ui-interaction"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: interaction-video-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  record:
+    name: Record the interaction take
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Cache pinned toolchains
+        uses: actions/cache@v4
+        with:
+          path: .tools
+          key: tools-${{ runner.os }}-${{ hashFiles('tools.lock.json') }}
+
+      - name: Install pinned toolchains (verified by SHA-256)
+        run: npm run setup:tools
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          ffmpeg -hide_banner -version | head -1
+
+      - name: Record one take of the real app
+        run: npx playwright test -c recordings/playwright.config.js
+
+      - name: MP4, stills per phase, and a contact sheet
+        run: |
+          cd interaction-output
+          ffmpeg -hide_banner -loglevel error -y -i new-ui-interaction.webm -c:v libx264 -pix_fmt yuv420p -crf 20 -movflags +faststart new-ui-interaction.mp4
+          ffprobe -v error -show_entries format=duration:stream=codec_name,width,height,r_frame_rate,nb_frames -of compact new-ui-interaction.mp4
+          mkdir -p stills
+          node -e '
+            const { execFileSync } = require("node:child_process");
+            const { phases } = require("./timeline.json");
+            const marks = [];
+            phases.forEach((p, i) => {
+              const next = phases[i + 1]?.video ?? p.video + 1.5;
+              marks.push([p.name + "-start", p.video + 0.3], [p.name + "-end", Math.max(p.video + 0.3, next - 0.15)]);
+            });
+            marks.forEach(([name, t], i) => {
+              const file = `stills/${String(i).padStart(2, "0")}-${name}.png`;
+              execFileSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", "-ss", t.toFixed(2), "-i", "new-ui-interaction.mp4", "-frames:v", "1", file]);
+              console.log(file, t.toFixed(2));
+            });
+          '
+          ffmpeg -hide_banner -loglevel error -y -i new-ui-interaction.mp4 -vf "fps=1/3,scale=640:-1,tile=4x5" -frames:v 1 contact-sheet.png
+          ls -la . stills
+
+      - name: Upload the recording
+        uses: actions/upload-artifact@v4
+        with:
+          name: new-ui-interaction
+          path: |
+            interaction-output/new-ui-interaction.mp4
+            interaction-output/new-ui-interaction.webm
+            interaction-output/timeline.json
+            interaction-output/contact-sheet.png
+            interaction-output/stills/
+          retention-days: 90
+
+      - name: Upload the take's test output on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: interaction-recording-failure
+          path: test-results/recording/
+          retention-days: 14
