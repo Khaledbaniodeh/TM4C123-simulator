@@ -265,10 +265,8 @@ code {
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition:
-    background 120ms ease,
-    color 120ms ease,
-    border-color 120ms ease;
+  /* Colour changes at once, so the icon and its button never disagree mid-fade. */
+  transition: background 120ms ease;
 }
 
 .icon-button:hover:not(:disabled) {
