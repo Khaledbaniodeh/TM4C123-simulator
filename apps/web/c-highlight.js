@@ -72,19 +72,30 @@ export function tokenize(source) {
       end = end === -1 ? length : end + 2;
       push("comment", source.slice(i, end));
     } else if (c === "#" && lineStart) {
-      // A directive up to the end of its line (with backslash continuations), or up to a comment.
+      // The directive itself (#define, #include, ...); the rest of the line is coloured as code,
+      // so macro names, values and register addresses keep their own colours.
       end = i + 1;
-      while (end < length) {
-        const ch = source[end];
-        if (ch === "\n" && source[end - 1] !== "\\") {
-          break;
-        }
-        if (ch === "/" && (source[end + 1] === "/" || source[end + 1] === "*")) {
-          break;
-        }
+      while (end < length && (source[end] === " " || source[end] === "\t")) {
         end += 1;
       }
-      push("preprocessor", source.slice(i, end));
+      while (end < length && IDENT.test(source[end])) {
+        end += 1;
+      }
+      const directive = source.slice(i, end);
+      push("preprocessor", directive);
+      // #include <file.h>: the file name reads as a string.
+      if (/include$/.test(directive)) {
+        let open = end;
+        while (open < length && (source[open] === " " || source[open] === "\t")) {
+          open += 1;
+        }
+        const close = source[open] === "<" ? source.indexOf(">", open) : -1;
+        if (close !== -1 && !source.slice(open, close).includes("\n")) {
+          push("plain", source.slice(end, open));
+          push("string", source.slice(open, close + 1));
+          end = close + 1;
+        }
+      }
     } else if (c === '"' || c === "'") {
       end = i + 1;
       while (end < length && source[end] !== c && source[end] !== "\n") {

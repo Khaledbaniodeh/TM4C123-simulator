@@ -30,8 +30,8 @@ describe("firmware editor syntax colouring", () => {
       "}",
     ].join("\n");
     assert.deepEqual(kinds(source), [
-      'preprocessor:#include "TM4C123.h"',
-      "preprocessor:#define PF1_RED_LED (1u << 1) ",
+      "preprocessor:#include", 'string:"TM4C123.h"',
+      "preprocessor:#define", "constant:PF1_RED_LED", "number:1u", "number:1",
       "comment:/* PF1 */",
       "keyword:static", "keyword:volatile", "type:uint32_t", "number:0x1Fu", "comment:// counter",
       "type:int", "function:main", "type:void",
@@ -47,9 +47,10 @@ describe("firmware editor syntax colouring", () => {
     assert.deepEqual(kinds('s = "no end\nnext'), ['string:"no end']);
   });
 
-  it("treats # as a directive only at the start of a line", () => {
-    assert.deepEqual(kinds("  #if DEBUG\nx # y"), ["preprocessor:#if DEBUG"]);
-    assert.deepEqual(kinds("#define A \\\n  1\nOK"), ["preprocessor:#define A \\\n  1", "constant:OK"]);
+  it("colours the directive, and the rest of its line as code; # only starts a directive at the start of a line", () => {
+    assert.deepEqual(kinds("  #if DEBUG\nx # y"), ["preprocessor:#if", "constant:DEBUG"]);
+    assert.deepEqual(kinds("#define A \\\n  1\nOK"), ["preprocessor:#define", "number:1", "constant:OK"]);
+    assert.deepEqual(kinds("#include <stdint.h>\n# define LIMIT 0x10u"), ["preprocessor:#include", "string:<stdint.h>", "preprocessor:# define", "constant:LIMIT", "number:0x10u"]);
   });
 
   it("escapes markup and keeps the layer as tall as the text", () => {
