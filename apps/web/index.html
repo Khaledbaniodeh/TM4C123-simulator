@@ -18,54 +18,63 @@
 <body>
   <div class="application">
 
-    <!-- Top Navigation -->
+    <!-- Top bar: the project (example) and the simulation controls -->
     <header class="topbar">
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">M4</div>
         <div class="brand-text">
           <strong>TM4C123 Simulator</strong>
-          <span>Cortex-M4 Firmware &amp; Peripheral Simulation</span>
+          <span>Cortex-M4 firmware on a simulated LaunchPad</span>
         </div>
       </div>
 
-      <div class="topbar-actions">
-        <label class="example-picker">
-          <span>Example</span>
-          <select id="exampleSelect" aria-label="Firmware example"></select>
-        </label>
-        <button id="compileButton" class="toolbar-button secondary-button" type="button" disabled>Compile</button>
-        <button id="runButton" class="toolbar-button primary-button" type="button" disabled>▶ Run</button>
-        <button id="pauseButton" class="toolbar-button secondary-button" type="button" disabled>❚❚ Pause</button>
-        <button id="resetButton" class="toolbar-button secondary-button" type="button" disabled>↻ Reset MCU</button>
-        <button id="stopButton" class="toolbar-button danger-button" type="button" disabled>■ Stop</button>
+      <label class="example-picker">
+        <span>Example</span>
+        <select id="exampleSelect" aria-label="Firmware example"></select>
+      </label>
+
+      <div class="run-controls" role="group" aria-label="Simulation controls">
+        <button id="compileButton" class="btn btn-secondary" type="button" title="Compile main.c with arm-none-eabi-gcc (Ctrl+B)" disabled>Compile</button>
+        <button id="runButton" class="btn btn-run" type="button" title="Compile if needed and run on the simulated TM4C123 (Ctrl+Enter)" disabled>▶ Run</button>
+        <button id="pauseButton" class="btn btn-icon" type="button" aria-label="Pause" title="Pause the simulation" disabled>
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M5.5 3.5v9M10.5 3.5v9" /></svg>
+        </button>
+        <button id="resetButton" class="btn btn-icon" type="button" aria-label="Reset MCU" title="Reset the MCU: the firmware restarts from the reset vector" disabled>
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3.2 8a4.8 4.8 0 1 0 1.5-3.5M4.5 1.8v2.9h2.9" /></svg>
+        </button>
+        <button id="stopButton" class="btn btn-icon btn-stop" type="button" aria-label="Stop" title="Stop the simulation" disabled>
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><rect x="4" y="4" width="8" height="8" rx="1.2" /></svg>
+        </button>
       </div>
+
+      <div class="simulation-state" role="status" aria-live="polite">
+        <span id="stateIndicator" class="state-indicator stopped" aria-hidden="true"></span>
+        <span id="simulationStatus">No firmware</span>
+        <span class="virtual-time" title="Emulation virtual time reported by Renode (not wall-clock time)">
+          <strong id="virtualTime">—</strong>
+        </span>
+      </div>
+
+      <button id="helpButton" class="btn btn-icon btn-help" type="button" aria-label="Help and keyboard shortcuts" aria-haspopup="dialog" aria-expanded="false" aria-controls="helpPanel" title="Help and keyboard shortcuts (?)">?</button>
     </header>
 
-    <!-- Mode Notice -->
-    <section id="modeNotice" class="prototype-notice">
-      <strong>Local trusted mode.</strong>
-      Compiled firmware runs on a Renode Cortex-M4 with TM4C123 register models. Time- and size-limited,
-      not sandboxed — only run code you trust.
-      <span id="toolchainInfo" class="notice-detail"></span>
-    </section>
-
-    <!-- Main Workspace -->
+    <!-- Code | Circuit -->
     <main class="workspace">
 
-      <!-- Code Workspace -->
-      <section class="editor-panel" aria-label="Firmware editor">
-        <div class="panel-header">
-          <div>
-            <span class="panel-eyebrow">Firmware</span>
+      <section id="editorPanel" class="editor-panel" aria-label="Firmware editor">
+        <div class="pane-header editor-header">
+          <div class="file-tab" aria-current="page">
+            <svg class="icon file-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 1.75h5.5L12.5 4.75v9.5H4z M9.25 1.75v3.25h3.25" /></svg>
             <h1>main.c</h1>
           </div>
-          <div class="editor-status">
-            <span id="draftStatus" class="draft-status" aria-live="polite"></span>
-            <span id="editorStatus" class="small-status">Loading…</span>
-          </div>
+          <span id="editorStatus" class="build-badge">Loading…</span>
+          <span id="draftStatus" class="draft-status" aria-live="polite"></span>
         </div>
 
-        <p id="exampleSummary" class="example-summary"></p>
+        <div id="exampleAbout" class="example-about" data-expanded="false">
+          <p id="exampleSummary" class="example-summary"></p>
+          <button id="aboutToggle" class="link-button" type="button" aria-expanded="false" aria-controls="exampleSummary">More</button>
+        </div>
 
         <div class="editor-container">
           <div id="lineNumbers" class="line-numbers" aria-hidden="true"></div>
@@ -80,25 +89,15 @@
         </div>
       </section>
 
-      <!-- Circuit Workspace -->
-      <section class="simulator-panel" aria-label="Circuit workspace">
-        <div class="panel-header simulator-header">
-          <div>
-            <span class="panel-eyebrow">Simulation</span>
-            <h2>EK-TM4C123GXL LaunchPad</h2>
-          </div>
-          <div class="simulation-state" role="status" aria-live="polite">
-            <span id="stateIndicator" class="state-indicator stopped" aria-hidden="true"></span>
-            <span id="simulationStatus">No firmware</span>
-            <span class="virtual-time" title="Emulation virtual time reported by Renode (not wall-clock time)">
-              · Virtual time <strong id="virtualTime">—</strong>
-            </span>
-          </div>
-        </div>
+      <div id="splitter" class="splitter" role="separator" aria-orientation="vertical" aria-controls="editorPanel" aria-label="Resize the code and circuit panes (arrow keys; double-click to reset)" tabindex="0" aria-valuemin="25" aria-valuemax="65" aria-valuenow="38"></div>
 
-        <div class="simulator-toolbar" role="toolbar" aria-label="Workspace tools">
+      <section class="simulator-panel" aria-label="Circuit workspace">
+        <div class="simulator-toolbar" role="toolbar" aria-label="Circuit tools">
           <div class="library-anchor">
-            <button id="addPartButton" class="icon-button wide-icon-button" type="button" aria-haspopup="menu" aria-expanded="false" title="Add a component">＋ Part</button>
+            <button id="addPartButton" class="btn btn-accent" type="button" aria-haspopup="menu" aria-expanded="false" title="Add a component (A)">
+              <svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 3v10M3 8h10" /></svg>
+              Add Part
+            </button>
             <div id="partLibrary" class="part-library" role="menu" aria-label="Component library" hidden></div>
           </div>
           <div class="toolbar-divider"></div>
@@ -112,6 +111,7 @@
               <path d="M10 2.5 13.5 6 10 9.5M13.25 6H6.5a3.75 3.75 0 0 0 0 7.5h3.25" />
             </svg>
           </button>
+          <div class="toolbar-divider"></div>
           <button id="rotateButton" class="icon-button" type="button" aria-label="Rotate selected part" title="Rotate (R)" disabled>
             <svg class="toolbar-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
               <path d="M12.11 6.63A4.75 4.75 0 1 1 8 4.25M6 2l2.25 2.25L6 6.5" />
@@ -128,16 +128,34 @@
             </svg>
           </button>
           <div class="toolbar-divider"></div>
-          <button id="zoomOutButton" class="icon-button" type="button" aria-label="Zoom out" title="Zoom out (−)">−</button>
+          <button id="zoomOutButton" class="icon-button" type="button" aria-label="Zoom out" title="Zoom out (−)">
+            <svg class="toolbar-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3.5 8h9" /></svg>
+          </button>
           <span id="zoomValue" class="zoom-value">100%</span>
-          <button id="zoomInButton" class="icon-button" type="button" aria-label="Zoom in" title="Zoom in (+)">+</button>
-          <button id="fitButton" class="icon-button wide-icon-button" type="button" title="Fit to screen (F)">Fit</button>
-          <button id="gridToggle" class="icon-button wide-icon-button" type="button" aria-pressed="true" title="Show grid (G)">Grid</button>
-          <button id="snapToggle" class="icon-button wide-icon-button" type="button" aria-pressed="true" title="Snap to 0.1 in grid">Snap</button>
-          <div class="toolbar-divider"></div>
-          <button id="saveDiagramButton" class="icon-button wide-icon-button" type="button" title="Download diagram.json">Save</button>
-          <button id="loadDiagramButton" class="icon-button wide-icon-button" type="button" aria-label="Load diagram.json" title="Load diagram.json">Load</button>
+          <button id="zoomInButton" class="icon-button" type="button" aria-label="Zoom in" title="Zoom in (+)">
+            <svg class="toolbar-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 3.5v9M3.5 8h9" /></svg>
+          </button>
+          <button id="fitButton" class="icon-button" type="button" aria-label="Fit" title="Fit the circuit to the view (F)">
+            <svg class="toolbar-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" /></svg>
+          </button>
+          <button id="gridToggle" class="icon-button" type="button" aria-label="Grid" aria-pressed="true" title="Show grid (G)">
+            <svg class="toolbar-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 2.5h11v11h-11zM6.17 2.5v11M9.83 2.5v11M2.5 6.17h11M2.5 9.83h11" /></svg>
+          </button>
+          <button id="snapToggle" class="icon-button" type="button" aria-label="Snap" aria-pressed="true" title="Snap parts to the 0.1 in grid">
+            <svg class="toolbar-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.5 2.5v5.5a3.5 3.5 0 0 0 7 0V2.5M4.5 5h2.5M9 5h2.5" /></svg>
+          </button>
+          <div class="toolbar-spacer"></div>
+          <button id="saveDiagramButton" class="icon-button" type="button" aria-label="Save" title="Download the circuit as diagram.json">
+            <svg class="toolbar-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 2.5v7.5M4.75 6.75 8 10l3.25-3.25M2.75 11.5v2h10.5v-2" /></svg>
+          </button>
+          <button id="loadDiagramButton" class="icon-button" type="button" aria-label="Load diagram.json" title="Open a diagram.json circuit file">
+            <svg class="toolbar-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 10V2.5M4.75 5.75 8 2.5l3.25 3.25M2.75 11.5v2h10.5v-2" /></svg>
+          </button>
           <input id="loadDiagramInput" type="file" accept="application/json,.json" hidden>
+          <div class="toolbar-divider"></div>
+          <button id="inspectorToggle" class="icon-button" type="button" aria-label="Inspector" aria-pressed="false" aria-controls="inspector" title="Show the inspector: selection, live pins, firmware image">
+            <svg class="toolbar-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 2.5h11v11h-11zM9.5 2.5v11M11 5.25h1M11 7.25h1" /></svg>
+          </button>
         </div>
 
         <div class="simulation-canvas">
@@ -145,42 +163,47 @@
             <svg id="circuitCanvas" class="circuit-canvas" role="application" aria-label="Circuit canvas: LaunchPad and wired parts. Scroll to zoom, drag empty space to pan, click a pin to start a wire, Shift+click or Shift+drag to select several parts, arrow keys to nudge."></svg>
             <div id="pinTooltip" class="pin-tooltip" role="tooltip" hidden></div>
             <div id="faultBadge" class="fault-badge" hidden></div>
+            <p id="canvasHint" class="canvas-hint" hidden>
+              <span><kbd>Add Part</kbd> places a component</span>
+              <span>Drag from one pin to another to wire</span>
+              <span>Hover a pin to see its role</span>
+            </p>
             <p id="workspaceMessage" class="workspace-message" aria-live="polite"></p>
           </div>
 
-          <!-- Inspector -->
-          <aside class="inspector" aria-label="Inspector">
-            <section class="inspector-section">
-              <h3>Selection</h3>
+          <!-- Inspector: hidden on narrow screens until opened or a part is selected -->
+          <aside id="inspector" class="inspector" aria-label="Inspector">
+            <details class="inspector-section" open>
+              <summary>Selection</summary>
               <div id="selectionPanel" class="selection-panel"></div>
-            </section>
+            </details>
 
-            <section class="inspector-section">
-              <h3>Pins <small>from GPIO model</small></h3>
+            <details class="inspector-section" open>
+              <summary>Pins <small>live, from the GPIO model</small></summary>
               <table class="pin-table">
                 <thead>
                   <tr><th scope="col">Pin</th><th scope="col">Role</th><th scope="col">Level</th><th scope="col">Driven by</th></tr>
                 </thead>
                 <tbody id="pinTable"></tbody>
               </table>
-            </section>
+            </details>
 
-            <section class="inspector-section">
-              <h3>Firmware image <small>ELF</small></h3>
+            <details class="inspector-section">
+              <summary>Firmware image <small>ELF</small></summary>
               <dl id="elfInfo" class="elf-info"><dt>Status</dt><dd>Not built</dd></dl>
-            </section>
+            </details>
 
-            <section class="inspector-section">
-              <h3>Capabilities</h3>
+            <details class="inspector-section">
+              <summary>Simulator coverage</summary>
               <ul id="capabilityList" class="capability-list"></ul>
-            </section>
+            </details>
           </aside>
         </div>
       </section>
     </main>
 
-    <!-- Console -->
-    <section class="console-panel" aria-label="Build and simulation output">
+    <!-- Output: collapsed to one line until needed (build problems open it) -->
+    <section id="consolePanel" class="console-panel" data-open="false" aria-label="Build and simulation output">
       <div class="console-header">
         <div class="console-tabs" role="tablist">
           <button class="console-tab active" type="button" role="tab" data-console="console" aria-selected="true">
@@ -193,6 +216,7 @@
             Events <span id="eventCount">0</span>
           </button>
         </div>
+        <p id="consolePreview" class="console-preview" aria-hidden="true"></p>
         <div id="consoleTools" class="console-tools" role="group" aria-label="Console view and filters">
           <div class="console-segmented" role="group" aria-label="Console view">
             <button class="console-chip" type="button" data-view="compact" aria-pressed="true" title="Fold runs of GPIO pin changes into one line">Compact</button>
@@ -205,18 +229,62 @@
           <span id="consoleSummary" class="console-summary"></span>
         </div>
         <button id="clearConsoleButton" class="clear-console-button" type="button">Clear</button>
+        <button id="consoleToggle" class="icon-button console-toggle" type="button" aria-label="Show output" aria-expanded="false" aria-controls="consolePanel" title="Show or hide the output panel">
+          <svg class="toolbar-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3.5 10 8 5.5l4.5 4.5" /></svg>
+        </button>
       </div>
-      <div id="consoleOutput" class="console-output" role="log" aria-live="polite"></div>
-      <div id="problemsOutput" class="console-output" hidden></div>
-      <div id="eventsOutput" class="console-output events-output" hidden></div>
+      <div class="console-body">
+        <div id="consoleOutput" class="console-output" role="log" aria-live="polite"></div>
+        <div id="problemsOutput" class="console-output" hidden></div>
+        <div id="eventsOutput" class="console-output events-output" hidden></div>
+      </div>
     </section>
 
-    <!-- Footer -->
+    <!-- Status bar: the trust model stays visible at all times -->
     <footer class="statusbar">
-      <span>TM4C123 Simulator · independent project, not affiliated with or endorsed by Texas Instruments</span>
-      <span>Simulated behavior · hardware equivalence not verified</span>
+      <span id="modeNotice" class="trust-notice" title="Firmware is compiled by arm-none-eabi-gcc and executed on a Renode Cortex-M4 with TM4C123 register models, in time- and size-limited processes on this computer.">
+        <svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 1.75 2.75 3.75v4c0 3.2 2.2 5.4 5.25 6.5 3.05-1.1 5.25-3.3 5.25-6.5v-4z" /></svg>
+        <strong>Local trusted mode:</strong> not sandboxed — only run code you trust.<span id="toolchainInfo" class="notice-detail"></span>
+      </span>
+      <span class="disclaimer" title="TM4C123 Simulator is an independent project, not affiliated with or endorsed by Texas Instruments. Simulated behaviour; hardware equivalence not verified.">Independent project, not affiliated with TI · not verified against hardware</span>
       <span id="footerStatus">Ready</span>
     </footer>
+
+    <!-- Help: first steps and keyboard shortcuts -->
+    <div id="helpPanel" class="help-panel" role="dialog" aria-modal="false" aria-labelledby="helpTitle" hidden>
+      <div class="help-header">
+        <h2 id="helpTitle">Getting started</h2>
+        <button id="helpClose" class="icon-button" type="button" aria-label="Close help" title="Close (Esc)">
+          <svg class="toolbar-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 4l8 8M12 4l-8 8" /></svg>
+        </button>
+      </div>
+      <ol class="help-steps">
+        <li><strong>Pick an example</strong> or write your own firmware in <code>main.c</code>.</li>
+        <li><strong>Press ▶ Run.</strong> GCC compiles <code>main.c</code>; Renode runs the ELF on a simulated TM4C123.</li>
+        <li><strong>Interact:</strong> hold SW1/SW2 or a button, turn a potentiometer, watch LEDs and the LCD.</li>
+        <li><strong>Build circuits:</strong> <em>Add Part</em>, then drag from one pin to another to wire them.</li>
+        <li><strong>Errors</strong> open in <em>Problems</em>; click one to jump to its line (F8 for the next).</li>
+      </ol>
+      <h3>Keyboard shortcuts</h3>
+      <dl class="shortcut-list">
+        <dt><kbd>Ctrl</kbd>+<kbd>Enter</kbd></dt><dd>Run (or resume)</dd>
+        <dt><kbd>Ctrl</kbd>+<kbd>B</kbd></dt><dd>Compile</dd>
+        <dt><kbd>F8</kbd> / <kbd>Shift</kbd>+<kbd>F8</kbd></dt><dd>Next / previous problem (editor)</dd>
+        <dt><kbd>A</kbd></dt><dd>Add a part (circuit)</dd>
+        <dt><kbd>R</kbd></dt><dd>Rotate the selected part</dd>
+        <dt><kbd>Ctrl</kbd>+<kbd>D</kbd></dt><dd>Duplicate</dd>
+        <dt><kbd>Del</kbd></dt><dd>Delete the selection</dd>
+        <dt><kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>X</kbd> / <kbd>V</kbd></dt><dd>Copy, cut, paste parts</dd>
+        <dt><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd></dt><dd>Undo / redo</dd>
+        <dt>Arrow keys</dt><dd>Nudge 0.1 in (Shift: 1 in)</dd>
+        <dt><kbd>+</kbd> / <kbd>−</kbd> / <kbd>F</kbd></dt><dd>Zoom in / out / fit</dd>
+        <dt><kbd>G</kbd></dt><dd>Toggle the grid</dd>
+        <dt><kbd>Esc</kbd></dt><dd>Cancel a wire, clear the selection</dd>
+        <dt><kbd>?</kbd></dt><dd>This help</dd>
+      </dl>
+    </div>
+
+    <p id="runHint" class="coach-mark" role="note" hidden>Start here: <strong>▶ Run</strong> compiles <code>main.c</code> and runs it on the simulated MCU.</p>
   </div>
 
   <script type="module" src="./app.js"></script>

@@ -23,6 +23,7 @@ import { describeAnalogInput, evaluateAnalog } from "./workspace/analog.js";
 import { DraftStore, browserStorage, compareWork } from "./draft-store.js";
 import { describeLocation, groupDiagnostics, isNavigable, lineMarks, nextProblem, problemRange, summarize } from "./diagnostics.js";
 import { CATEGORIES, ConsoleLog, DEFAULT_FILTER, consoleRows } from "./console-log.js";
+import { createShell, isTyping } from "./layout.js";
 
 const CAPABILITIES = [
   { name: "ARM GCC build → Cortex-M4 ELF", status: "verified" },
@@ -117,7 +118,36 @@ const elements = {
   consoleSummary: $("#consoleSummary"),
   eventCount: $("#eventCount"),
   clearConsoleButton: $("#clearConsoleButton"),
+  consolePanel: $("#consolePanel"),
+  consoleToggle: $("#consoleToggle"),
+  consolePreview: $("#consolePreview"),
+  workspacePane: $(".workspace"),
+  splitter: $("#splitter"),
+  simulatorPanel: $(".simulator-panel"),
+  inspectorToggle: $("#inspectorToggle"),
+  helpPanel: $("#helpPanel"),
+  helpButton: $("#helpButton"),
+  helpClose: $("#helpClose"),
+  runHint: $("#runHint"),
+  canvasHint: $("#canvasHint"),
+  exampleAbout: $("#exampleAbout"),
+  aboutToggle: $("#aboutToggle"),
 };
+
+// Layout: split, output panel, inspector, help, first-run hint (see layout.js).
+const shell = createShell({
+  workspace: elements.workspacePane,
+  splitter: elements.splitter,
+  simulatorPanel: elements.simulatorPanel,
+  inspectorToggle: elements.inspectorToggle,
+  consolePanel: elements.consolePanel,
+  consoleToggle: elements.consoleToggle,
+  helpPanel: elements.helpPanel,
+  helpButton: elements.helpButton,
+  helpClose: elements.helpClose,
+  runHint: elements.runHint,
+  runButton: elements.runButton,
+}, browserStorage());
 
 /** UI state. `session.state` mirrors the orchestrator: none | starting | paused | running | stopped | error. */
 const state = {
@@ -187,6 +217,9 @@ const consoleView = { filter: { ...DEFAULT_FILTER, levels: new Set(DEFAULT_FILTE
  */
 function log(message, level = "info", virtualTimeNs, options = {}) {
   consoleLog.add({ level, message, time: virtualTimeNs, category: options.category ?? "system", key: options.key ?? null, details: options.details ?? null });
+  if (level === "error" && !shell.consoleOpen) {
+    shell.setConsole(true); // errors are never left folded away
+  }
   if (!consoleView.scheduled) {
     consoleView.scheduled = true;
     requestAnimationFrame(() => {
@@ -205,6 +238,10 @@ function renderConsole() {
   const errorsSoFar = consoleLog.errorCount;
   elements.consoleErrorCount.hidden = errorsSoFar === 0;
   elements.consoleErrorCount.textContent = String(errorsSoFar);
+  // The folded panel shows the newest message.
+  const newest = consoleLog.entries.at(-1);
+  elements.consolePreview.textContent = newest ? newest.message : "";
+  elements.consolePreview.dataset.level = newest?.level ?? "";
   const output = elements.consoleOutput;
   if (output.hidden) {
     return; // rendered when the Console tab is shown
@@ -412,6 +449,7 @@ function cursorLine() {
 }
 
 function selectConsoleTab(name) {
+  shell.setConsole(true);
   elements.consoleTabs.forEach((tab) => {
     const active = tab.dataset.console === name;
     tab.classList.toggle("active", active);
@@ -473,17 +511,21 @@ function buildIsCurrent() {
 
 function updateEditorStatus() {
   const failed = state.problems.source === elements.editor.value && state.problems.list.some((p) => p.severity === "error");
+  let status = "pending";
   if (state.busy === "compiling") {
     elements.editorStatus.textContent = "Compiling…";
   } else if (buildIsCurrent()) {
     elements.editorStatus.textContent = "Built";
+    status = "built";
   } else if (failed) {
     elements.editorStatus.textContent = `Build failed: ${summarize(state.problems.list)}`;
+    status = "failed";
   } else if (state.build) {
     elements.editorStatus.textContent = "Changed since build";
   } else {
     elements.editorStatus.textContent = "Not built";
   }
+  elements.editorStatus.dataset.state = status;
 }
 
 // ---------------------------------------------------------------------------
@@ -602,8 +644,14 @@ workspace.addEventListener("change", (event) => {
   reevaluateCircuit();
   renderToolbar();
   renderPinTable();
+  updateCanvasHint();
   workspaceMessage(event.detail.label);
 });
+
+/** First steps over the canvas while the circuit is the bare board. */
+function updateCanvasHint() {
+  elements.canvasHint.hidden = history.diagram.parts.some((part) => CATALOG[part.type]?.kind !== "board");
+}
 workspace.addEventListener("clipboard", (event) => {
   const { action, parts, wires, relocated, crowded } = event.detail;
   const what = `${parts} part${parts === 1 ? "" : "s"}${wires ? ` and ${wires} wire${wires === 1 ? "" : "s"} between them` : ""}`;
@@ -618,6 +666,12 @@ workspace.addEventListener("clipboard", (event) => {
 workspace.addEventListener("select", () => {
   renderToolbar();
   renderSelectionPanel();
+  // A selected part or wire has properties to show; the board alone does not.
+  const selection = workspace.selection;
+  const part = selection?.kind === "part" ? findPart(history.diagram, selection.id) : null;
+  if (selection && !(part && CATALOG[part.type].kind === "board")) {
+    shell.revealInspector();
+  }
 });
 workspace.addEventListener("view", () => {
   elements.zoomValue.textContent = `${Math.round(workspace.zoomLevel * 100)}%`;
@@ -823,6 +877,7 @@ function loadDiagramText(text, origin) {
   reevaluateCircuit();
   renderToolbar();
   renderPinTable();
+  updateCanvasHint();
   workspaceMessage(`Loaded ${origin}.`);
   return true;
 }
@@ -907,6 +962,8 @@ function render() {
   elements.virtualTime.textContent = live || sessionState === "stopped"
     ? formatVirtualTime(state.board.virtualTimeNs) + (state.realTimeFactor ? ` (${state.realTimeFactor.toFixed(2)}× real time)` : "")
     : "—";
+  // The pill can be narrow; the whole reading is in its tooltip.
+  elements.virtualTime.parentElement.title = `Virtual time ${elements.virtualTime.textContent}: emulation time reported by Renode (not wall-clock time)`;
 
   const fault = live ? state.board.fault : null;
   elements.faultBadge.hidden = !fault;
@@ -1547,6 +1604,14 @@ function exampleCircuitText(example) {
 function showExample(example) {
   elements.exampleSelect.value = example.id;
   elements.exampleSummary.textContent = `${example.summary} Expected: ${example.expected}.`;
+  setAboutExpanded(false);
+}
+
+/** The example's description: one line, or all of it. */
+function setAboutExpanded(expanded) {
+  elements.exampleAbout.dataset.expanded = String(expanded);
+  elements.aboutToggle.textContent = expanded ? "Less" : "More";
+  elements.aboutToggle.setAttribute("aria-expanded", String(expanded));
 }
 
 function setSource(text) {
@@ -1624,6 +1689,7 @@ async function initialize() {
   renderLibrary();
   renderToolbar();
   renderSelectionPanel();
+  updateCanvasHint();
   workspace.fit();
   render();
   try {
@@ -1695,8 +1761,52 @@ elements.editor.addEventListener("keydown", (event) => {
   }
 });
 
-elements.compileButton.addEventListener("click", compile);
-elements.runButton.addEventListener("click", run);
+elements.compileButton.addEventListener("click", () => {
+  shell.finishRunHint();
+  compile();
+});
+elements.runButton.addEventListener("click", () => {
+  shell.finishRunHint();
+  run();
+});
+elements.aboutToggle.addEventListener("click", () => setAboutExpanded(elements.exampleAbout.dataset.expanded !== "true"));
+
+/** Library open or closed (the Add Part button and the A key). */
+function setLibraryOpen(open) {
+  elements.partLibrary.hidden = !open;
+  elements.addPartButton.setAttribute("aria-expanded", String(open));
+  if (open) {
+    elements.partLibrary.querySelector(".library-item")?.focus();
+  }
+}
+
+// Application shortcuts. Single keys only act outside text fields; the circuit's own keys (R, Del, arrows, ...)
+// are handled by the canvas when it has focus.
+document.addEventListener("keydown", (event) => {
+  const ctrl = event.ctrlKey || event.metaKey;
+  if (ctrl && !event.shiftKey && !event.altKey && event.key === "Enter") {
+    event.preventDefault();
+    if (!elements.runButton.disabled) {
+      elements.runButton.click();
+    }
+  } else if (ctrl && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "b") {
+    event.preventDefault();
+    if (!elements.compileButton.disabled) {
+      elements.compileButton.click();
+    }
+  } else if (event.key === "Escape" && (shell.helpOpen || !elements.partLibrary.hidden)) {
+    shell.setHelp(false);
+    setLibraryOpen(false);
+  } else if (!ctrl && !event.altKey && !isTyping(event.target)) {
+    if (event.key === "?") {
+      event.preventDefault();
+      shell.setHelp(!shell.helpOpen);
+    } else if (event.key === "a" || event.key === "A") {
+      event.preventDefault();
+      setLibraryOpen(true);
+    }
+  }
+});
 elements.pauseButton.addEventListener("click", () => control("pause"));
 elements.resetButton.addEventListener("click", () => control("reset"));
 elements.stopButton.addEventListener("click", stop);
@@ -1711,11 +1821,7 @@ elements.redoButton.addEventListener("click", () => workspace.redo());
 elements.rotateButton.addEventListener("click", () => workspace.rotateSelection());
 elements.duplicateButton.addEventListener("click", () => workspace.duplicateSelection());
 elements.deleteButton.addEventListener("click", () => workspace.deleteSelection());
-elements.addPartButton.addEventListener("click", () => {
-  const open = elements.partLibrary.hidden;
-  elements.partLibrary.hidden = !open;
-  elements.addPartButton.setAttribute("aria-expanded", String(open));
-});
+elements.addPartButton.addEventListener("click", () => setLibraryOpen(elements.partLibrary.hidden));
 elements.saveDiagramButton.addEventListener("click", () => {
   const blob = new Blob([serializeDiagram(history.diagram)], { type: "application/json" });
   const link = document.createElement("a");

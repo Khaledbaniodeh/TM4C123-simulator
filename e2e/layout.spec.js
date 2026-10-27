@@ -40,19 +40,11 @@ for (const size of SIZES) {
       }
       const canvas = document.querySelector("#circuitCanvas").getBoundingClientRect();
       const consolePanel = document.querySelector(".console-panel").getBoundingClientRect();
-      const consoleOutput = document.querySelector("#consoleOutput");
-      const consoleLineHeight = parseFloat(getComputedStyle(consoleOutput).lineHeight);
-      const consoleLines = Math.floor((consoleOutput.clientHeight - 20) / consoleLineHeight);
       // Before any scrolling: the circuit canvas lies fully inside its visible panel area,
       // so Fit shows the whole circuit.
       const area = document.querySelector(".simulation-canvas").getBoundingClientRect();
       const canvasVisible = canvas.top >= area.top - 1 && canvas.bottom <= area.bottom + 1 && canvas.height > 150;
-      // The inspector (selection, pins) may stack below the canvas in a scroll area; it must be reachable.
-      const inspector = document.querySelector(".inspector");
-      inspector?.scrollIntoView({ block: "nearest" });
-      const inspectorRect = inspector?.getBoundingClientRect();
-      const inspectorReachable = Boolean(inspectorRect && inspectorRect.width > 0 && inspectorRect.right <= viewport.width + 1 && inspectorRect.top < viewport.height);
-      // Lines of text in the trust notice and in the simulator's board name (distinct line boxes of their text).
+      // Lines of text (distinct line boxes) in the trust notice and in the simulation state pill.
       const lines = (node) => {
         const range = document.createRange();
         range.selectNodeContents(node);
@@ -60,7 +52,7 @@ for (const size of SIZES) {
         return bottoms.filter((bottom, i) => i === 0 || bottom - bottoms[i - 1] > 8).length;
       };
       const noticeLines = lines(document.querySelector("#modeNotice"));
-      const boardTitleLines = lines(document.querySelector(".simulator-header h2"));
+      const stateLines = lines(document.querySelector(".simulation-state"));
       const panels = [...document.querySelectorAll("main > *, .layout > *, body > div > *")]
         .slice(0, 8)
         .map((node) => `${node.id || node.className || node.tagName}:${Math.round(node.getBoundingClientRect().width)}`);
@@ -70,41 +62,45 @@ for (const size of SIZES) {
         canvas: { width: Math.round(canvas.width), height: Math.round(canvas.height) },
         clipped,
         panels,
-        inspectorReachable,
         canvasVisible,
         consoleHeight: Math.round(consolePanel.height),
-        consoleLines,
         noticeLines,
-        boardTitleLines,
+        stateLines,
         toolchain: document.querySelector("#toolchainInfo").textContent.trim(),
       };
     });
     console.log(`::notice title=layout ${size.width}x${size.height}::${JSON.stringify(metrics)}`);
-    // Screenshot what the user sees first (undo the inspector scroll used for the check).
-    await page.evaluate(() => document.querySelector(".simulation-canvas").scrollTo(0, 0));
     await page.screenshot({ path: `test-results/layout-${size.width}x${size.height}.png` });
     expect(metrics.clipped).toEqual([]);
     expect(metrics.scroll.width).toBeLessThanOrEqual(size.width);
-    expect(metrics.inspectorReachable).toBe(true);
     expect(metrics.canvasVisible).toBe(true);
-    // Short screens give the circuit more height; the console stays usable everywhere.
-    expect(metrics.consoleLines).toBeGreaterThanOrEqual(3);
-    if (size.height <= 820) {
-      expect(metrics.consoleHeight).toBeLessThanOrEqual(122);
-    } else {
-      expect(metrics.consoleHeight).toBeGreaterThanOrEqual(148);
-    }
+    // The circuit gets the height: the output panel is folded to one line until opened
+    // (canvas height at 1280x720: 323 px originally, 371 px before the shell redesign).
+    expect(metrics.consoleHeight).toBeLessThanOrEqual(36);
     if (size.width === 1280 && size.height === 720) {
-      expect(metrics.canvas.height, "canvas height at 1280x720 (was 323 px)").toBeGreaterThanOrEqual(350);
+      expect(metrics.canvas.height, "canvas height at 1280x720").toBeGreaterThanOrEqual(480);
     }
-    // The trust notice keeps its warning and fits one line from 1280 px (it took two before); the board
-    // name never wraps (at 1024 px the virtual time wrapped it onto two lines).
+    // The trust notice keeps its warning on one line in the status bar at every size; the state pill is one line.
     await expect(page.locator("#modeNotice")).toContainText("not sandboxed — only run code you trust");
     expect(metrics.toolchain).toMatch(/^GCC \d+\.\d+\.\d+ · Renode \d+\.\d+\.\d+$/);
-    if (size.width >= 1280) {
-      expect(metrics.noticeLines, "trust notice lines").toBe(1);
+    expect(metrics.noticeLines, "trust notice lines").toBe(1);
+    expect(metrics.stateLines, "state pill lines").toBe(1);
+
+    // Opened, the console shows at least three lines; the inspector (selection, pins) is one click away.
+    await page.getByRole("tab", { name: /Console/ }).click();
+    const consoleLines = await page.evaluate(() => {
+      const output = document.querySelector("#consoleOutput");
+      return Math.floor((output.clientHeight - 16) / parseFloat(getComputedStyle(output).lineHeight));
+    });
+    expect(consoleLines).toBeGreaterThanOrEqual(3);
+    if ((await page.locator(".simulator-panel").getAttribute("data-inspector")) === "closed") {
+      await page.locator("#inspectorToggle").click();
     }
-    expect(metrics.boardTitleLines, "board name lines").toBe(1);
+    const inspector = await page.locator(".inspector").evaluate((node) => node.getBoundingClientRect().toJSON());
+    expect(inspector.width).toBeGreaterThan(200);
+    expect(inspector.right).toBeLessThanOrEqual(size.width + 1);
+    await expect(page.locator("#pinTable")).toBeVisible();
+    await page.screenshot({ path: `test-results/layout-panels-${size.width}x${size.height}.png` });
     await page.click("#stopButton");
     expect(errors).toEqual([]);
   });

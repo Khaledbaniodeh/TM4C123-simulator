@@ -1,0 +1,55 @@
+name: UX preview
+
+# Screenshots of the interface at 1024x768, 1280x720 and 1920x1080 from the layout-focused browser
+# tests, in a few minutes, for reviewing interface work on feat/ux-* branches. The full test suite
+# still runs in CI; this workflow gates nothing.
+on:
+  workflow_dispatch:
+  push:
+    branches: ["feat/ux-**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ux-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  screenshots:
+    name: Interface screenshots
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Cache pinned toolchains
+        uses: actions/cache@v4
+        with:
+          path: .tools
+          key: tools-${{ runner.os }}-${{ hashFiles('tools.lock.json') }}
+
+      - name: Install pinned toolchains (verified by SHA-256)
+        run: npm run setup:tools
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Layout and interface tests
+        run: npx playwright test e2e/ux-shell.spec.js e2e/layout.spec.js e2e/showcase.spec.js
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ux-preview-screenshots
+          path: test-results/**/*.png
+          retention-days: 14
