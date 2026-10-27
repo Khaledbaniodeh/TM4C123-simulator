@@ -35,7 +35,7 @@ anything other than executed code teach the wrong lessons.
 - **Fourteen firmware examples** (A–N): GPIO output and input, interrupts
   with PF0 unlock, clock tree, SysTick, GPTM timers, LCD1602, ADC with a
   potentiometer and the temperature sensor; see the README.
-- **Automated tests:** 164 Node tests and 124 browser tests in CI,
+- **Automated tests:** 174 Node tests and 140 browser tests in CI,
   including all RISK-001 negative cases
   ([`RISK-001_Acceptance_Report.md`](RISK-001_Acceptance_Report.md)) and a
   showcase walkthrough ([`SHOWCASE_DEMO.md`](SHOWCASE_DEMO.md)).

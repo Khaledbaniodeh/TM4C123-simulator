@@ -44,7 +44,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Layout and interface tests
-        run: npx playwright test e2e/ux-shell.spec.js e2e/ux-circuit.spec.js e2e/layout.spec.js e2e/showcase.spec.js e2e/toolbar.spec.js
+        run: npx playwright test e2e/ux-shell.spec.js e2e/ux-circuit.spec.js e2e/ux-editor.spec.js e2e/layout.spec.js e2e/showcase.spec.js e2e/toolbar.spec.js
 
       - name: Upload screenshots
         if: always()

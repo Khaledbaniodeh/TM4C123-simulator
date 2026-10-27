@@ -139,7 +139,8 @@ into the gitignored `.tools/` directory; delete it to uninstall. **Ctrl+C**
 stops the server and shuts Renode down cleanly.
 
 A guided 10-minute walkthrough for presentations:
-[`docs/SHOWCASE_DEMO.md`](docs/SHOWCASE_DEMO.md).
+[`docs/SHOWCASE_DEMO.md`](docs/SHOWCASE_DEMO.md). How the interface is laid out, and why:
+[`docs/UX_DESIGN.md`](docs/UX_DESIGN.md).
 
 ## Firmware examples
 
@@ -170,7 +171,7 @@ npm test           # Node: compiler, Renode integration, API, peripherals, works
 npm run test:e2e   # Playwright: real UI against the real toolchain and Renode
 ```
 
-CI ([`ci.yml`](.github/workflows/ci.yml)) runs **164 Node tests and 124
+CI ([`ci.yml`](.github/workflows/ci.yml)) runs **174 Node tests and 140
 browser tests** with the pinned toolchains; every browser test compiles and
 executes real firmware where it needs to. Browser
 screenshots from each run are published to the

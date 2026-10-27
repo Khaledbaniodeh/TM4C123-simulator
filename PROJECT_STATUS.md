@@ -3,7 +3,7 @@
 **Last updated:** 2026-10-24 (`main`, showcase demo build)
 **Stage:** Technical preview. Real firmware execution, the interactive
 LaunchPad and the circuit workspace are implemented and covered by
-automated tests (164 Node + 124 browser tests in CI).
+automated tests (174 Node + 140 browser tests in CI).
 **Public hosted simulator:** No. Local, trusted, single-user mode only.
 **Hardware equivalence:** Not verified (no physical LaunchPad comparison yet).
 
@@ -27,7 +27,8 @@ automated tests (164 Node + 124 browser tests in CI).
 | Live pin and wire tooltips (follow the running simulation), wiring hints | ✅ Implemented and verified (Playwright) |
 | Workspace parts: LED, resistor, pushbutton, potentiometer, LCD1602 | ✅ Implemented and verified (logic level / ideal divider / HD44780) |
 | Editing: multi-selection, copy/paste, smart placement, undo/redo | ✅ Implemented and verified (Playwright) |
-| Wiring: click-to-click, drag-to-connect, pan while wiring, rerouting | ✅ Implemented and verified (Playwright) |
+| Wiring: click-to-click, drag-to-connect, pan while wiring, rerouting; every target pin shown while wiring | ✅ Implemented and verified (Playwright) |
+| Interface: code \| circuit split (resizable), folded output and inspector, help and shortcuts, searchable component library with part drawings, C syntax colouring ([`docs/UX_DESIGN.md`](docs/UX_DESIGN.md)) | ✅ Implemented and verified (Playwright, three window sizes) |
 | Automatic routes for new wires: clear of unrelated pads, parts, and the board's switches and their labels | ✅ Implemented and verified (D-035) |
 | Compile problems: GCC and linker diagnostics listed; only those with a line in `main.c` (the editable file) go to it (F8 / Shift+F8); others, such as linker errors without a source location, are listed but not navigable | ✅ Implemented and verified (Playwright) |
 | Console: severity and source per message, compact/detailed views, filters | ✅ Implemented and verified (Playwright) |

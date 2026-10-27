@@ -23,15 +23,17 @@ the previous work.
 ## 2. Real C, real compiler (1 min)
 
 - Example **A — Red LED on (PF1)** is plain C with register defines.
-- Click **Compile**. The status turns **Built**; the inspector shows the
-  ELF (entry point, `.isr_vector`, `.text`, `.data`, `.bss`) and the console
-  shows the GCC build result. The notice bar names the GCC and Renode
-  versions reported by the server (hover it for GCC's full version string).
+- Click **Compile** (Ctrl+B). The badge next to `main.c` turns **Built**;
+  **Firmware image** in the inspector shows the ELF (entry point,
+  `.isr_vector`, `.text`, `.data`, `.bss`), and the output line at the
+  bottom shows the GCC build result (click **Console** for the full log).
+  The status bar names the GCC and Renode versions reported by the server
+  (hover it for GCC's full version string).
 
 ## 3. Execution on the simulated MCU (1 min)
 
-- Click **Run**. The console shows `SYSCTL: GPIOF clock enabled`, then
-  `PF1 → HIGH (GPIO output)`, and the red LED lights.
+- Click **Run** (Ctrl+Enter). The red LED lights; the **Console** shows
+  `SYSCTL: GPIOF clock enabled`, then `PF1 → HIGH (GPIO output)`.
 - The pin table says why: PF1 HIGH, driven by a GPIO output. Nothing in the
   browser decides this; it is the GPIO model's event.
 - Optional proof: example **B** has the identical configuration with DATA
@@ -48,7 +50,8 @@ the previous work.
 ## 5. Building a circuit (2 min)
 
 - Stop the simulation and pick example **A**.
-- **+ Part → LED**: the LED is placed on free canvas beside the board.
+- **Add Part** (or press **A**) → **LED**: the LED is placed on free canvas
+  beside the board. The library can also be searched ("pot", "lcd").
 - **Drag to connect:** press on **J2 pin 3**, drag to the LED's anode,
   release. The wire is created, validated and selected. **Ctrl+Z** removes
   it in one step; **Ctrl+Y** restores it exactly.

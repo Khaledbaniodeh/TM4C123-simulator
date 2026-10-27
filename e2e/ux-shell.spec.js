@@ -51,16 +51,16 @@ for (const size of SIZES) {
     await expect(page.locator("#modeNotice")).toContainText("not sandboxed — only run code you trust");
     expect((await box(page, "#modeNotice")).height).toBeLessThanOrEqual(20);
 
-    // The output panel starts folded to one line; the inspector starts open only on wide screens.
+    // The output panel starts folded to one line; the inspector starts closed.
     await expect(page.locator("#consolePanel")).toHaveAttribute("data-open", "false");
     expect((await box(page, "#consolePanel")).height).toBeLessThanOrEqual(36);
-    await expect(page.locator(".simulator-panel")).toHaveAttribute("data-inspector", size.width >= 1280 ? "open" : "closed");
+    await expect(page.locator(".simulator-panel")).toHaveAttribute("data-inspector", "closed");
 
-    // The canvas: at least 70% of the window height, and at least 42% of its width (inspector open from 1280 px).
+    // The canvas: at least 70% of the window height and 60% of its width (the inspector starts closed).
     const canvas = await box(page, "#circuitCanvas");
     console.log(`::notice title=canvas ${tag}::${Math.round(canvas.width)}x${Math.round(canvas.height)}`);
     expect(canvas.height).toBeGreaterThanOrEqual(size.height * 0.7);
-    expect(canvas.width).toBeGreaterThanOrEqual(size.width * 0.42);
+    expect(canvas.width).toBeGreaterThanOrEqual(size.width * 0.6);
     // The circuit tools fit one row.
     expect((await box(page, ".simulator-toolbar")).height).toBeLessThanOrEqual(44);
     await shot(page, `open-${tag}`);
@@ -121,23 +121,42 @@ test("the code | circuit split follows the splitter (pointer and keys) and is re
   expect(errors).toEqual([]);
 });
 
-test("on a narrow screen the inspector opens for a selected part, unless the user hid it", async ({ page }) => {
-  const errors = await open(page, { width: 1024, height: 768 });
+test("the inspector starts closed; a selected part opens it once the press is over; the user's choice is kept", async ({ page }) => {
+  const errors = await open(page);
   await page.selectOption("#exampleSelect", "external-led-button");
   await expect(page.locator('.part[data-part="led1"]')).toHaveCount(1);
   const panel = page.locator(".simulator-panel");
   await expect(panel).toHaveAttribute("data-inspector", "closed");
-  await page.locator('.part[data-part="led1"]').click();
-  await expect(panel).toHaveAttribute("data-inspector", "open");
-  await expect(page.locator("#selectionPanel")).toContainText("led1");
-  await shot(page, "inspector-1024x768");
 
-  // Hidden by the user: it stays hidden for later selections.
+  // Dragging a part: nothing opens mid-drag, the part moves and stays selected, the inspector opens on release.
+  const leftOf = () => page.evaluate(() => window.__tm4c.diagram.parts.find((p) => p.id === "led1").left);
+  const before = await leftOf();
+  const led = await page.locator('.part[data-part="led1"]').boundingBox();
+  await page.mouse.move(led.x + led.width / 2, led.y + led.height / 3);
+  await page.mouse.down();
+  await page.mouse.move(led.x + led.width / 2 - 40, led.y + led.height / 3, { steps: 8 });
+  await expect(panel).toHaveAttribute("data-inspector", "closed");
+  await page.mouse.up();
+  await expect(panel).toHaveAttribute("data-inspector", "open");
+  expect(await leftOf()).toBeLessThan(before);
+  await expect(page.locator("#selectionPanel")).toContainText("led1");
+  await shot(page, "inspector-1280x720");
+
+  // Hidden by the user: it stays hidden for later selections, and after a reload.
   await page.locator("#inspectorToggle").click();
   await expect(panel).toHaveAttribute("data-inspector", "closed");
   await page.locator('.part[data-part="btn1"]').click();
   await expect(page.locator("#selectionPanel")).toContainText("btn1");
   await expect(panel).toHaveAttribute("data-inspector", "closed");
+  await page.reload();
+  await expect(page.locator("#exampleSelect option")).toHaveCount(14);
+  await expect(panel).toHaveAttribute("data-inspector", "closed");
+  // Opened by the user: open after a reload.
+  await page.locator("#inspectorToggle").click();
+  await expect(panel).toHaveAttribute("data-inspector", "open");
+  await page.reload();
+  await expect(page.locator("#exampleSelect option")).toHaveCount(14);
+  await expect(panel).toHaveAttribute("data-inspector", "open");
   expect(errors).toEqual([]);
 });
 
