@@ -1,1 +1,1 @@
-Screenshots from feat/ux-shell @ cd57f95e6b459953fe904d3ca3bcb560a954f3a4 (run 40476894067, test result: failure)
+Screenshots from feat/ux-shell @ 19bc83b899f808976942dc102449bd4334c02549 (run 40480077586, test result: failure)
