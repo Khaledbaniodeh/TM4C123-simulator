@@ -300,19 +300,19 @@ for (const size of [{ width: 1024, height: 768 }, { width: 1280, height: 720 }, 
     await open(page, size);
     await expect(page.locator("#draftStatus")).toHaveText("Saved in this browser");
     const fit = await page.evaluate(() => {
-      const header = document.querySelector(".editor-panel .panel-header").getBoundingClientRect();
+      const header = document.querySelector(".editor-panel .pane-header").getBoundingClientRect();
       const status = document.querySelector("#draftStatus").getBoundingClientRect();
       const badge = document.querySelector("#editorStatus").getBoundingClientRect();
       return {
         inside: status.left >= header.left && status.right <= header.right && status.top >= header.top && status.bottom <= header.bottom,
         oneLine: status.height < 20,
-        beforeBadge: status.right <= badge.left,
+        clearOfBadge: status.left >= badge.right,
         headerHeight: Math.round(header.height),
       };
     });
     console.log(`::notice title=draft status ${size.width}x${size.height}::${JSON.stringify(fit)}`);
-    expect(fit).toEqual({ inside: true, oneLine: true, beforeBadge: true, headerHeight: fit.headerHeight });
+    expect(fit).toEqual({ inside: true, oneLine: true, clearOfBadge: true, headerHeight: fit.headerHeight });
     expect(fit.headerHeight).toBeLessThanOrEqual(64);
-    await page.locator(".editor-panel .panel-header").screenshot({ path: `test-results/persistence-status-${size.width}x${size.height}.png` });
+    await page.locator(".editor-panel .pane-header").screenshot({ path: `test-results/persistence-status-${size.width}x${size.height}.png` });
   });
 }

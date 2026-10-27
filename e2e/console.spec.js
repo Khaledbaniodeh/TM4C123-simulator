@@ -43,6 +43,7 @@ test("compact and detailed views of a running LCD example; the page keeps a boun
   const errors = await open(page);
   await runLcd(page);
   await page.waitForTimeout(2000); // a few hundred pin changes
+  await page.getByRole("tab", { name: /Console/ }).click(); // the output panel starts folded
   await expect(chip(page, "Compact")).toHaveAttribute("aria-pressed", "true");
   const compact = await rowTexts(page);
   const folded = compact.filter((r) => r.category === "gpio" && /^GPIO: \d+ pin changes \(/.test(r.text));
@@ -127,6 +128,9 @@ test("filters never hide an error, and compiler output folds under it", async ({
 for (const size of SIZES) {
   test(`console header stays on one line at ${size.width}x${size.height}`, async ({ page }) => {
     const errors = await open(page, size);
+    // The output panel starts folded to its header; a tab opens it with the console's tools.
+    await page.getByRole("tab", { name: /Console/ }).click();
+    await expect(page.locator("#consolePanel")).toHaveAttribute("data-open", "true");
     const header = await page.locator(".console-header").boundingBox();
     expect(header.height).toBeLessThanOrEqual(36);
     for (const selector of ["#consoleTools .console-chip", "#consoleCategory", "#consoleFilter", "#clearConsoleButton"]) {

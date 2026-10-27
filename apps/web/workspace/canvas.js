@@ -404,7 +404,12 @@ export class Workspace extends EventTarget {
   }
 
   fit() {
-    const bounds = unionBounds(this.diagram.parts.map((part) => partBounds(part, this.#catalog[part.type].size)));
+    let bounds = unionBounds(this.diagram.parts.map((part) => partBounds(part, this.#catalog[part.type].size)));
+    // A bare board is framed with a workbench to its right (1.6 in), so the first parts added land
+    // beside it, next to the J4/J2 headers, not on it, whatever the canvas proportions.
+    if (this.diagram.parts.length === 1) {
+      bounds = { ...bounds, width: bounds.width + GRID * 16 };
+    }
     const rect = this.#svg.getBoundingClientRect();
     const aspect = rect.width && rect.height ? rect.width / rect.height : 4 / 3;
     this.#viewBox = fitViewBox(bounds, aspect, GRID * 2.5);
