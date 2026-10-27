@@ -72,11 +72,14 @@ test("zooms, pans, and fits the view", async ({ page }) => {
   const zoomed = await viewBox(page);
   expect(zoomed[2]).toBeLessThan(initial[2]);
 
-  // Drag empty canvas space to pan.
+  // Drag empty canvas space to pan: the workbench right of the bare board (a bare board is framed
+  // with free space to its right, so the canvas's left edge can be over the board once zoomed in).
   const stage = await page.locator("#circuitCanvas").boundingBox();
-  await page.mouse.move(stage.x + 15, stage.y + 15);
+  const start = { x: stage.x + stage.width - 150, y: stage.y + 30 };
+  expect(await page.evaluate(({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest(".part, .wire, .pin-anchor")), start), "pan starts on empty canvas").toBe(false);
+  await page.mouse.move(start.x, start.y);
   await page.mouse.down();
-  await page.mouse.move(stage.x + 115, stage.y + 65, { steps: 5 });
+  await page.mouse.move(start.x + 100, start.y + 50, { steps: 5 });
   await page.mouse.up();
   const panned = await viewBox(page);
   expect(panned[0]).toBeLessThan(zoomed[0]);

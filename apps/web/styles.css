@@ -1000,12 +1000,13 @@ body.is-resizing {
   border-radius: var(--radius-sm);
 }
 
-/* First steps, over empty canvas space; never takes a click. */
+/* First steps, over the empty workbench right of a bare board; never takes a click. */
 .canvas-hint {
   position: absolute;
   top: 12px;
-  left: 12px;
+  right: 12px;
   display: grid;
+  justify-items: end;
   gap: 6px;
   margin: 0;
   color: var(--text-muted);
