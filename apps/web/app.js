@@ -1562,7 +1562,13 @@ async function control(action) {
 }
 
 async function stop() {
+  const sessionId = state.session.id;
   await control("stop");
+  // The session reports "stopped" on its event stream before this request is answered, which
+  // enables Run: a new session may have started meanwhile. That one is not this stop's to end.
+  if (state.session.id !== sessionId) {
+    return;
+  }
   closeStream();
   state.session.state = "stopped";
   state.appliedDrives.clear();
