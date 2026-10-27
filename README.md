@@ -171,7 +171,7 @@ npm test           # Node: compiler, Renode integration, API, peripherals, works
 npm run test:e2e   # Playwright: real UI against the real toolchain and Renode
 ```
 
-CI ([`ci.yml`](.github/workflows/ci.yml)) runs **173 Node tests and 140
+CI ([`ci.yml`](.github/workflows/ci.yml)) runs **174 Node tests and 140
 browser tests** with the pinned toolchains; every browser test compiles and
 executes real firmware where it needs to. Browser
 screenshots from each run are published to the

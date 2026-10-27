@@ -3,7 +3,7 @@
 **Last updated:** 2026-10-24 (`main`, showcase demo build)
 **Stage:** Technical preview. Real firmware execution, the interactive
 LaunchPad and the circuit workspace are implemented and covered by
-automated tests (173 Node + 140 browser tests in CI).
+automated tests (174 Node + 140 browser tests in CI).
 **Public hosted simulator:** No. Local, trusted, single-user mode only.
 **Hardware equivalence:** Not verified (no physical LaunchPad comparison yet).
 
