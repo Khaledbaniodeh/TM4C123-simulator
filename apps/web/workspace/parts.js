@@ -7,6 +7,7 @@
  *   status    "simulated"  — behavior derived from real simulator events
  *             "editor"     — can be placed and wired; no electrical behavior yet
  *   kind      used by the netlist (led, resistor, pushbutton, board, ...)
+ *   category  the library group it is listed under (library parts)
  *   render()  returns SVG markup for the part body (original artwork)
  *
  * Electrical behavior lives in netlist.js; rendering here is pure strings so
@@ -34,6 +35,7 @@ function escapeXml(text) {
 const led = {
   title: "LED (5 mm)",
   kind: "led",
+  category: "Outputs",
   status: "simulated",
   idPrefix: "led",
   description: "Lights when its anode net is driven HIGH and its cathode net is LOW (logic-level model).",
@@ -62,6 +64,7 @@ const led = {
 const resistor = {
   title: "Resistor",
   kind: "resistor",
+  category: "Passive",
   status: "simulated",
   idPrefix: "r",
   description: "Passes a logic level as a weak connection (a pull resistor loses to a direct connection).",
@@ -90,6 +93,7 @@ const resistor = {
 const pushbutton = {
   title: "Pushbutton",
   kind: "pushbutton",
+  category: "Inputs",
   status: "simulated",
   idPrefix: "btn",
   description: "Connects its two pins while held. Wired between a GPIO and GND it drives the input LOW through the GPIO model.",
@@ -119,6 +123,7 @@ const pushbutton = {
 const potentiometer = {
   title: "Potentiometer",
   kind: "potentiometer",
+  category: "Inputs",
   status: "simulated",
   idPrefix: "pot",
   description: "Ideal voltage divider: wire VCC to 3.3V, GND to GND, and SIG to an ADC pin (PE0–PE5, PD0–PD3, PB4–PB5). Set the knob position below; the ADC model samples the wiper voltage.",
@@ -178,6 +183,7 @@ function lcdCell(cell, x, y, cgram, lit) {
 const lcd1602 = {
   title: "LCD1602 (HD44780)",
   kind: "lcd1602",
+  category: "Displays",
   status: "simulated",
   idPrefix: "lcd",
   description: "HD44780 controller driven by the firmware's GPIO writes (4- or 8-bit). Wire VDD/VSS, RS, E, D4–D7, and RW to GND (D-024).",
@@ -225,6 +231,7 @@ const lcd1602 = {
 const logicAnalyzer = {
   title: "Logic analyzer (8 ch)",
   kind: "logic-analyzer",
+  category: "Instruments",
   status: "editor",
   idPrefix: "la",
   description: "Placeable and wireable. Waveform capture is planned; channels do not record yet.",
@@ -255,6 +262,9 @@ export const CATALOG = Object.freeze({
 
 /** Parts offered in the library panel, in display order. */
 export const LIBRARY = Object.freeze(["led", "resistor", "pushbutton", "potentiometer", "lcd1602", "logic-analyzer"]);
+
+/** Library groups, in display order; every library part declares one of them as its category. */
+export const LIBRARY_CATEGORIES = Object.freeze(["Outputs", "Inputs", "Passive", "Displays", "Instruments"]);
 
 export function pinOf(type, name) {
   return CATALOG[type]?.pins.find((pin) => pin.name === name) ?? null;

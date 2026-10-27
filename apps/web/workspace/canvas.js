@@ -569,6 +569,7 @@ export class Workspace extends EventTarget {
   #renderDraft(pointerWorld, valid = null, target = null) {
     const overlay = this.#layers.overlay;
     overlay.replaceChildren();
+    this.#showWiring(Boolean(this.#wireDraft));
     if (!this.#wireDraft) {
       return;
     }
@@ -1034,6 +1035,7 @@ export class Workspace extends EventTarget {
     const { routing } = this.#routeNewWire(this.#wireDraft.from, endpoint); // the route the preview showed
     const connection = [this.#wireDraft.from, endpoint, this.#defaultColor(this.#wireDraft.from, endpoint), routing];
     this.#wireDraft = null;
+    this.#showWiring(false);
     this.#layers.overlay.replaceChildren();
     this.execute(commands.addConnection(connection));
     this.select({ kind: "wire", index: this.diagram.connections.length - 1 });
@@ -1154,8 +1156,21 @@ export class Workspace extends EventTarget {
     return node?.closest?.(".pin-anchor") ?? null;
   }
 
+  /** While a wire is drawn, every pin shows as a target and the starting pin is marked. */
+  #showWiring(on) {
+    this.#svg.classList.toggle("is-wiring", on);
+    for (const node of this.#svg.querySelectorAll(".pin-anchor.is-source")) {
+      node.classList.remove("is-source");
+    }
+    const from = on ? splitEndpoint(this.#wireDraft.from) : null;
+    if (from) {
+      this.#svg.querySelector(`.pin-anchor[data-part="${CSS.escape(from.partId)}"][data-pin="${CSS.escape(from.pin)}"]`)?.classList.add("is-source");
+    }
+  }
+
   #cancelDraft(message) {
     this.#wireDraft = null;
+    this.#showWiring(false);
     this.#layers.overlay.replaceChildren();
     this.#emit("wire", { state: "cancelled", message });
   }

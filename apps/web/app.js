@@ -14,7 +14,7 @@
  */
 import { applyEvent, createBoardState, describePin, formatVirtualTime } from "./board-state.js";
 import { BOARD_PART } from "./board/launchpad.js";
-import { CATALOG, LIBRARY } from "./workspace/parts.js";
+import { CATALOG, LIBRARY, LIBRARY_CATEGORIES } from "./workspace/parts.js";
 import { Workspace } from "./workspace/canvas.js";
 import { History, WIRE_COLORS, commands, createDiagram, findPart, parseDiagram, serializeDiagram, splitEndpoint } from "./workspace/diagram.js";
 import { evaluateCircuit } from "./workspace/netlist.js";
@@ -1279,32 +1279,133 @@ function renderCapabilities() {
   );
 }
 
+/**
+ * A small drawing of a part for the library: the part's own artwork (as the
+ * canvas draws it, with its default attributes) and its pins.
+ */
+function partPreview(type) {
+  const definition = CATALOG[type];
+  const part = { id: "preview", type, left: 0, top: 0, rotate: 0, attrs: structuredClone(definition.defaultAttrs ?? {}) };
+  const { width, height } = definition.size;
+  const pad = 3;
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("class", "library-preview");
+  svg.setAttribute("viewBox", `${-pad} ${-pad} ${width + 2 * pad} ${height + 2 * pad}`);
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
+  // The catalog's render() output is the same trusted markup the canvas uses.
+  svg.innerHTML = definition.render(part, {}) +
+    definition.pins.map((pin) => `<circle class="preview-pin" cx="${pin.x}" cy="${pin.y}" r="1.6" />`).join("");
+  return svg;
+}
+
+/** The component library: search, parts grouped by category, each with its drawing and status. */
 function renderLibrary() {
-  elements.partLibrary.replaceChildren(
-    ...LIBRARY.map((type) => {
+  const search = document.createElement("input");
+  search.id = "librarySearch";
+  search.className = "library-search";
+  search.type = "search";
+  search.placeholder = "Search parts";
+  search.setAttribute("aria-label", "Search parts");
+  search.spellcheck = false;
+  search.autocomplete = "off";
+  const list = document.createElement("div");
+  list.className = "library-list";
+  const empty = document.createElement("p");
+  empty.className = "library-empty";
+  empty.textContent = "No part matches. Supported parts: LED, resistor, pushbutton, potentiometer, LCD1602.";
+  empty.hidden = true;
+  const items = [];
+  for (const category of LIBRARY_CATEGORIES) {
+    const types = LIBRARY.filter((type) => CATALOG[type].category === category);
+    if (!types.length) {
+      continue;
+    }
+    const heading = document.createElement("p");
+    heading.className = "library-group";
+    heading.textContent = category;
+    list.append(heading);
+    for (const type of types) {
       const definition = CATALOG[type];
       const button = document.createElement("button");
       button.type = "button";
       button.className = "library-item";
       button.dataset.type = type;
-      button.setAttribute("role", "menuitem");
+      button.dataset.search = `${definition.title} ${definition.kind} ${category} ${definition.description}`.toLowerCase();
+      const text = document.createElement("span");
+      text.className = "library-text";
       const name = document.createElement("strong");
       name.textContent = definition.title;
+      const description = document.createElement("small");
+      description.textContent = definition.description;
+      text.append(name, description);
       const chip = document.createElement("span");
       chip.className = "status-chip";
       chip.dataset.status = definition.status;
       chip.textContent = definition.status === "simulated" ? "simulated" : "editor only";
-      const description = document.createElement("small");
-      description.textContent = definition.description;
-      button.append(name, chip, description);
+      chip.title = definition.status === "simulated" ? "Behaviour comes from the simulator" : "Can be placed and wired; no electrical behaviour yet";
+      button.append(partPreview(type), text, chip);
       button.addEventListener("click", () => {
-        workspace.addPart(type);
-        elements.partLibrary.hidden = true;
-        elements.addPartButton.setAttribute("aria-expanded", "false");
+        setLibraryOpen(false);
+        const part = workspace.addPart(type);
+        flashPart(part.id);
       });
-      return button;
-    }),
-  );
+      heading.dataset.category = category;
+      items.push({ button, heading });
+      list.append(button);
+    }
+  }
+  const foot = document.createElement("p");
+  foot.className = "library-foot";
+  foot.innerHTML = "Click a part to add it, then drag it into place. <kbd>A</kbd> opens this list; <kbd>↑</kbd> <kbd>↓</kbd> and <kbd>Enter</kbd> choose.";
+  search.addEventListener("input", () => {
+    const words = search.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const shown = new Set();
+    for (const { button } of items) {
+      button.hidden = !words.every((word) => button.dataset.search.includes(word));
+      if (!button.hidden) {
+        shown.add(button.dataset.type);
+      }
+    }
+    for (const heading of list.querySelectorAll(".library-group")) {
+      heading.hidden = !LIBRARY.some((type) => CATALOG[type].category === heading.dataset.category && shown.has(type));
+    }
+    empty.hidden = shown.size > 0;
+  });
+  // Arrow keys move between the visible parts (and from the search box into the list).
+  elements.partLibrary.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") {
+      return;
+    }
+    const visible = items.map(({ button }) => button).filter((button) => !button.hidden);
+    if (!visible.length) {
+      return;
+    }
+    event.preventDefault();
+    const index = visible.indexOf(document.activeElement);
+    const next = event.key === "ArrowDown"
+      ? visible[index + 1] ?? visible[0]
+      : index <= 0 ? search : visible[index - 1];
+    next.focus();
+  });
+  search.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      items.map(({ button }) => button).find((button) => !button.hidden)?.click();
+    }
+  });
+  elements.partLibrary.replaceChildren(search, list, empty, foot);
+}
+
+/** A short highlight on a part that was just added, so the eye finds it. */
+function flashPart(id) {
+  const node = elements.canvas.querySelector(`.part[data-part="${CSS.escape(id)}"]`);
+  if (!node) {
+    return;
+  }
+  node.classList.remove("just-added");
+  void node.getBoundingClientRect();
+  node.classList.add("just-added");
+  setTimeout(() => node.classList.remove("just-added"), 1200);
 }
 
 // ---------------------------------------------------------------------------
@@ -1771,14 +1872,24 @@ elements.runButton.addEventListener("click", () => {
 });
 elements.aboutToggle.addEventListener("click", () => setAboutExpanded(elements.exampleAbout.dataset.expanded !== "true"));
 
-/** Library open or closed (the Add Part button and the A key). */
+/** Library open (search box focused, all parts listed) or closed (the Add Part button and the A key). */
 function setLibraryOpen(open) {
+  const wasOpen = !elements.partLibrary.hidden;
   elements.partLibrary.hidden = !open;
   elements.addPartButton.setAttribute("aria-expanded", String(open));
-  if (open) {
-    elements.partLibrary.querySelector(".library-item")?.focus();
+  if (open && !wasOpen) {
+    const search = elements.partLibrary.querySelector(".library-search");
+    search.value = "";
+    search.dispatchEvent(new Event("input"));
+    search.focus();
   }
 }
+// A press outside the library (and its button) closes it.
+document.addEventListener("pointerdown", (event) => {
+  if (!elements.partLibrary.hidden && !event.target.closest?.("#partLibrary, #addPartButton")) {
+    setLibraryOpen(false);
+  }
+}, true);
 
 // Application shortcuts. Single keys only act outside text fields; the circuit's own keys (R, Del, arrows, ...)
 // are handled by the canvas when it has focus.
@@ -1795,8 +1906,11 @@ document.addEventListener("keydown", (event) => {
       elements.compileButton.click();
     }
   } else if (event.key === "Escape" && (shell.helpOpen || !elements.partLibrary.hidden)) {
+    if (!elements.partLibrary.hidden) {
+      setLibraryOpen(false);
+      elements.addPartButton.focus();
+    }
     shell.setHelp(false);
-    setLibraryOpen(false);
   } else if (!ctrl && !event.altKey && !isTyping(event.target)) {
     if (event.key === "?") {
       event.preventDefault();
