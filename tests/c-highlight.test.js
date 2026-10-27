@@ -53,6 +53,21 @@ describe("firmware editor syntax colouring", () => {
     assert.deepEqual(kinds("#include <stdint.h>\n# define LIMIT 0x10u"), ["preprocessor:#include", "string:<stdint.h>", "preprocessor:# define", "constant:LIMIT", "number:0x10u"]);
   });
 
+  it("colours a long file in a few milliseconds (it runs on every keystroke)", async () => {
+    const example = await readFile(new URL("../examples/lcd1602-hello/main.c", import.meta.url), "utf8");
+    const long = Array(10).fill(example).join("\n"); // ten times the longest example, about 1300 lines
+    for (let i = 0; i < 5; i++) {
+      highlightHtml(long);
+    }
+    const runs = 20;
+    const started = performance.now();
+    for (let i = 0; i < runs; i++) {
+      highlightHtml(long);
+    }
+    const perRender = (performance.now() - started) / runs;
+    assert.ok(perRender < 50, `${perRender.toFixed(1)} ms per render`);
+  });
+
   it("escapes markup and keeps the layer as tall as the text", () => {
     const html = highlightHtml('char *s = "<b>&</b>";\n');
     assert.ok(html.includes("&lt;b&gt;&amp;&lt;/b&gt;"));
