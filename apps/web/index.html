@@ -94,11 +94,11 @@
       <section class="simulator-panel" aria-label="Circuit workspace">
         <div class="simulator-toolbar" role="toolbar" aria-label="Circuit tools">
           <div class="library-anchor">
-            <button id="addPartButton" class="btn btn-accent" type="button" aria-haspopup="menu" aria-expanded="false" title="Add a component (A)">
+            <button id="addPartButton" class="btn btn-accent" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="partLibrary" title="Add a component (A)">
               <svg class="icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 3v10M3 8h10" /></svg>
               Add Part
             </button>
-            <div id="partLibrary" class="part-library" role="menu" aria-label="Component library" hidden></div>
+            <div id="partLibrary" class="part-library" role="dialog" aria-label="Component library" hidden></div>
           </div>
           <div class="toolbar-divider"></div>
           <button id="undoButton" class="icon-button" type="button" aria-label="Undo" title="Undo (Ctrl+Z)" disabled>

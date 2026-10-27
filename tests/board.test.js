@@ -9,7 +9,7 @@ import { BOARD_INPUTS, BOARD_LEDS } from "../apps/web/board-state.js";
 import { BOARD_PART, GEOMETRY } from "../apps/web/board/launchpad.js";
 import { readFile } from "node:fs/promises";
 import { GRID, areaBounds, autoRoute, bodyCrossings, padCrossings, partBounds, partToWorld, pinEscape, routeWire, wireOverlap } from "../apps/web/workspace/geometry.js";
-import { CATALOG, LIBRARY } from "../apps/web/workspace/parts.js";
+import { CATALOG, LIBRARY, LIBRARY_CATEGORIES } from "../apps/web/workspace/parts.js";
 import { createDiagram, parseDiagram, validateDiagram } from "../apps/web/workspace/diagram.js";
 import { evaluateCircuit } from "../apps/web/workspace/netlist.js";
 
@@ -243,5 +243,19 @@ describe("board part behavior", () => {
     assert.equal(CATALOG.potentiometer.status, "simulated"); // ideal divider feeding the ADC model
     assert.equal(CATALOG.lcd1602.status, "simulated"); // HD44780 model fed by GPIO events
     assert.equal(CATALOG["logic-analyzer"].status, "editor");
+  });
+
+  it("lists every library part under one library category, and every category has a part", () => {
+    for (const type of LIBRARY) {
+      assert.ok(LIBRARY_CATEGORIES.includes(CATALOG[type].category), `${type}: ${CATALOG[type].category}`);
+    }
+    for (const category of LIBRARY_CATEGORIES) {
+      assert.ok(LIBRARY.some((type) => CATALOG[type].category === category), category);
+    }
+    // The library draws each part from its own artwork: render() gives SVG markup.
+    for (const type of LIBRARY) {
+      const part = { id: "preview", type, left: 0, top: 0, rotate: 0, attrs: structuredClone(CATALOG[type].defaultAttrs ?? {}) };
+      assert.match(CATALOG[type].render(part, {}), /<(g|rect|path|circle)\b/, type);
+    }
   });
 });
