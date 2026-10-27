@@ -56,10 +56,11 @@ targets.
   action, and every tool's tooltip names its shortcut.
 - **Inspector:** an accordion of Selection, live Pins, Firmware image (the
   ELF) and Simulator coverage.
-  - It is open from 1280 px.
-  - On narrower screens it opens when a part is selected, but only after
-    the press is released, so a drag is never disturbed. It stays closed if
-    the user has hidden it.
+  - It starts closed at every size, so the circuit gets the full width.
+  - Its toggle opens it. Selecting a part or wire also opens it, but only
+    after the press is released, so a drag or a wire is never disturbed.
+  - It stays closed if the user has hidden it, and the user's open or
+    closed choice is remembered.
 - **Output:** folded to one line showing the newest message. A tab opens
   it, and build problems and errors open it by themselves. The filters
   appear only when it is open.
@@ -71,8 +72,10 @@ Measured canvas size, before → after (CI, same tests):
 | Window | Before | After | Area |
 |---|---|---|---|
 | 1024×768 | 584×356 | 648×612 | +91% |
-| 1280×720 (inspector open) | 565×371 | 554×564 | +49% |
-| 1920×1080 | 987×701 | 976×924 | +30% |
+| 1280×720 | 565×371 | 838×564 | +125% |
+| 1920×1080 | 987×701 | 1260×924 | +68% |
+
+With the inspector opened, the canvas is 284 px narrower.
 
 ## Interaction model
 
@@ -144,9 +147,10 @@ layout.
   readability benefit with no dependency.
   - Not available as a result: autocomplete, multiple cursors, and
     find/replace beyond the browser's own.
-- **A docked inspector, not a floating panel.** A floating card would cover
-  pins and parts near it, and could take their clicks. On narrow screens
-  the docked inspector opens only after the press is released.
+- **A docked inspector, closed by default, not a floating panel.** A
+  floating card would cover pins and parts near it, and could take their
+  clicks. The docked inspector starts closed so the circuit has the width,
+  and opens for a selection only after the press is released.
 - **The output panel folded by default.** The circuit gets the height;
   errors can't be missed, because they open the panel.
 - **Layout logic in `layout.js`.** It is separate from `app.js`, which
@@ -162,7 +166,7 @@ not a claim of parity.
 | Area | Wokwi | TM4C123 Simulator | Gap |
 |---|---|---|---|
 | First view | Code and simulation, about half each; three floating buttons (Play, Add, More) | Code and circuit split; Run, Add Part and Help prominent; a first-run pointer; Help | Comparable after the redesign |
-| Canvas | About half the window | 43–63% of the width, 78–86% of the height | Comparable; the inspector costs width at 1280 px |
+| Canvas | About half the window | 63–66% of the width, 78–86% of the height (inspector closed) | Comparable |
 | Finding parts | Searchable categorised menu with pictures; hundreds of parts | Searchable grouped library with artwork; 6 parts | **Missing:** breadth. Deliberate: only parts the simulator models honestly |
 | Placing parts | Added at (0, 0), then dragged | Placed in free visible space beside the board, then dragged | — |
 | Moving and editing parts | Drag, arrow keys, R, D, Shift multi-select, copy/paste | Drag, arrow keys (Shift ×10), R, Ctrl+D, Shift-click or box select, Ctrl+C/X/V, undo/redo | Duplicate is Ctrl+D here, D there |
@@ -175,8 +179,9 @@ not a claim of parity.
 
 ## Remaining limitations
 
-- At 1280×720 the inspector, while open, takes 284 px from the canvas. The
-  user can hide it, and the setting is remembered.
+- While open, the inspector takes 284 px from the canvas, and the circuit
+  rescales to fit. It opens for the first selected part unless the user has
+  hidden it before.
 - The bare-board view shows the board smaller than a tight frame would,
   to leave room for parts. Fit (`F`) after adding parts frames the circuit
   tightly.

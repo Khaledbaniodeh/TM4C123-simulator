@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { INSPECTOR_OPEN_WIDTH, clampSplit, defaultSplit, initialInspector } from "../apps/web/layout.js";
+import { clampSplit, defaultSplit, initialInspector } from "../apps/web/layout.js";
 
 describe("application shell layout", () => {
   it("gives the code pane a third of wide screens and a little more on narrow ones", () => {
@@ -23,13 +23,10 @@ describe("application shell layout", () => {
     assert.equal(clampSplit("50", 1280), 34);
   });
 
-  it("opens the inspector by default from 1280 px, and otherwise follows the user's last choice", () => {
-    assert.equal(INSPECTOR_OPEN_WIDTH, 1280);
-    assert.equal(initialInspector({}, 1920), true);
-    assert.equal(initialInspector({}, 1280), true);
-    assert.equal(initialInspector({}, 1024), false);
-    assert.equal(initialInspector({ inspector: false }, 1920), false);
-    assert.equal(initialInspector({ inspector: true }, 1024), true);
-    assert.equal(initialInspector({ inspector: "yes" }, 1024), false);
+  it("starts with the inspector closed, unless the user left it open", () => {
+    assert.equal(initialInspector({}), false);
+    assert.equal(initialInspector({ inspector: false }), false);
+    assert.equal(initialInspector({ inspector: true }), true);
+    assert.equal(initialInspector({ inspector: "yes" }), false);
   });
 });

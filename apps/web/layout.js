@@ -9,9 +9,6 @@
 
 export const PREFS_KEY = "tm4c123-simulator:ui";
 
-/** The inspector starts open on screens at least this wide; narrower ones keep the circuit wide. */
-export const INSPECTOR_OPEN_WIDTH = 1280;
-
 const SPLIT_MIN = 25;
 const SPLIT_MAX = 65;
 
@@ -25,9 +22,12 @@ export function clampSplit(percent, viewportWidth) {
   return Number.isFinite(percent) ? Math.min(SPLIT_MAX, Math.max(SPLIT_MIN, percent)) : defaultSplit(viewportWidth);
 }
 
-/** Whether the inspector starts open: the stored choice, else by screen width. */
-export function initialInspector(prefs, viewportWidth) {
-  return typeof prefs.inspector === "boolean" ? prefs.inspector : viewportWidth >= INSPECTOR_OPEN_WIDTH;
+/**
+ * Whether the inspector starts open: the user's stored choice, else closed at every size, so the
+ * circuit gets the width; it opens with its toggle, or for a selected part (see revealInspector).
+ */
+export function initialInspector(prefs) {
+  return typeof prefs.inspector === "boolean" ? prefs.inspector : false;
 }
 
 function readPrefs(storage) {
@@ -115,7 +115,7 @@ export function createShell(dom, storage, { onRunHintDone } = {}) {
 
   // --- Inspector -------------------------------------------------------------
 
-  let inspectorOpen = initialInspector(prefs, window.innerWidth);
+  let inspectorOpen = initialInspector(prefs);
   function setInspector(open) {
     inspectorOpen = open;
     dom.simulatorPanel.dataset.inspector = open ? "open" : "closed";
