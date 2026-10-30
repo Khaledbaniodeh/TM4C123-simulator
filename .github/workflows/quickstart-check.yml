@@ -1,0 +1,145 @@
+name: Quick Start check
+
+# Evidence for the README (not for merge): runs the README's Quick Start commands exactly, on fresh
+# Windows (Windows PowerShell 5.1) and Linux (bash) runners with Node 20, against a fresh clone of
+# main; measures disk use; loads the page; compiles and runs example A through the API; and stops
+# the server with Ctrl+C, checking that Renode exits with it.
+on:
+  push:
+    branches: ["evidence/readme-quickstart"]
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Linux (Ubuntu 24.04, bash, Node 20)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: evidence
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Prerequisites
+        run: |
+          node --version; npm --version; git --version; tar --version | head -1
+          df -h "$GITHUB_WORKSPACE" | tail -1
+
+      - name: README commands
+        run: |
+          git clone https://github.com/Khaledbaniodeh/TM4C123-simulator.git
+          cd TM4C123-simulator
+          git log -1 --format='cloned main at %H'
+          time npm run setup:tools
+          time npm ci
+
+      - name: Disk used
+        working-directory: TM4C123-simulator
+        run: du -sh .tools/* .tools node_modules . | sed 's/^/  /'
+
+      - name: npm start, page, example A, then Ctrl+C
+        working-directory: TM4C123-simulator
+        run: |
+          setsid npm start > ../server.log 2>&1 &
+          group=$!
+          for i in $(seq 60); do curl -fsS -o /dev/null http://127.0.0.1:5123/api/health && break; sleep 1; done
+          node ../evidence/evidence-quickstart/smoke.mjs
+          echo "Renode running before Ctrl+C: $(pgrep -c -f -i 'renode' || true) process(es)"
+          # Ctrl+C in a terminal sends SIGINT to the foreground process group (npm and the server).
+          kill -INT -- -"$group"
+          for i in $(seq 30); do pgrep -g "$group" > /dev/null || break; sleep 1; done
+          echo "--- server output"; cat ../server.log
+          if pgrep -g "$group" > /dev/null; then echo "FAIL: server still running 30 s after Ctrl+C"; exit 1; fi
+          if pgrep -a -f -i renode; then echo "FAIL: Renode still running after Ctrl+C"; exit 1; fi
+          if curl -fsS -o /dev/null http://127.0.0.1:5123/api/health; then echo "FAIL: port 5123 still answering"; exit 1; fi
+          echo "Ctrl+C: server exited, Renode exited, port 5123 closed"
+
+  windows:
+    name: Windows (Server 2022, Windows PowerShell 5.1, Node 20)
+    runs-on: windows-2022
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: evidence
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Prerequisites
+        run: |
+          "PowerShell $($PSVersionTable.PSVersion)"
+          node --version; npm --version; git --version
+          & "$env:SystemRoot\System32\tar.exe" --version
+          Get-PSDrive -PSProvider FileSystem | Format-Table Name, @{n = "FreeGB"; e = { [math]::Round($_.Free / 1GB, 1) } }
+
+      - name: Which npm Windows PowerShell runs, and the Restricted script policy
+        run: |
+          $ErrorActionPreference = "Continue"
+          Get-Command npm -All | Format-Table CommandType, Source -AutoSize
+          Get-ExecutionPolicy -List | Format-Table -AutoSize
+          # Windows' default policy for Windows PowerShell on client editions is Restricted.
+          powershell -NoProfile -ExecutionPolicy Restricted -Command "npm --version; 'exit code ' + `$LASTEXITCODE" 2>&1 | Out-String
+          powershell -NoProfile -ExecutionPolicy Restricted -Command "npm.cmd --version; 'exit code ' + `$LASTEXITCODE" 2>&1 | Out-String
+          exit 0
+
+      - name: README commands
+        run: |
+          $s = Get-Date
+          git clone https://github.com/Khaledbaniodeh/TM4C123-simulator.git
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          "git clone: $([math]::Round(((Get-Date) - $s).TotalSeconds)) s"
+          cd TM4C123-simulator
+          git log -1 --format='cloned main at %H'
+          $s = Get-Date
+          npm run setup:tools
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          "npm run setup:tools: $([math]::Round(((Get-Date) - $s).TotalSeconds)) s"
+          $s = Get-Date
+          npm ci
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          "npm ci: $([math]::Round(((Get-Date) - $s).TotalSeconds)) s"
+
+      - name: Disk used
+        working-directory: TM4C123-simulator
+        run: |
+          foreach ($p in (Get-ChildItem .tools -Directory).FullName + @(".tools", "node_modules", ".")) {
+            $bytes = (Get-ChildItem $p -Recurse -File -Force -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
+            "  {0,8:N0} MB  {1}" -f ($bytes / 1MB), $p
+          }
+
+      - name: npm start, page, example A, then Ctrl+C
+        working-directory: TM4C123-simulator
+        run: |
+          # Started on this step's console, as typing `npm start` in a PowerShell window would.
+          $server = Start-Process -FilePath powershell -ArgumentList "-NoProfile", "-Command", "npm start" -NoNewWindow -PassThru
+          for ($i = 0; $i -lt 90; $i++) {
+            try { Invoke-WebRequest -UseBasicParsing http://127.0.0.1:5123/api/health | Out-Null; break } catch { Start-Sleep 1 }
+          }
+          node ..\evidence\evidence-quickstart\smoke.mjs
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          "Renode running before Ctrl+C: $(@(Get-Process | Where-Object { $_.ProcessName -match 'renode' }).Count) process(es)"
+          # Ctrl+C to every process on this console; this PowerShell ignores it.
+          Add-Type -Namespace Win -Name Console -MemberDefinition @'
+          [System.Runtime.InteropServices.DllImport("kernel32.dll")] public static extern bool GenerateConsoleCtrlEvent(uint ctrlEvent, uint group);
+          [System.Runtime.InteropServices.DllImport("kernel32.dll")] public static extern bool SetConsoleCtrlHandler(System.IntPtr handler, bool add);
+          '@
+          [Win.Console]::SetConsoleCtrlHandler([IntPtr]::Zero, $true) | Out-Null
+          "Ctrl+C sent: $([Win.Console]::GenerateConsoleCtrlEvent(0, 0))"
+          $exited = $server.WaitForExit(30000)
+          Start-Sleep 2
+          $renode = @(Get-Process | Where-Object { $_.ProcessName -match 'renode' })
+          $open = $true
+          try { Invoke-WebRequest -UseBasicParsing http://127.0.0.1:5123/api/health | Out-Null } catch { $open = $false }
+          "server exited: $exited | Renode processes left: $($renode.Count) | port 5123 still answering: $open"
+          if (-not $exited -or $renode.Count -or $open) { "FAIL: Ctrl+C did not stop everything"; exit 1 }
+          "Ctrl+C: server exited, Renode exited, port 5123 closed"
