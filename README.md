@@ -128,28 +128,28 @@ The first **Run** compiles `main.c` and starts Renode, which takes a few seconds
 
 **1. Example A: red LED on (PF1).** It is loaded when the app opens.
 
-- **Do:** press **▶ Run**.
+- **Do:** press **Run**.
 - **Expect:**
   - The editor badge changes to **Built**, and the status reads **Running**, with virtual
     time advancing.
   - The LaunchPad's RGB LED glows red, and the bottom bar shows `PF1 → HIGH (GPIO output)`.
   - Open the **Inspector** with the button at the right end of the circuit toolbar.
     **Pins** lists PF1 HIGH, driven by GPIO output.
-- **Then:** press **■ Stop**.
+- **Then:** press **Stop**.
 
 **2. Example F: external LED + button (PA7/PA6).** It loads a wired circuit: an LED and a
 220 Ω resistor on PA7 (J1 pin 10), and a pushbutton from PA6 (J1 pin 9) to GND.
 
-- **Do:** press **▶ Run**, then press and hold the pushbutton on the canvas.
+- **Do:** press **Run**, then press and hold the pushbutton on the canvas.
 - **Expect:**
   - The firmware reads PA6 LOW and drives PA7 HIGH: the external LED lights.
   - Release the button and the firmware turns the LED off.
-- **Then:** press **■ Stop**.
+- **Then:** press **Stop**.
 
 **3. Example M: potentiometer on AIN0 (ADC0 SS3).** A potentiometer wiper is wired to
 PE3/AIN0.
 
-- **Do:** press **▶ Run**, then click the potentiometer. The Inspector opens on it with a
+- **Do:** press **Run**, then click the potentiometer. The Inspector opens on it with a
   **Position** slider.
 - **Expect:** the firmware samples the wiper every 10 ms and picks the LED colour from the
   12-bit result: green below 1/3 of full scale, blue in the middle, red above 2/3.
